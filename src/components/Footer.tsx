@@ -118,7 +118,7 @@ export const Footer: React.FC = () => {
               </p>
               <div className="pt-2 text-[11px] text-[#929BAA] border-t border-white/5">
                 <p>اللجنة التحضيرية والتنظيمية:</p>
-                <p className="text-white/80">مصطفى علي حسون • مصطفى أركان • حسين عبدالله</p>
+                <p className="text-white/80">مصطفى علي حسون • مصطفى أركان ساجت</p>
               </div>
             </div>
           </div>

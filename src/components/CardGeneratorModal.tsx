@@ -151,7 +151,7 @@ export const CardGeneratorModal: React.FC<CardGeneratorModalProps> = ({
 
     ctx.fillStyle = '#929BAA';
     ctx.font = '14px "Cairo", sans-serif';
-    ctx.fillText('اللجنة المنظمة لمعهد التمريض: مصطفى علي حسون • حسين عبدالله جاسم • مصطفى أركان ساجت | @uofaon.1', 600, 660);
+    ctx.fillText('اللجنة المنظمة لمعهد التمريض: مصطفى علي حسون • مصطفى أركان ساجت | @uofaon.1', 600, 660);
   };
 
   useEffect(() => {

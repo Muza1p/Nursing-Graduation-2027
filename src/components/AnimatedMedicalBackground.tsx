@@ -217,112 +217,52 @@ const FLOATING_SYMBOLS: FloatingSymbolItem[] = [
   {
     id: 'nurse-cap-top-right',
     Component: NurseCapSymbol,
-    top: '8%',
+    top: '12%',
     side: 'right',
-    offset: '2.5%',
-    sizeClass: 'w-9 h-9 sm:w-12 sm:h-12',
+    offset: '2%',
+    sizeClass: 'w-7 h-7 sm:w-9 sm:h-9',
     animClass: 'med-float-slow',
     delay: '0s',
-    duration: '19s',
-    colorClass: 'text-[#35D6C2]/25',
+    duration: '22s',
+    colorClass: 'text-[#35D6C2]/15',
   },
   {
     id: 'stethoscope-top-left',
     Component: StethoscopeSymbol,
-    top: '12%',
+    top: '16%',
     side: 'left',
     offset: '2%',
-    sizeClass: 'w-10 h-10 sm:w-13 sm:h-13',
+    sizeClass: 'w-8 h-8 sm:w-10 sm:h-10',
     animClass: 'med-float-reverse',
-    delay: '1.5s',
-    duration: '22s',
-    colorClass: 'text-[#5CE1E6]/25',
+    delay: '2s',
+    duration: '24s',
+    colorClass: 'text-[#5CE1E6]/15',
   },
   {
-    id: 'heart-upper-right',
+    id: 'heart-lower-right',
     Component: HeartbeatSymbol,
-    top: '26%',
+    top: '68%',
     side: 'right',
-    offset: '3.5%',
-    sizeClass: 'w-8 h-8 sm:w-11 sm:h-11',
+    offset: '2.5%',
+    sizeClass: 'w-7 h-7 sm:w-9 sm:h-9',
     animClass: 'med-float-medium',
     delay: '3s',
-    duration: '17s',
-    colorClass: 'text-[#35D6C2]/22',
-  },
-  {
-    id: 'medical-cross-upper-left',
-    Component: MedicalCrossSymbol,
-    top: '31%',
-    side: 'left',
-    offset: '3%',
-    sizeClass: 'w-8 h-8 sm:w-10 sm:h-10',
-    animClass: 'med-float-slow',
-    delay: '2.2s',
     duration: '20s',
-    colorClass: 'text-[#A6F0DF]/20',
-  },
-  {
-    id: 'iv-drip-mid-right',
-    Component: IvDripSymbol,
-    top: '46%',
-    side: 'right',
-    offset: '1.8%',
-    sizeClass: 'w-9 h-9 sm:w-12 sm:h-12',
-    animClass: 'med-float-reverse',
-    delay: '0.8s',
-    duration: '23s',
-    colorClass: 'text-[#5CE1E6]/22',
+    colorClass: 'text-[#35D6C2]/14',
     hideOnSmallMobile: true,
   },
   {
-    id: 'dna-mid-left',
-    Component: DnaHelixSymbol,
-    top: '52%',
-    side: 'left',
-    offset: '2.2%',
-    sizeClass: 'w-9 h-9 sm:w-12 sm:h-12',
-    animClass: 'med-float-medium',
-    delay: '4s',
-    duration: '21s',
-    colorClass: 'text-[#35D6C2]/22',
-  },
-  {
-    id: 'syringe-lower-right',
-    Component: SyringeSymbol,
-    top: '67%',
-    side: 'right',
-    offset: '2.8%',
-    sizeClass: 'w-9 h-9 sm:w-11 sm:h-11',
-    animClass: 'med-float-slow',
-    delay: '2.7s',
-    duration: '18s',
-    colorClass: 'text-[#A6F0DF]/20',
-  },
-  {
-    id: 'clipboard-lower-left',
-    Component: MedicalClipboardSymbol,
-    top: '73%',
+    id: 'medical-cross-lower-left',
+    Component: MedicalCrossSymbol,
+    top: '74%',
     side: 'left',
     offset: '2.5%',
-    sizeClass: 'w-8 h-8 sm:w-11 sm:h-11',
-    animClass: 'med-float-reverse',
-    delay: '1.2s',
-    duration: '24s',
-    colorClass: 'text-[#5CE1E6]/20',
+    sizeClass: 'w-7 h-7 sm:w-9 sm:h-9',
+    animClass: 'med-float-slow',
+    delay: '1.5s',
+    duration: '23s',
+    colorClass: 'text-[#A6F0DF]/14',
     hideOnSmallMobile: true,
-  },
-  {
-    id: 'oximeter-bottom-right',
-    Component: PulseOximeterSymbol,
-    top: '85%',
-    side: 'right',
-    offset: '3.2%',
-    sizeClass: 'w-8 h-8 sm:w-11 sm:h-11',
-    animClass: 'med-float-medium',
-    delay: '3.6s',
-    duration: '20s',
-    colorClass: 'text-[#35D6C2]/22',
   },
 ];
 
@@ -337,13 +277,10 @@ interface GlowParticle {
 }
 
 const GLOW_PARTICLES: GlowParticle[] = [
-  { id: 'p1', top: '14%', left: '8%', size: 'w-1.5 h-1.5', delay: '0s', duration: '7s' },
-  { id: 'p2', top: '22%', left: '91%', size: 'w-2 h-2', delay: '1.5s', duration: '9s' },
-  { id: 'p3', top: '38%', left: '6%', size: 'w-1.5 h-1.5', delay: '3s', duration: '8s' },
-  { id: 'p4', top: '49%', left: '93%', size: 'w-1.5 h-1.5', delay: '2s', duration: '10s', mobileHidden: true },
-  { id: 'p5', top: '63%', left: '7%', size: 'w-2 h-2', delay: '4s', duration: '8.5s' },
-  { id: 'p6', top: '77%', left: '90%', size: 'w-1.5 h-1.5', delay: '0.8s', duration: '7.5s' },
-  { id: 'p7', top: '88%', left: '10%', size: 'w-1.5 h-1.5', delay: '2.5s', duration: '9.5s', mobileHidden: true },
+  { id: 'p1', top: '18%', left: '6%', size: 'w-1.5 h-1.5', delay: '0s', duration: '9s' },
+  { id: 'p2', top: '26%', left: '93%', size: 'w-1.5 h-1.5', delay: '2s', duration: '10s' },
+  { id: 'p3', top: '65%', left: '5%', size: 'w-1.5 h-1.5', delay: '4s', duration: '9.5s', mobileHidden: true },
+  { id: 'p4', top: '78%', left: '92%', size: 'w-1.5 h-1.5', delay: '1.2s', duration: '8.5s', mobileHidden: true },
 ];
 
 export const AnimatedMedicalBackground: React.FC = () => {
@@ -357,12 +294,12 @@ export const AnimatedMedicalBackground: React.FC = () => {
         className="absolute inset-0"
         style={{
           background:
-            'radial-gradient(circle at 15% 18%, rgba(53, 214, 194, 0.07) 0%, transparent 45%), radial-gradient(circle at 85% 32%, rgba(24, 168, 184, 0.06) 0%, transparent 48%), radial-gradient(circle at 50% 82%, rgba(16, 27, 44, 0.65) 0%, transparent 60%)',
+            'radial-gradient(circle at 15% 18%, rgba(53, 214, 194, 0.06) 0%, transparent 45%), radial-gradient(circle at 85% 32%, rgba(24, 168, 184, 0.05) 0%, transparent 48%), radial-gradient(circle at 50% 82%, rgba(16, 27, 44, 0.6) 0%, transparent 60%)',
         }}
       />
 
-      {/* Primary Animated ECG Heartbeat Line (Upper-Mid Viewport) */}
-      <div className="absolute inset-x-0 top-[21%] sm:top-[24%] h-24 sm:h-32 opacity-40 sm:opacity-50">
+      {/* Primary Animated ECG Heartbeat Line */}
+      <div className="absolute inset-x-0 top-[22%] sm:top-[25%] h-20 sm:h-28 opacity-30 sm:opacity-40">
         <svg
           viewBox="0 0 1440 140"
           fill="none"
@@ -372,13 +309,13 @@ export const AnimatedMedicalBackground: React.FC = () => {
           <defs>
             <linearGradient id="ecgLineGradPrimary" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor="#35D6C2" stopOpacity="0" />
-              <stop offset="15%" stopColor="#35D6C2" stopOpacity="0.35" />
-              <stop offset="50%" stopColor="#5CE1E6" stopOpacity="0.85" />
-              <stop offset="85%" stopColor="#35D6C2" stopOpacity="0.35" />
+              <stop offset="15%" stopColor="#35D6C2" stopOpacity="0.3" />
+              <stop offset="50%" stopColor="#5CE1E6" stopOpacity="0.75" />
+              <stop offset="85%" stopColor="#35D6C2" stopOpacity="0.3" />
               <stop offset="100%" stopColor="#35D6C2" stopOpacity="0" />
             </linearGradient>
             <filter id="ecgCyanGlow" x="-20%" y="-50%" width="140%" height="200%">
-              <feGaussianBlur stdDeviation="3.5" result="blur" />
+              <feGaussianBlur stdDeviation="3" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
@@ -386,44 +323,14 @@ export const AnimatedMedicalBackground: React.FC = () => {
             </filter>
           </defs>
 
-          {/* Subtle Baseline Trace */}
           <path
             d="M 0 70 L 210 70 Q 225 56 240 70 L 262 70 L 274 84 L 290 16 L 308 118 L 324 70 Q 345 46 368 70 L 660 70 Q 675 56 690 70 L 712 70 L 724 84 L 740 14 L 758 120 L 774 70 Q 795 46 818 70 L 1110 70 Q 1125 56 1140 70 L 1162 70 L 1174 84 L 1190 18 L 1208 116 L 1224 70 Q 1245 46 1268 70 L 1440 70"
             stroke="url(#ecgLineGradPrimary)"
-            strokeWidth="1"
-            strokeOpacity="0.28"
-            fill="none"
-          />
-
-          {/* Glowing Animated Heartbeat Pulse Wave */}
-          <path
-            d="M 0 70 L 210 70 Q 225 56 240 70 L 262 70 L 274 84 L 290 16 L 308 118 L 324 70 Q 345 46 368 70 L 660 70 Q 675 56 690 70 L 712 70 L 724 84 L 740 14 L 758 120 L 774 70 Q 795 46 818 70 L 1110 70 Q 1125 56 1140 70 L 1162 70 L 1174 84 L 1190 18 L 1208 116 L 1224 70 Q 1245 46 1268 70 L 1440 70"
-            stroke="url(#ecgLineGradPrimary)"
-            strokeWidth="2"
+            strokeWidth="1.75"
             strokeLinecap="round"
             strokeLinejoin="round"
             filter="url(#ecgCyanGlow)"
             className="med-ecg-sweep"
-          />
-        </svg>
-      </div>
-
-      {/* Secondary Soft ECG Heartbeat Line (Lower Viewport) */}
-      <div className="absolute inset-x-0 top-[72%] h-20 sm:h-28 opacity-25 sm:opacity-35">
-        <svg
-          viewBox="0 0 1440 120"
-          fill="none"
-          preserveAspectRatio="none"
-          className="w-full h-full overflow-visible"
-        >
-          <path
-            d="M 0 60 L 340 60 Q 354 48 368 60 L 388 60 L 398 72 L 414 18 L 430 102 L 444 60 Q 464 40 484 60 L 920 60 Q 934 48 948 60 L 968 60 L 978 72 L 994 18 L 1010 102 L 1024 60 Q 1044 40 1064 60 L 1440 60"
-            stroke="url(#ecgLineGradPrimary)"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            filter="url(#ecgCyanGlow)"
-            className="med-ecg-sweep-delayed"
           />
         </svg>
       </div>
@@ -438,13 +345,13 @@ export const AnimatedMedicalBackground: React.FC = () => {
             animationDelay: p.delay,
             animationDuration: p.duration,
           }}
-          className={`absolute rounded-full bg-[#5CE1E6] shadow-[0_0_12px_2px_rgba(53,214,194,0.65)] med-particle-glow ${
+          className={`absolute rounded-full bg-[#5CE1E6] shadow-[0_0_10px_1px_rgba(53,214,194,0.5)] med-particle-glow ${
             p.size
           } ${p.mobileHidden ? 'hidden sm:block' : ''}`}
         />
       ))}
 
-      {/* Floating Semi-Transparent Medical & Nursing Symbols Along Screen Edges */}
+      {/* Curated Minimal Medical Symbols Along Screen Corners */}
       {FLOATING_SYMBOLS.map((item) => {
         const {
           id,
@@ -469,7 +376,7 @@ export const AnimatedMedicalBackground: React.FC = () => {
               animationDelay: delay,
               animationDuration: duration,
             }}
-            className={`absolute ${colorClass} ${animClass} drop-shadow-[0_0_12px_rgba(53,214,194,0.22)] ${
+            className={`absolute ${colorClass} ${animClass} ${
               hideOnSmallMobile ? 'hidden sm:block' : ''
             }`}
           >

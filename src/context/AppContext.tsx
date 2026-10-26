@@ -339,6 +339,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setEventConfig((prev) => ({
             ...prev,
             ...cloudCfg,
+            organizers: prev.organizers.filter(
+              (o) =>
+                o.id !== 'org-3' &&
+                !o.name.includes('حسين عبدالله جاسم') &&
+                !o.name.includes('حسين عبد الله جاسم') &&
+                !(o.instagram && o.instagram.includes('922r_h'))
+            ),
             countdownEnabled: cloudCfg.countdownEnabled ?? true,
             countdownPublished: cloudCfg.countdownPublished ?? true,
             countdownDate: cloudCfg.countdownDate || '2026-12-12',
@@ -370,7 +377,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             const allReqs = await getAllRegistrationRequests();
             setPendingRegistrationRequests(
-              allReqs.filter((r) => r.status === 'pending')
+              allReqs.filter(
+                (r) =>
+                  r.status === 'pending' &&
+                  !r.fullName.includes('حسين عبدالله جاسم') &&
+                  !r.fullName.includes('حسين عبد الله جاسم')
+              )
             );
           } catch (e) {
             console.warn('Error fetching pending registration requests:', e);
@@ -397,7 +409,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Fetch my registration request if any
         try {
           const myReq = await getStudentRegistrationRequest(user.uid);
-          setMyRegistrationRequest(myReq);
+          if (
+            myReq &&
+            !myReq.fullName.includes('حسين عبدالله جاسم') &&
+            !myReq.fullName.includes('حسين عبد الله جاسم')
+          ) {
+            setMyRegistrationRequest(myReq);
+          } else {
+            setMyRegistrationRequest(null);
+          }
         } catch (e) {
           console.warn('Error fetching student registration request:', e);
         }
@@ -405,7 +425,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Fetch official graduate record if already approved
         try {
           const gradDoc = await getGraduateDoc(user.uid);
-          if (gradDoc) {
+          if (
+            gradDoc &&
+            !gradDoc.fullName.includes('حسين عبدالله جاسم') &&
+            !gradDoc.fullName.includes('حسين عبد الله جاسم')
+          ) {
             setGraduates((prev) => {
               if (prev.some((g) => g.id === gradDoc.id)) {
                 return prev.map((g) => (g.id === gradDoc.id ? gradDoc : g));

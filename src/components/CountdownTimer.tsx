@@ -229,27 +229,14 @@ export const CountdownTimer: React.FC<{ compact?: boolean }> = ({ compact = fals
   // Live numeric countdown in the future
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl sm:rounded-3xl ${containerStyleClass} p-4 sm:p-7 shadow-2xl transition-all`}
+      className={`relative overflow-hidden rounded-2xl sm:rounded-3xl ${containerStyleClass} p-4 sm:p-6 shadow-2xl transition-all`}
     >
-      {/* Subtle Medical Glow & ECG Line */}
-      <div className="absolute -top-24 -right-24 w-72 h-72 bg-[#35D6C5]/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-[#D6B777]/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-2 inset-x-0 pointer-events-none">
-        <AnimatedEcgWaveform color="#35D6C5" opacity="opacity-15" className="w-full h-8" />
-      </div>
-
       <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-4 sm:gap-6 text-center lg:text-right">
-        {/* Right Side: Event Identity, Date, Location & Timezone Badge */}
-        <div className="space-y-2.5 flex-1 w-full">
-          <div className="flex flex-wrap items-center justify-center lg:justify-start gap-1.5 sm:gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-[#35D6C5]/15 border border-[#35D6C5]/35 text-[#35D6C5] text-[11px] sm:text-xs font-extrabold">
-              <Stethoscope className="w-3.5 h-3.5 shrink-0" />
+        {/* Right Side: Event Identity, Date & Location */}
+        <div className="space-y-2 flex-1 w-full">
+          <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#35D6C5]/15 border border-[#35D6C5]/30 text-[#35D6C5] text-[11px] sm:text-xs font-extrabold">
               <span>معهد التمريض • دفعة 2027</span>
-            </span>
-
-            <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-[#A6F0DF] text-[11px] sm:text-xs font-bold">
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#35D6C5] shrink-0" />
-              <span>التوقيت المعتمد</span>
             </span>
           </div>
 
@@ -282,11 +269,6 @@ export const CountdownTimer: React.FC<{ compact?: boolean }> = ({ compact = fals
                 <span className="truncate">{displayLocation}</span>
               </span>
             )}
-
-            <span className="col-span-2 sm:col-span-1 inline-flex items-center justify-center sm:justify-start gap-1.5 font-bold text-[#A6F0DF] bg-[#10151C]/50 sm:bg-transparent px-2.5 py-1.5 sm:p-0 rounded-xl border border-white/5 sm:border-0">
-              <Camera className="w-3.5 h-3.5 text-[#35D6C5] shrink-0" />
-              <span>المصور: {eventConfig?.scrubPhotographer || 'باقر حسن'}</span>
-            </span>
           </div>
         </div>
 

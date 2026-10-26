@@ -50,12 +50,11 @@ export const HomePage: React.FC = () => {
       {/* 2. Event Overview Cards */}
       <EventOverview />
 
-      {/* 3. Dedicated Student Achievement & Nursing Profession Section (Curated Medical Objects) */}
+      {/* 3. Dedicated Student Achievement & Nursing Profession Section */}
       <section className="py-8 sm:py-14 relative overflow-hidden border-y border-white/5 bg-[#101B2C]/35">
         <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 space-y-6 sm:space-y-10">
           <div className="text-center max-w-3xl mx-auto space-y-2.5 sm:space-y-3">
             <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-xl bg-[#35D6C2]/15 border border-[#35D6C2]/30 text-[#35D6C2] text-[11px] sm:text-xs font-bold">
-              <HeartPulse className="w-3.5 h-3.5" />
               <span>إنجاز الدفعة ورسالة التمريض السريرية</span>
             </div>
             <h2 className="text-xl sm:text-4xl font-black text-[#F4F8FC] leading-snug">
@@ -70,12 +69,9 @@ export const HomePage: React.FC = () => {
             {/* Card 1: Peripheral IV Cannulas & Infusion Therapy */}
             <div className="rounded-2xl sm:rounded-3xl glass-panel p-4 sm:p-6 border border-[#35D6C2]/25 flex flex-col justify-between space-y-4 sm:space-y-5 hover:border-[#35D6C2]/60 transition-all">
               <div className="space-y-2 text-right">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] sm:text-xs font-extrabold text-[#35D6C2] bg-[#35D6C2]/10 px-2.5 py-1 rounded-lg border border-[#35D6C2]/25">
-                    المهارة السريرية والدقة
-                  </span>
-                  <Activity className="w-4 h-4 text-[#35D6C2]" />
-                </div>
+                <span className="inline-block text-[11px] sm:text-xs font-extrabold text-[#35D6C2] bg-[#35D6C2]/10 px-2.5 py-1 rounded-lg border border-[#35D6C2]/25">
+                  المهارة السريرية والدقة
+                </span>
                 <h3 className="text-base sm:text-lg font-black text-[#F4F8FC]">
                   الإجراءات الوريدية والعلاج السريري
                 </h3>
@@ -84,19 +80,16 @@ export const HomePage: React.FC = () => {
                 </p>
               </div>
               <div className="flex justify-center">
-                <IvCannulaSetIllustration className="w-full max-w-[230px] sm:max-w-[300px] h-auto" />
+                <IvCannulaSetIllustration className="w-full max-w-[220px] sm:max-w-[270px] h-auto" />
               </div>
             </div>
 
             {/* Card 2: Vital Signs & Patient Assessment Tools */}
             <div className="rounded-2xl sm:rounded-3xl glass-panel p-4 sm:p-6 border border-[#D7B875]/30 flex flex-col justify-between space-y-4 sm:space-y-5 hover:border-[#D7B875]/60 transition-all">
               <div className="space-y-2 text-right">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] sm:text-xs font-extrabold text-[#D7B875] bg-[#D7B875]/10 px-2.5 py-1 rounded-lg border border-[#D7B875]/25">
-                    المتابعة الحيوية المستمرة
-                  </span>
-                  <Stethoscope className="w-4 h-4 text-[#D7B875]" />
-                </div>
+                <span className="inline-block text-[11px] sm:text-xs font-extrabold text-[#D7B875] bg-[#D7B875]/10 px-2.5 py-1 rounded-lg border border-[#D7B875]/25">
+                  المتابعة الحيوية المستمرة
+                </span>
                 <h3 className="text-base sm:text-lg font-black text-[#F4F8FC]">
                   أدوات التقييم والعلامات الحيوية
                 </h3>
@@ -105,19 +98,16 @@ export const HomePage: React.FC = () => {
                 </p>
               </div>
               <div className="flex justify-center">
-                <VitalSignsToolsIllustration className="w-full max-w-[230px] sm:max-w-[300px] h-auto" />
+                <VitalSignsToolsIllustration className="w-full max-w-[220px] sm:max-w-[270px] h-auto" />
               </div>
             </div>
 
             {/* Card 3: Anatomical Heart, DNA & Graduation Honor */}
             <div className="rounded-2xl sm:rounded-3xl glass-panel p-4 sm:p-6 border border-indigo-400/30 flex flex-col justify-between space-y-4 sm:space-y-5 hover:border-indigo-400/60 transition-all">
               <div className="space-y-2 text-right">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] sm:text-xs font-extrabold text-indigo-300 bg-[#342A78]/50 px-2.5 py-1 rounded-lg border border-indigo-400/30">
-                    شرف المهنة والتخرج 2027
-                  </span>
-                  <Award className="w-4 h-4 text-[#D7B875]" />
-                </div>
+                <span className="inline-block text-[11px] sm:text-xs font-extrabold text-indigo-300 bg-[#342A78]/50 px-2.5 py-1 rounded-lg border border-indigo-400/30">
+                  شرف المهنة والتخرج 2027
+                </span>
                 <h3 className="text-base sm:text-lg font-black text-[#F4F8FC]">
                   نبض الإنسانية واستحقاق التخرج
                 </h3>
@@ -126,12 +116,10 @@ export const HomePage: React.FC = () => {
                 </p>
               </div>
               <div className="flex justify-center">
-                <AnatomicalHeartMedalIllustration className="w-full max-w-[200px] sm:max-w-[250px] h-auto" />
+                <AnatomicalHeartMedalIllustration className="w-full max-w-[190px] sm:max-w-[230px] h-auto" />
               </div>
             </div>
           </div>
-
-          <AnimatedEcgWaveform color="#35D6C2" opacity="opacity-25" className="w-full h-8 sm:h-10" />
         </div>
       </section>
 

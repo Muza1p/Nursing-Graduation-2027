@@ -21,9 +21,16 @@ export const TeamSection: React.FC = () => {
           </p>
         </div>
 
-        {/* 3 Organizers Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 max-w-5xl mx-auto">
-          {eventConfig.organizers.map((org) => (
+        {/* Organizers Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 max-w-3xl mx-auto">
+          {eventConfig.organizers
+            .filter(
+              (org) =>
+                org.id !== 'org-3' &&
+                !org.name.includes('حسين عبدالله جاسم') &&
+                !org.name.includes('حسين عبد الله جاسم')
+            )
+            .map((org) => (
             <div
               key={org.id}
               className="relative rounded-2xl bg-[#101827] border border-white/10 hover:border-[#21D4C2]/40 transition-all duration-300 p-5 sm:p-6 flex flex-col items-center text-center group shadow-xl hover:-translate-y-1"

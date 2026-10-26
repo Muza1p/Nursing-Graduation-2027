@@ -235,11 +235,22 @@ export class ScrubStudentStorage {
       const parsed = JSON.parse(raw) as ScrubStudent[];
       const demoIds = new Set(['grad-admin', 'grad-mod', 'grad-2', 'grad-3', 'grad-4', 'grad-advance-1']);
       let modified = false;
-      const cleaned = parsed.map((s) => {
+      const filtered = parsed.filter((s) => {
+        const norm = normalizeArabicName(s.fullName);
+        if (norm === 'حسين عبدالله جاسم' || norm === 'حسين عبد الله جاسم') {
+          modified = true;
+          return false;
+        }
+        return true;
+      });
+      const cleaned = filtered.map((s) => {
         if (
           s.needsReview &&
           ((s.potentialMatchId && demoIds.has(s.potentialMatchId)) ||
-            (s.reviewNote && s.reviewNote.includes('كرار حيدر الموسوي')))
+            (s.reviewNote &&
+              (s.reviewNote.includes('كرار حيدر الموسوي') ||
+                s.reviewNote.includes('حسين عبدالله جاسم') ||
+                s.reviewNote.includes('حسين عبد الله جاسم'))))
         ) {
           modified = true;
           return {
@@ -269,7 +280,15 @@ export class ScrubStudentStorage {
     try {
       const raw = localStorage.getItem(STUDENT_PAYMENTS_STORAGE_KEY);
       if (!raw) return [];
-      return JSON.parse(raw) as StudentPayment[];
+      const parsed = JSON.parse(raw) as StudentPayment[];
+      const filtered = parsed.filter((p) => {
+        const norm = normalizeArabicName(p.studentName);
+        return norm !== 'حسين عبدالله جاسم' && norm !== 'حسين عبد الله جاسم';
+      });
+      if (filtered.length !== parsed.length) {
+        this.saveStudentPayments(filtered);
+      }
+      return filtered;
     } catch {
       return [];
     }
@@ -355,8 +374,18 @@ export async function syncScrubRosterFromFirestore(): Promise<{
       return null;
     }
 
-    const fsStudents = stuSnap.docs.map((d) => ({ ...d.data(), id: d.id } as ScrubStudent));
-    const fsPayments = paySnap.docs.map((d) => ({ ...d.data(), id: d.id } as StudentPayment));
+    const fsStudents = stuSnap.docs
+      .map((d) => ({ ...d.data(), id: d.id } as ScrubStudent))
+      .filter((s) => {
+        const norm = normalizeArabicName(s.fullName);
+        return norm !== 'حسين عبدالله جاسم' && norm !== 'حسين عبد الله جاسم';
+      });
+    const fsPayments = paySnap.docs
+      .map((d) => ({ ...d.data(), id: d.id } as StudentPayment))
+      .filter((p) => {
+        const norm = normalizeArabicName(p.studentName);
+        return norm !== 'حسين عبدالله جاسم' && norm !== 'حسين عبد الله جاسم';
+      });
 
     // Recalculate financials for every student from verified payments
     const recalculated = fsStudents

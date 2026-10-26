@@ -86,13 +86,6 @@ export const DEFAULT_CONFIG: EventConfig = {
       bio: 'عضو اللجنة المنظمة لحفلة تخرج الممرضين وحفل التخرج الرسمي (دفعة 2027).',
       instagram: 'https://www.instagram.com/t__suf',
     },
-    {
-      id: 'org-3',
-      name: 'حسين عبدالله جاسم',
-      role: 'لجنة التنظيم والتنسيق — معهد التمريض',
-      bio: 'عضو اللجنة المنظمة لحفلة تخرج الممرضين وحفل التخرج الرسمي (دفعة 2027).',
-      instagram: 'https://www.instagram.com/922r_h',
-    },
   ],
 };
 
@@ -281,7 +274,13 @@ export class LocalStorageManager {
         return INITIAL_GRADUATES;
       }
       const rawList: Graduate[] = JSON.parse(data);
-      const list = rawList.filter((g) => !DEMO_GRADUATE_IDS.has(g.id));
+      const list = rawList.filter(
+        (g) =>
+          !DEMO_GRADUATE_IDS.has(g.id) &&
+          !g.fullName.includes('حسين عبدالله جاسم') &&
+          !g.fullName.includes('حسين عبد الله جاسم') &&
+          !g.email.toLowerCase().includes('922r_h')
+      );
       if (list.length !== rawList.length) {
         this.saveGraduates(list);
       }
@@ -328,7 +327,11 @@ export class LocalStorageManager {
       }
       const rawList: PaymentTransaction[] = JSON.parse(data);
       const list = rawList.filter(
-        (p) => !DEMO_PAYMENT_IDS.has(p.id) && !DEMO_GRADUATE_IDS.has(p.graduateId)
+        (p) =>
+          !DEMO_PAYMENT_IDS.has(p.id) &&
+          !DEMO_GRADUATE_IDS.has(p.graduateId) &&
+          !p.graduateName.includes('حسين عبدالله جاسم') &&
+          !p.graduateName.includes('حسين عبد الله جاسم')
       );
       if (list.length !== rawList.length) {
         this.savePayments(list);
