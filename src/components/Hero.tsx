@@ -66,7 +66,7 @@ export const Hero: React.FC = () => {
               <HeartPulse className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#35D6C5] shrink-0" />
               <span className="text-[11px] sm:text-sm font-extrabold text-white">معهد التمريض</span>
               <span className="text-white/25">|</span>
-              <span className="text-[11px] sm:text-sm font-black text-[#35D6C5]">دفعة 2026</span>
+              <span className="text-[11px] sm:text-sm font-black text-[#35D6C5]">دفعة 2027</span>
               <span className="text-white/25">|</span>
               <span className="text-[11px] sm:text-sm font-mono font-extrabold text-[#D6B777]">
                 Graduation 2027 • التخرج 2027
@@ -75,14 +75,14 @@ export const Hero: React.FC = () => {
 
             <div className="space-y-2.5 sm:space-y-3">
               <h1 className="text-2xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.28] sm:leading-[1.18]">
-                دفعة 2026 — ملائكة الرحمة{' '}
+                دفعة 2027 — ملائكة الرحمة{' '}
                 <span className="block mt-1 bg-gradient-to-l from-[#35D6C5] via-[#A6F0DF] to-[#D6B777] bg-clip-text text-transparent">
                   نحو التخرج الأكاديمي 2027
                 </span>
               </h1>
               <p className="text-xs sm:text-lg text-[#E8EEF2]/90 font-medium max-w-2xl mx-auto lg:mx-0 leading-relaxed">
                 بكل فخر واعتزاز برسالة التمريض الإنسانية والعلمية، نحتفي بمسيرة التدريب السريري والجهد المتواصل لطلبة{' '}
-                <strong className="text-white">معهد التمريض (دفعة 2026 | التخرج 2027)</strong> من حفلة السكراب الصباحية إلى يوم التتويج بوشاح التخرج التركوازي.
+                <strong className="text-white">معهد التمريض (دفعة 2027)</strong> من حفلة السكراب الصباحية إلى يوم التتويج بوشاح التخرج التركوازي.
               </p>
             </div>
 
@@ -161,7 +161,7 @@ export const Hero: React.FC = () => {
                   <span className="w-2 h-2 rounded-full bg-[#35D6C5] animate-pulse shrink-0" />
                   <span className="truncate">الهوية الطبية والتخرج الأكاديمي</span>
                 </span>
-                <span className="font-mono text-[#D6B777] font-bold shrink-0">COHORT 2026 • GRAD 2027</span>
+                <span className="font-mono text-[#D6B777] font-bold shrink-0">COHORT 2027 • GRAD 2027</span>
               </div>
 
               {/* Stethoscope Intertwined with Graduation Cap Centerpiece */}

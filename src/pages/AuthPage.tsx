@@ -32,7 +32,6 @@ export const AuthPage: React.FC<{ initialMode?: 'login' | 'register' | 'otp' }> 
   const {
     login,
     registerGraduate,
-    quickSwitchUser,
     graduates,
     eventConfig,
     firebaseUser,
@@ -89,7 +88,7 @@ export const AuthPage: React.FC<{ initialMode?: 'login' | 'register' | 'otp' }> 
     }
 
     if (!agreeTerms) {
-      setFormError('يرجى تأكيد إقرار الانتماء لمعهد التمريض (دفعة 2026 | التخرج 2027).');
+      setFormError('يرجى تأكيد إقرار الانتماء لمعهد التمريض (دفعة 2027).');
       return;
     }
 
@@ -145,7 +144,7 @@ export const AuthPage: React.FC<{ initialMode?: 'login' | 'register' | 'otp' }> 
           بوابة طلبة وخريجي معهد التمريض
         </h1>
         <p className="text-xs sm:text-sm text-[#D7B875] font-extrabold">
-          دفعة 2026 | التخرج 2027 • Graduation 2027
+          دفعة 2027 • Graduation 2027
         </p>
         <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
           التسجيل الرسمي لطلبة الدفعة، متابعة حالة الاعتماد، استلام وصولات الكاش، وتوليد بطاقة التخرج الطبية.
@@ -177,7 +176,7 @@ export const AuthPage: React.FC<{ initialMode?: 'login' | 'register' | 'otp' }> 
             </div>
             <div className="flex justify-between">
               <span>الدفعة:</span>
-              <span className="text-white font-medium">دفعة 2026 | التخرج 2027</span>
+              <span className="text-white font-medium">دفعة 2027</span>
             </div>
             <div className="flex justify-between">
               <span>حالة السداد:</span>
@@ -299,7 +298,7 @@ export const AuthPage: React.FC<{ initialMode?: 'login' | 'register' | 'otp' }> 
           <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 space-y-2 text-xs">
             <span className="font-bold text-red-300">سبب الرفض الموضح من الإدارة:</span>
             <p className="text-white/90 leading-relaxed">
-              {myRegistrationRequest.rejectionReason || 'البيانات غير مطابقة لقوائم طلبة معهد التمريض دفعة 2026.'}
+              {myRegistrationRequest.rejectionReason || 'البيانات غير مطابقة لقوائم طلبة معهد التمريض دفعة 2027.'}
             </p>
           </div>
 
@@ -555,7 +554,7 @@ export const AuthPage: React.FC<{ initialMode?: 'login' | 'register' | 'otp' }> 
                         className="mt-0.5 rounded border-gray-700 text-[#21D4C2] focus:ring-[#21D4C2]"
                       />
                       <span>
-                        أؤكد أنني طالب/خريج في <strong className="text-white">معهد التمريض — دفعة 2026 | التخرج 2027</strong>، وأوافق على إرسال بياناتي للجنة المنظمة للتدقيق والاعتماد قبل منح صلاحيات الخريج.
+                        أؤكد أنني طالب/خريج في <strong className="text-white">معهد التمريض — دفعة 2027</strong>، وأوافق على إرسال بياناتي للجنة المنظمة للتدقيق والاعتماد قبل منح صلاحيات الخريج.
                       </span>
                     </label>
                   </div>
@@ -641,27 +640,6 @@ export const AuthPage: React.FC<{ initialMode?: 'login' | 'register' | 'otp' }> 
                 </div>
               </div>
             )}
-
-            {/* Quick Mobile Testing Switcher for Admin/Developer on Android */}
-            <div className="p-4 rounded-2xl bg-[#101827]/60 border border-white/5 space-y-2 text-right">
-              <span className="text-[11px] font-bold text-[#D6B779] block">
-                أدوات الاختبار المباشر (تسهيلاً للتجربة والتدقيق):
-              </span>
-              <div className="flex flex-wrap gap-2 text-xs">
-                <button
-                  onClick={() => quickSwitchUser('grad-admin')}
-                  className="px-3 py-1.5 rounded-lg bg-[#D6B779]/20 text-[#D6B779] border border-[#D6B779]/30 hover:bg-[#D6B779]/30 font-bold"
-                >
-                  تجربة دور المشرف (Admin)
-                </button>
-                <button
-                  onClick={() => quickSwitchUser('grad-2')}
-                  className="px-3 py-1.5 rounded-lg bg-[#21D4C2]/20 text-[#21D4C2] border border-[#21D4C2]/30 hover:bg-[#21D4C2]/30 font-bold"
-                >
-                  تجربة خريج معتمد (زينب)
-                </button>
-              </div>
-            </div>
           </div>
         )}
     </div>

@@ -40,7 +40,7 @@ export const AnnouncementsSection: React.FC<{ limit?: number }> = ({ limit }) =>
               التبليغات الرسمية وآخر الأخبار
             </h2>
             <p className="text-xs text-slate-300 mt-1">
-              متابعة مباشرة لتوجيهات اللجنة التحضيرية، مواعيد التجهيز، وتحديثات دفعة 2026 | التخرج 2027.
+              متابعة مباشرة لتوجيهات اللجنة التحضيرية، مواعيد التجهيز، وتحديثات دفعة 2027.
             </p>
           </div>
 
@@ -65,7 +65,7 @@ export const AnnouncementsSection: React.FC<{ limit?: number }> = ({ limit }) =>
         {displayList.length === 0 ? (
           <div className="text-center py-12 rounded-2xl bg-[#101B2C]/60 border border-white/10">
             <Bell className="w-10 h-10 text-slate-400 mx-auto mb-3 opacity-50" />
-            <h4 className="text-base font-bold text-[#F4F8FC] mb-1">لا توجد منشورات حالياً في هذا القسم</h4>
+            <h4 className="text-base font-bold text-[#F4F8FC] mb-1">لا توجد بيانات حالياً</h4>
             <p className="text-xs text-slate-400">سيتم نشر التحديثات فور اعتمادها من قبل اللجنة المنظمة.</p>
           </div>
         ) : (
@@ -188,7 +188,7 @@ export const AnnouncementsSection: React.FC<{ limit?: number }> = ({ limit }) =>
               <div className="flex items-center gap-2 text-xs text-[#929BAA] mb-4 pb-3 border-b border-white/10">
                 <Calendar className="w-3.5 h-3.5 text-[#21D4C2]" />
                 <span>تاريخ النشر: {formatArabicDate(activeModalAnn.publishedAt)}</span>
-                <span className="text-[#D6B779]">• معهد التمريض (دفعة 2026 | التخرج 2027)</span>
+                <span className="text-[#D6B779]">• معهد التمريض (دفعة 2027)</span>
               </div>
 
               <div className="text-sm text-[#F5F7FA]/90 leading-relaxed whitespace-pre-line mb-6 bg-[#090B10]/50 p-4 rounded-xl border border-white/5">

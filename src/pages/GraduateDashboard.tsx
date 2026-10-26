@@ -128,9 +128,9 @@ export const GraduateDashboard: React.FC = () => {
               )}
             </div>
             <p className="text-xs text-slate-300 flex flex-wrap items-center gap-2">
-              <span className="text-[#D7B875] font-extrabold">معهد التمريض — دفعة 2026 | التخرج 2027</span>
+              <span className="text-[#D7B875] font-extrabold">معهد التمريض — دفعة 2027</span>
               <span>•</span>
-              <span>رقم القيد: {currentUser.studentId || 'NUR-2026'}</span>
+              <span>رقم القيد: {currentUser.studentId || 'NUR-2027'}</span>
               <span>•</span>
               <span>{currentUser.email}</span>
             </p>
@@ -246,7 +246,7 @@ export const GraduateDashboard: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-white">حفل التخرج الأكاديمي الرسمي</h3>
-                    <p className="text-[11px] text-[#A6F0DF]">دفعة 2026 | التخرج 2027 (قريباً)</p>
+                    <p className="text-[11px] text-[#A6F0DF]">دفعة 2027 (قريباً)</p>
                   </div>
                 </div>
                 <span className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold ${getPaymentStatusBadgeClass(currentUser.gradStatus)}`}>

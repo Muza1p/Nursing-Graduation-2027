@@ -232,7 +232,30 @@ export class ScrubStudentStorage {
     try {
       const raw = localStorage.getItem(SCRUB_STUDENTS_STORAGE_KEY);
       if (!raw) return [];
-      return JSON.parse(raw) as ScrubStudent[];
+      const parsed = JSON.parse(raw) as ScrubStudent[];
+      const demoIds = new Set(['grad-admin', 'grad-mod', 'grad-2', 'grad-3', 'grad-4', 'grad-advance-1']);
+      let modified = false;
+      const cleaned = parsed.map((s) => {
+        if (
+          s.needsReview &&
+          ((s.potentialMatchId && demoIds.has(s.potentialMatchId)) ||
+            (s.reviewNote && s.reviewNote.includes('كرار حيدر الموسوي')))
+        ) {
+          modified = true;
+          return {
+            ...s,
+            needsReview: false,
+            reviewNote: undefined,
+            potentialMatchId: undefined,
+            potentialMatchName: undefined,
+          };
+        }
+        return s;
+      });
+      if (modified) {
+        this.saveStudents(cleaned);
+      }
+      return cleaned;
     } catch {
       return [];
     }
@@ -1028,7 +1051,7 @@ export function exportScrubFullBackupJSON(
   return JSON.stringify(
     {
       exportedAt: new Date().toISOString(),
-      institution: 'معهد التمريض — دفعة 2026 | التخرج 2027',
+      institution: 'معهد التمريض — دفعة 2027',
       event: 'حفلة السكراب (مسرح تفاحة المصور)',
       activeStudentsCount: students.filter((s) => s.status === 'active').length,
       archivedStudentsCount: students.filter((s) => s.status === 'archived').length,

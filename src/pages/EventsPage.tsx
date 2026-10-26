@@ -39,7 +39,7 @@ export const EventsPage: React.FC = () => {
       <div className="text-center max-w-3xl mx-auto space-y-3">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#101B2C] border border-white/10 text-xs font-bold text-[#F4F8FC]">
           <Calendar className="w-3.5 h-3.5 text-[#35D6C2]" />
-          <span>معهد التمريض — دفعة 2026 | التخرج 2027</span>
+          <span>معهد التمريض — دفعة 2027</span>
         </div>
         <h1 className="text-2xl sm:text-4xl font-black text-[#F4F8FC]">
           الحفلات والمناسبات الرسمية للدفعة
@@ -92,7 +92,7 @@ export const EventsPage: React.FC = () => {
                   حفلة السكراب لمعهد التمريض
                 </h2>
                 <p className="text-xs sm:text-sm text-indigo-100/85 max-w-xl leading-relaxed">
-                  الاحتفالية الصباحية لطلبة معهد التمريض (دفعة 2026 | التخرج 2027) بالزي الطبي والسكراب السريري الموحد، في مسرح تفاحة المصور وبإشراف المصور باقر حسن.
+                  الاحتفالية الصباحية لطلبة معهد التمريض (دفعة 2027) بالزي الطبي والسكراب السريري الموحد، في مسرح تفاحة المصور وبإشراف المصور باقر حسن.
                 </p>
 
                 <div className="flex flex-wrap items-center gap-2.5 pt-2 text-xs">
@@ -146,7 +146,7 @@ export const EventsPage: React.FC = () => {
               </div>
               <h4 className="text-sm font-bold text-[#F4F8FC]">قاعة الحفل المعتمدة</h4>
               <p className="text-xs text-slate-300 leading-relaxed">
-                {eventConfig.scrubVenue || 'مسرح تفاحة المصور'} — مجهز بالكامل لاستقبال خريجي معهد التمريض دفعة 2026.
+                {eventConfig.scrubVenue || 'مسرح تفاحة المصور'} — مجهز بالكامل لاستقبال خريجي معهد التمريض دفعة 2027.
               </p>
             </div>
 
@@ -222,7 +222,7 @@ export const EventsPage: React.FC = () => {
                   حفل التخرج الرسمي لمعهد التمريض
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
-                  مراسيم تخرج طلبة معهد التمريض (دفعة 2026 | التخرج 2027)، ارتداء روب التخرج والمعطف الأبيض ووشاح التمريض الفيروزي المذهب، وترديد القسم الطبي الرسمي.
+                  مراسيم تخرج طلبة معهد التمريض (دفعة 2027)، ارتداء روب التخرج والمعطف الأبيض ووشاح التمريض الفيروزي المذهب، وترديد القسم الطبي الرسمي.
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 pt-2 text-xs">
@@ -242,7 +242,7 @@ export const EventsPage: React.FC = () => {
                 <ScrubUniformCoatIllustration variant="coat" className="w-36 h-36 mx-auto" />
                 <div className="text-xs text-[#35D6C2] font-bold">وشاح التمريض المعتمد</div>
                 <div className="text-sm font-black text-[#D7B875]">التركوازي الفيروزي المذهب</div>
-                <div className="text-[11px] text-slate-400">دفعة 2026 | التخرج 2027</div>
+                <div className="text-[11px] text-slate-400">دفعة 2027</div>
               </div>
             </div>
           </div>

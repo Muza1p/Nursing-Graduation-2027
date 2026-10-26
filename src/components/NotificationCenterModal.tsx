@@ -38,7 +38,7 @@ const DEFAULT_NOTIFICATIONS: AppNotification[] = [
   {
     id: 'notif-2',
     title: 'فتح باب توثيق الوصولات واستلام العربون',
-    body: 'يمكن لجميع طلبة معهد التمريض دفعة 2026 تسليم الكاش للمنظمين واستلام الوصل الرسمي برقم تسلسلي موثق.',
+    body: 'يمكن لجميع طلبة معهد التمريض دفعة 2027 تسليم الكاش للمنظمين واستلام الوصل الرسمي برقم تسلسلي موثق.',
     timestamp: '2026-10-24 14:30',
     isRead: false,
     type: 'payment',
@@ -47,7 +47,7 @@ const DEFAULT_NOTIFICATIONS: AppNotification[] = [
   {
     id: 'notif-3',
     title: 'تحديث هوية حفل التخرج الرسمي 2027',
-    body: 'اعتمدت اللجنة اللون التركوازي لوشاح التمريض لحفل التخرج الرسمي لدفعة 2026 (سنة التخرج 2027).',
+    body: 'اعتمدت اللجنة اللون التركوازي لوشاح التمريض لحفل التخرج الرسمي لدفعة 2027.',
     timestamp: '2026-10-22 09:15',
     isRead: true,
     type: 'announcement',
@@ -98,7 +98,7 @@ export const NotificationCenterModal: React.FC<{ isOpen: boolean; onClose: () =>
       const permission = await Notification.requestPermission();
       setBrowserPermission(permission);
       if (permission === 'granted') {
-        new Notification('معهد التمريض — دفعة 2026', {
+        new Notification('معهد التمريض — دفعة 2027', {
           body: 'تم تفعيل التنبيهات بنجاح! ستصلك آخر أخبار حفلة السكراب والتخرج أولاً بأول.',
           icon: '/icon.svg',
         });
@@ -152,7 +152,7 @@ export const NotificationCenterModal: React.FC<{ isOpen: boolean; onClose: () =>
             <div>
               <h3 className="text-base font-black">مركز التنبيهات والإشعارات</h3>
               <p className="text-xs text-[#929BAA]">
-                دفعة 2026 | التخرج 2027 • حفلة السكراب
+                دفعة 2027 • حفلة السكراب
               </p>
             </div>
           </div>

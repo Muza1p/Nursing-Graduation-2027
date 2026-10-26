@@ -133,7 +133,7 @@ export async function submitRegistrationRequest(data: {
       phoneNumber: data.phoneNumber.trim(),
       phoneVerified: false, // Honest flag: phone is stored in profile, genuine SMS OTP not yet gateway-verified
       email: data.email,
-      cohortLabel: 'دفعة 2026 | التخرج 2027',
+      cohortLabel: 'دفعة 2027',
       status: 'pending',
       createdAt: new Date().toISOString(),
     };
@@ -280,7 +280,7 @@ export async function approveStudentRequest(
       studentId: request.studentId,
       preferredTitle: request.preferredTitle,
       displayTitle: `${titleLabel} ${request.fullName}`,
-      cohortLabel: 'دفعة 2026 | التخرج 2027',
+      cohortLabel: 'دفعة 2027',
       role: 'graduate',
       status: 'active',
       scrubDueIQD: scrubDue,

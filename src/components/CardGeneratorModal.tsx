@@ -92,7 +92,7 @@ export const CardGeneratorModal: React.FC<CardGeneratorModalProps> = ({
     ctx.textAlign = 'center';
     ctx.fillStyle = '#D6B779';
     ctx.font = 'bold 22px "Cairo", sans-serif';
-    ctx.fillText('معهد التمريض — دفعة 2026 | التخرج 2027', 600, 110);
+    ctx.fillText('معهد التمريض — دفعة 2027', 600, 110);
 
     ctx.fillStyle = accentColor;
     ctx.font = 'bold 18px "Cairo", sans-serif';
@@ -131,7 +131,7 @@ export const CardGeneratorModal: React.FC<CardGeneratorModalProps> = ({
     // Student ID / Code & Verification
     ctx.fillStyle = '#929BAA';
     ctx.font = '16px "Cairo", sans-serif';
-    ctx.fillText(`رقم القيد: ${graduate.studentId || 'NUR-2026'}  •  دفعة 2026 | التخرج 2027  •  الحالة: معتمد رسمي`, 600, 475);
+    ctx.fillText(`رقم القيد: ${graduate.studentId || 'NUR-2027'}  •  دفعة 2027  •  الحالة: معتمد رسمي`, 600, 475);
 
     // Poetic Quote
     ctx.fillStyle = 'rgba(245, 247, 250, 0.9)';
@@ -165,7 +165,7 @@ export const CardGeneratorModal: React.FC<CardGeneratorModalProps> = ({
     try {
       const dataUrl = canvas.toDataURL('image/png');
       const link = document.createElement('a');
-      link.download = `Nursing_Institute_2026_Grad_2027_${graduate.fullName.replace(/\s+/g, '_')}.png`;
+      link.download = `Nursing_Institute_Cohort_2027_${graduate.fullName.replace(/\s+/g, '_')}.png`;
       link.href = dataUrl;
       link.click();
 
@@ -200,7 +200,7 @@ export const CardGeneratorModal: React.FC<CardGeneratorModalProps> = ({
             <span>بطاقة التخرج الرقمية الرسمية</span>
           </div>
           <h3 className="text-xl font-black text-white">
-            بطاقة تهنئة خريج معهد التمريض (دفعة 2026 | التخرج 2027)
+            بطاقة تهنئة خريج معهد التمريض (دفعة 2027)
           </h3>
           <p className="text-xs text-[#929BAA]">
             خصص الألوان والمسمى الوظيفي ثم نزل البطاقة التذكارية بدقة عالية إلى هاتفك مباشرة.

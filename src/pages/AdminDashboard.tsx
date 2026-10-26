@@ -71,6 +71,8 @@ export const AdminDashboard: React.FC = () => {
     media,
     auditLogs,
     eventConfig,
+    addGraduateManually,
+    deleteGraduate,
     approveGraduate,
     rejectGraduate,
     suspendGraduate,
@@ -172,7 +174,7 @@ export const AdminDashboard: React.FC = () => {
   const [editCountdownEnabled, setEditCountdownEnabled] = useState(eventConfig.countdownEnabled ?? true);
   const [editCountdownPublished, setEditCountdownPublished] = useState(eventConfig.countdownPublished ?? true);
   const [editCountdownTarget, setEditCountdownTarget] = useState<'scrub_party' | 'official_grad' | 'custom'>(eventConfig.countdownTarget || 'scrub_party');
-  const [editCountdownTitle, setEditCountdownTitle] = useState(eventConfig.countdownTitle || 'العد التنازلي لحفلة السكراب — معهد التمريض دفعة 2026');
+  const [editCountdownTitle, setEditCountdownTitle] = useState(eventConfig.countdownTitle || 'العد التنازلي لحفلة السكراب — معهد التمريض دفعة 2027');
   const [editCountdownDate, setEditCountdownDate] = useState(eventConfig.countdownDate || '2026-12-12');
   const [editCountdownTime, setEditCountdownTime] = useState(eventConfig.countdownTime || '09:00');
   const [editCountdownTimezone, setEditCountdownTimezone] = useState(eventConfig.countdownTimezone || 'Asia/Baghdad');
@@ -367,7 +369,7 @@ export const AdminDashboard: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-300">
-              دفعة 2026 | التخرج 2027 • المنظم المسؤول: <strong className="text-[#35D6C2]">{currentUser?.displayTitle || currentUser?.fullName}</strong>
+              دفعة 2027 • المنظم المسؤول: <strong className="text-[#35D6C2]">{currentUser?.displayTitle || currentUser?.fullName}</strong>
             </p>
           </div>
         </div>
@@ -588,9 +590,9 @@ export const AdminDashboard: React.FC = () => {
               <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h3 className="text-base font-bold text-white">لا توجد طلبات تسجيل معلقة حالياً</h3>
+              <h3 className="text-base font-bold text-white">لا توجد بيانات حالياً</h3>
               <p className="text-xs text-[#929BAA] max-w-md mx-auto">
-                كافة طلبات تسجيل الطلبة تمت مراجعتها وتدقيقها بالكامل، أو لم يقم طلبة جدد بتقديم طلبات بعد.
+                لا توجد طلبات تسجيل معلقة حالياً. كافة الطلبات تمت مراجعتها أو لم يقم طلبة جدد بتقديم طلبات بعد.
               </p>
             </div>
           ) : (
@@ -669,7 +671,7 @@ export const AdminDashboard: React.FC = () => {
 
                       <div className="p-3 rounded-xl bg-white/5 border border-white/5 space-y-1">
                         <span className="text-[#929BAA] block text-[11px]">الدفعة وسنة التخرج:</span>
-                        <span className="text-[#D6B779] font-bold">دفعة 2026 | التخرج 2027</span>
+                        <span className="text-[#D6B779] font-bold">دفعة 2027</span>
                       </div>
                     </div>
 
@@ -753,7 +755,7 @@ export const AdminDashboard: React.FC = () => {
               rows={3}
               value={rejectionReasonText}
               onChange={(e) => setRejectionReasonText(e.target.value)}
-              placeholder="مثال: الاسم غير مطابق للقوائم الرسمية المعتمدة لدفعة 2026، أو يرجى مراجعة ممثل الدفعة..."
+              placeholder="مثال: الاسم غير مطابق للقوائم الرسمية المعتمدة لدفعة 2027، أو يرجى مراجعة ممثل الدفعة..."
               className="w-full bg-[#090B10] border border-white/10 rounded-xl p-3 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
             />
 
@@ -849,7 +851,7 @@ export const AdminDashboard: React.FC = () => {
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = `Graduates_Nursing_2026_Grad_2027.csv`;
+                  a.download = `Graduates_Nursing_Cohort_2027.csv`;
                   a.click();
                 }}
                 className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-bold border border-white/10 flex items-center gap-1.5"
@@ -932,83 +934,99 @@ export const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 text-white">
-                  {filteredGraduates.map((g) => (
-                    <tr key={g.id} className="hover:bg-white/5 transition-colors">
-                      <td className="p-3.5">
-                        <div className="font-bold">{g.displayTitle || g.fullName}</div>
-                        <div className="text-[10px] text-[#929BAA]">{g.email}</div>
-                      </td>
-                      <td className="p-3.5 font-mono">
-                        <div>{g.phone}</div>
-                        <div className="text-[10px] text-[#D6B779]">{g.studentId || '-'}</div>
-                      </td>
-                      <td className="p-3.5">
-                        <div className="font-mono text-indigo-300 font-bold">{formatIQD(g.scrubPaidIQD)}</div>
-                        <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${getPaymentStatusBadgeClass(g.scrubStatus)}`}>
-                          {getPaymentStatusArabic(g.scrubStatus)}
-                        </span>
-                      </td>
-                      <td className="p-3.5">
-                        <div className="font-mono text-[#21D4C2] font-bold">{formatIQD(g.gradPaidIQD)}</div>
-                        <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${getPaymentStatusBadgeClass(g.gradStatus)}`}>
-                          {getPaymentStatusArabic(g.gradStatus)}
-                        </span>
-                      </td>
-                      <td className="p-3.5 font-mono font-bold text-[#D6B779]">
-                        {formatIQD(g.remainingBalanceIQD)}
-                      </td>
-                      <td className="p-3.5 space-y-1.5">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          g.status === 'approved'
-                            ? 'bg-emerald-500/20 text-emerald-400'
-                            : g.status === 'pending'
-                            ? 'bg-amber-500/20 text-amber-400'
-                            : 'bg-red-500/20 text-red-400'
-                        }`}>
-                          {g.status === 'approved' ? 'معتمد' : g.status === 'pending' ? 'قيد التدقيق' : 'مرفوض'}
-                        </span>
-                        {isSuperAdmin && (
-                          <div>
-                            <select
-                              value={g.role}
-                              onChange={(e) => updateGraduateRole(g.id, e.target.value as UserRole)}
-                              className="px-2 py-1 rounded-lg bg-[#10151C] border border-[#35D6C5]/25 text-[10px] text-[#A6F0DF] font-bold"
-                              title="تغيير الدور الوظيفي (RBAC)"
-                            >
-                              <option value="graduate">طالب / خريج (student)</option>
-                              <option value="finance_manager">مدير مالي (finance_manager)</option>
-                              <option value="event_manager">مدير الحفلات (event_manager)</option>
-                              <option value="gallery_moderator">مشرف المعرض (gallery_moderator)</option>
-                              <option value="notification_manager">مسؤول الإشعارات (notification_manager)</option>
-                              <option value="super_admin">مشرف أعلى (super_admin)</option>
-                            </select>
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-3.5 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {g.status === 'pending' && (
-                            <button
-                              onClick={() => approveGraduate(g.id)}
-                              className="px-2.5 py-1 rounded-lg bg-emerald-500 text-black font-bold text-[11px]"
-                            >
-                              اعتماد
-                            </button>
-                          )}
-                          <button
-                            onClick={() => {
-                              setPayGradId(g.id);
-                              setPayTargetMode('existing');
-                              setShowPayModal(true);
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px]"
-                          >
-                            قبض كاش
-                          </button>
-                        </div>
+                  {filteredGraduates.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-10 text-center text-[#929BAA]">
+                        <div className="font-bold text-white text-sm mb-1">لا توجد بيانات حالياً</div>
+                        <div className="text-xs">لم يتم تسجيل خريجين في هذا القسم بعد. يمكنك إضافة خريج يدوياً من الأعلى.</div>
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredGraduates.map((g) => (
+                      <tr key={g.id} className="hover:bg-white/5 transition-colors">
+                        <td className="p-3.5">
+                          <div className="font-bold">{g.displayTitle || g.fullName}</div>
+                          <div className="text-[10px] text-[#929BAA]">{g.email}</div>
+                        </td>
+                        <td className="p-3.5 font-mono">
+                          <div>{g.phone}</div>
+                          <div className="text-[10px] text-[#D6B779]">{g.studentId || '-'}</div>
+                        </td>
+                        <td className="p-3.5">
+                          <div className="font-mono text-indigo-300 font-bold">{formatIQD(g.scrubPaidIQD)}</div>
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${getPaymentStatusBadgeClass(g.scrubStatus)}`}>
+                            {getPaymentStatusArabic(g.scrubStatus)}
+                          </span>
+                        </td>
+                        <td className="p-3.5">
+                          <div className="font-mono text-[#21D4C2] font-bold">{formatIQD(g.gradPaidIQD)}</div>
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${getPaymentStatusBadgeClass(g.gradStatus)}`}>
+                            {getPaymentStatusArabic(g.gradStatus)}
+                          </span>
+                        </td>
+                        <td className="p-3.5 font-mono font-bold text-[#D6B779]">
+                          {formatIQD(g.remainingBalanceIQD)}
+                        </td>
+                        <td className="p-3.5 space-y-1.5">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            g.status === 'approved'
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : g.status === 'pending'
+                              ? 'bg-amber-500/20 text-amber-400'
+                              : 'bg-red-500/20 text-red-400'
+                          }`}>
+                            {g.status === 'approved' ? 'معتمد' : g.status === 'pending' ? 'قيد التدقيق' : 'مرفوض'}
+                          </span>
+                          {isSuperAdmin && (
+                            <div>
+                              <select
+                                value={g.role}
+                                onChange={(e) => updateGraduateRole(g.id, e.target.value as UserRole)}
+                                className="px-2 py-1 rounded-lg bg-[#10151C] border border-[#35D6C5]/25 text-[10px] text-[#A6F0DF] font-bold"
+                                title="تغيير الدور الوظيفي (RBAC)"
+                              >
+                                <option value="graduate">طالب / خريج (student)</option>
+                                <option value="finance_manager">مدير مالي (finance_manager)</option>
+                                <option value="event_manager">مدير الحفلات (event_manager)</option>
+                                <option value="gallery_moderator">مشرف المعرض (gallery_moderator)</option>
+                                <option value="notification_manager">مسؤول الإشعارات (notification_manager)</option>
+                                <option value="super_admin">مشرف أعلى (super_admin)</option>
+                              </select>
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {g.status === 'pending' && (
+                              <button
+                                onClick={() => approveGraduate(g.id)}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-500 text-black font-bold text-[11px]"
+                              >
+                                اعتماد
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                setPayGradId(g.id);
+                                setPayTargetMode('existing');
+                                setShowPayModal(true);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px]"
+                            >
+                              قبض كاش
+                            </button>
+                            <button
+                              onClick={() => deleteGraduate(g.id)}
+                              className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400"
+                              title="حذف السجل"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1060,55 +1078,64 @@ export const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 text-white">
-                  {payments.map((p) => (
-                    <tr key={p.id} className="hover:bg-white/5 transition-colors">
-                      <td className="p-3.5 font-mono">
-                        <div className="font-bold text-white">{p.receiptNumber}</div>
-                        <div className="text-[10px] text-[#D6B779]">{p.referenceCode}</div>
-                      </td>
-                      <td className="p-3.5">
-                        <div className="font-bold">{p.graduateName}</div>
-                        {p.matchingPhone && (
-                          <div className="text-[10px] text-gray-400 font-mono flex items-center gap-1">
-                            <Link2 className="w-3 h-3 text-indigo-400" />
-                            <span>مطابقة هاتف: {p.matchingPhone}</span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-3.5">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          p.eventTarget === 'scrub_night'
-                            ? 'bg-indigo-500/20 text-indigo-300'
-                            : 'bg-[#21D4C2]/20 text-[#21D4C2]'
-                        }`}>
-                          {p.eventTarget === 'scrub_night' ? 'حفلة السكراب' : 'حفل التخرج الرسمي'}
-                        </span>
-                      </td>
-                      <td className="p-3.5">
-                        <div className="font-mono font-bold text-white text-sm">{formatIQD(p.amountIQD)}</div>
-                        <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-bold ${
-                          p.paymentStatus === 'completed'
-                            ? 'bg-emerald-500/20 text-emerald-300'
-                            : 'bg-amber-500/20 text-amber-300'
-                        }`}>
-                          {p.paymentStatus === 'deposit' ? 'عربون نقدي' : p.paymentStatus === 'completed' ? 'تسديد كامل' : 'دفعة جزئية'}
-                        </span>
-                      </td>
-                      <td className="p-3.5 text-[#929BAA]">
-                        <div>{p.date}</div>
-                        <div className="text-[10px] font-mono">{p.time}</div>
-                      </td>
-                      <td className="p-3.5 text-xs text-white font-medium">{p.recordedBy}</td>
-                      <td className="p-3.5 text-center">
-                        <button
-                          onClick={() => openReceipt(p)}
-                          className="px-3 py-1 rounded-lg bg-white/5 hover:bg-[#21D4C2]/20 text-[#21D4C2] border border-white/10 font-bold text-xs"
-                        >
-                          معاينة
-                        </button>
+                  {payments.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-10 text-center text-[#929BAA]">
+                        <div className="font-bold text-white text-sm mb-1">لا توجد بيانات حالياً</div>
+                        <div className="text-xs">لم يتم إصدار وصولات إضافية في هذا القسم بعد.</div>
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    payments.map((p) => (
+                      <tr key={p.id} className="hover:bg-white/5 transition-colors">
+                        <td className="p-3.5 font-mono">
+                          <div className="font-bold text-white">{p.receiptNumber}</div>
+                          <div className="text-[10px] text-[#D6B779]">{p.referenceCode}</div>
+                        </td>
+                        <td className="p-3.5">
+                          <div className="font-bold">{p.graduateName}</div>
+                          {p.matchingPhone && (
+                            <div className="text-[10px] text-gray-400 font-mono flex items-center gap-1">
+                              <Link2 className="w-3 h-3 text-indigo-400" />
+                              <span>مطابقة هاتف: {p.matchingPhone}</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3.5">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            p.eventTarget === 'scrub_night'
+                              ? 'bg-indigo-500/20 text-indigo-300'
+                              : 'bg-[#21D4C2]/20 text-[#21D4C2]'
+                          }`}>
+                            {p.eventTarget === 'scrub_night' ? 'حفلة السكراب' : 'حفل التخرج الرسمي'}
+                          </span>
+                        </td>
+                        <td className="p-3.5">
+                          <div className="font-mono font-bold text-white text-sm">{formatIQD(p.amountIQD)}</div>
+                          <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                            p.paymentStatus === 'completed'
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : 'bg-amber-500/20 text-amber-300'
+                          }`}>
+                            {p.paymentStatus === 'deposit' ? 'عربون نقدي' : p.paymentStatus === 'completed' ? 'تسديد كامل' : 'دفعة جزئية'}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-[#929BAA]">
+                          <div>{p.date}</div>
+                          <div className="text-[10px] font-mono">{p.time}</div>
+                        </td>
+                        <td className="p-3.5 text-xs text-white font-medium">{p.recordedBy}</td>
+                        <td className="p-3.5 text-center">
+                          <button
+                            onClick={() => openReceipt(p)}
+                            className="px-3 py-1 rounded-lg bg-white/5 hover:bg-[#21D4C2]/20 text-[#21D4C2] border border-white/10 font-bold text-xs"
+                          >
+                            معاينة
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1174,7 +1201,7 @@ export const AdminDashboard: React.FC = () => {
                     onChange={(e) => setEditCountdownTarget(e.target.value as any)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-[#142638] border border-white/10 text-white text-xs focus:outline-none focus:border-[#35D6C5]"
                   >
-                    <option value="scrub_party">حفلة السكراب (دفعة 2026)</option>
+                    <option value="scrub_party">حفلة السكراب (دفعة 2027)</option>
                     <option value="official_grad">حفل التخرج الرسمي (2027)</option>
                     <option value="custom">مناسبة مخصصة</option>
                   </select>
@@ -1540,24 +1567,31 @@ export const AdminDashboard: React.FC = () => {
           )}
 
           {/* Published Media Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {media.filter((m) => m.status !== 'pending').map((item) => (
-              <div key={item.id} className="group relative rounded-2xl overflow-hidden bg-[#101827] border border-white/10 shadow-lg">
-                <img src={item.url} alt={item.title} className="w-full h-40 object-cover" />
-                <div className="p-3 text-right">
-                  <span className="text-[10px] text-[#21D4C2] block">{item.album || item.category}</span>
-                  <h4 className="text-xs font-bold text-white truncate">{item.title}</h4>
-                  <button
-                    onClick={() => deleteMedia(item.id)}
-                    className="mt-2 text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    <span>حذف</span>
-                  </button>
+          {media.filter((m) => m.status !== 'pending').length === 0 ? (
+            <div className="text-center py-12 rounded-3xl bg-[#101827] border border-white/10 p-6">
+              <div className="font-bold text-white text-sm mb-1">لا توجد بيانات حالياً</div>
+              <p className="text-xs text-[#929BAA]">لم يتم رفع أي صور أو وسائط في المعرض العام بعد.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {media.filter((m) => m.status !== 'pending').map((item) => (
+                <div key={item.id} className="group relative rounded-2xl overflow-hidden bg-[#101827] border border-white/10 shadow-lg">
+                  <img src={item.url} alt={item.title} className="w-full h-40 object-cover" />
+                  <div className="p-3 text-right">
+                    <span className="text-[10px] text-[#21D4C2] block">{item.album || item.category}</span>
+                    <h4 className="text-xs font-bold text-white truncate">{item.title}</h4>
+                    <button
+                      onClick={() => deleteMedia(item.id)}
+                      className="mt-2 text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>حذف</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1575,28 +1609,35 @@ export const AdminDashboard: React.FC = () => {
             </button>
           </div>
 
-          <div className="space-y-3">
-            {announcements.map((ann) => (
-              <div key={ann.id} className="p-4 rounded-2xl bg-[#101827] border border-white/10 flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-white text-sm">{ann.title}</span>
-                    <span className="px-2 py-0.5 rounded-full bg-white/5 text-[10px] text-[#D6B779]">
-                      {ann.category === 'scrub_night' ? 'حفلة السكراب' : ann.category === 'official_grad' ? 'التخرج الرسمي' : 'عام'}
-                    </span>
+          {announcements.length === 0 ? (
+            <div className="text-center py-12 rounded-3xl bg-[#101827] border border-white/10 p-6">
+              <div className="font-bold text-white text-sm mb-1">لا توجد بيانات حالياً</div>
+              <p className="text-xs text-[#929BAA]">لم يتم نشر أي إعلانات حالياً.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {announcements.map((ann) => (
+                <div key={ann.id} className="p-4 rounded-2xl bg-[#101827] border border-white/10 flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white text-sm">{ann.title}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-white/5 text-[10px] text-[#D6B779]">
+                        {ann.category === 'scrub_night' ? 'حفلة السكراب' : ann.category === 'official_grad' ? 'التخرج الرسمي' : 'عام'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#929BAA]">{ann.description}</p>
+                    <span className="text-[10px] text-gray-500">{ann.publishedAt}</span>
                   </div>
-                  <p className="text-xs text-[#929BAA]">{ann.description}</p>
-                  <span className="text-[10px] text-gray-500">{ann.publishedAt}</span>
+                  <button
+                    onClick={() => deleteAnnouncement(ann.id)}
+                    className="p-2 rounded-lg text-red-400 hover:bg-red-500/10"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => deleteAnnouncement(ann.id)}
-                  className="p-2 rounded-lg text-red-400 hover:bg-red-500/10"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1604,19 +1645,23 @@ export const AdminDashboard: React.FC = () => {
       {activeAdminTab === 'audit' && (
         <div className="rounded-3xl bg-[#101827] border border-white/10 p-5 shadow-xl space-y-4">
           <h3 className="text-base font-bold text-white">سجل تدقيق العمليات والتعديلات (Audit Trail)</h3>
-          <div className="space-y-2">
-            {auditLogs.map((log) => (
-              <div key={log.id} className="p-3.5 rounded-xl bg-[#090B10] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                <div>
-                  <span className="font-bold text-white ml-2">{log.action}:</span>
-                  <span className="text-[#929BAA]">{log.details}</span>
+          {auditLogs.length === 0 ? (
+            <div className="text-center py-10 text-[#929BAA] text-xs">لا توجد بيانات حالياً</div>
+          ) : (
+            <div className="space-y-2">
+              {auditLogs.map((log) => (
+                <div key={log.id} className="p-3.5 rounded-xl bg-[#090B10] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div>
+                    <span className="font-bold text-white ml-2">{log.action}:</span>
+                    <span className="text-[#929BAA]">{log.details}</span>
+                  </div>
+                  <div className="text-[10px] text-[#D6B779] shrink-0 font-mono">
+                    {log.performedBy} • {log.timestamp}
+                  </div>
                 </div>
-                <div className="text-[10px] text-[#D6B779] shrink-0 font-mono">
-                  {log.performedBy} • {log.timestamp}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1710,7 +1755,7 @@ export const AdminDashboard: React.FC = () => {
                         type="text"
                         value={advanceStudentId}
                         onChange={(e) => setAdvanceStudentId(e.target.value)}
-                        placeholder="NUR-2026-..."
+                        placeholder="NUR-2027-..."
                         className="w-full px-3 py-2 rounded-xl bg-[#101827] border border-white/10 text-white font-mono"
                       />
                     </div>
@@ -1827,12 +1872,12 @@ export const AdminDashboard: React.FC = () => {
                   fullName: newGradName.trim(),
                   email: newGradEmail.trim(),
                   phone: newGradPhone.trim(),
-                  studentId: newGradStudentId.trim() || `NUR-2026-${Math.floor(100 + Math.random() * 900)}`,
+                  studentId: newGradStudentId.trim() || `NUR-2027-${Math.floor(100 + Math.random() * 900)}`,
                   role: 'graduate',
                   status: 'approved',
                   preferredTitle: newGradTitle,
                   displayTitle: newGradTitle === 'nurse_f' ? `الممرضة ${newGradName.trim()}` : `الممرض ${newGradName.trim()}`,
-                  cohortLabel: 'دفعة 2026 | التخرج 2027',
+                  cohortLabel: 'دفعة 2027',
                   scrubDueIQD: scrubDue,
                   scrubPaidIQD: 0,
                   scrubBalanceIQD: scrubDue,
@@ -1848,14 +1893,7 @@ export const AdminDashboard: React.FC = () => {
                   approvedAt: new Date().toISOString().split('T')[0],
                   approvedBy: currentUser?.fullName || 'المشرف',
                 };
-                graduates.unshift(newGrad);
-                LocalStorageManager.saveGraduates(graduates);
-                LocalStorageManager.addAuditLog({
-                  action: 'إنشاء حساب خريج يدوياً',
-                  performedBy: currentUser?.fullName || 'المسؤول',
-                  details: `تم إضافة الخريج ${newGrad.displayTitle || newGrad.fullName} واعتماده مباشرة.`,
-                  entityType: 'graduate',
-                });
+                addGraduateManually(newGrad);
                 setShowAddGradModal(false);
                 setNewGradName('');
                 setNewGradEmail('');
@@ -1920,7 +1958,7 @@ export const AdminDashboard: React.FC = () => {
                     type="text"
                     value={newGradStudentId}
                     onChange={(e) => setNewGradStudentId(e.target.value)}
-                    placeholder="NUR-2026-..."
+                    placeholder="NUR-2027-..."
                     className="w-full px-3 py-2 rounded-xl bg-[#090B10] border border-white/10 text-white font-mono"
                   />
                 </div>

@@ -31,7 +31,7 @@ export const OfficialGraduationPage: React.FC = () => {
         return {
           label: 'تم إعلان الموعد الرسمي',
           color: 'bg-[#35D6C2]/20 text-[#35D6C2] border-[#35D6C2]/40',
-          desc: 'تم اعتماد الموعد الرسمي لحفل التخرج الأكاديمي لطلبة دفعة 2026 | التخرج 2027.',
+          desc: 'تم اعتماد الموعد الرسمي لحفل التخرج الأكاديمي لطلبة دفعة 2027.',
         };
       case 'registration_open':
         return {
@@ -75,7 +75,7 @@ export const OfficialGraduationPage: React.FC = () => {
                 {statusInfo.label}
               </span>
               <span className="text-xs text-[#35D6C2] font-bold bg-[#35D6C2]/10 px-3 py-1 rounded-xl border border-[#35D6C2]/25">
-                معهد التمريض — دفعة 2026 | التخرج {eventConfig.officialGraduationYear || 2027}
+                معهد التمريض — دفعة 2027
               </span>
             </div>
 
@@ -161,7 +161,7 @@ export const OfficialGraduationPage: React.FC = () => {
             {eventConfig.officialGraduationSchedule || 'قريباً'}
           </h3>
           <p className="text-xs text-slate-400 leading-relaxed">
-            مسيرة الخريجين، أداء القسم الطبي، وتكريم طلبة دفعة 2026.
+            مسيرة الخريجين، أداء القسم الطبي، وتكريم طلبة دفعة 2027.
           </p>
         </div>
       </div>

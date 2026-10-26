@@ -17,14 +17,14 @@ export const Footer: React.FC = () => {
               </div>
               <div>
                 <h3 className="font-black text-sm sm:text-base text-white tracking-wider">
-                  معهد التمريض — دفعة 2026 | التخرج 2027
+                  معهد التمريض — دفعة 2027
                 </h3>
                 <p className="text-xs text-[#D6B779] font-medium">حفلة السكراب • SCRUB NIGHT</p>
               </div>
             </div>
 
             <p className="text-xs text-[#929BAA] max-w-md leading-relaxed">
-              المنصة الرسمية المعتمدة لإدارة وتوثيق فعاليات معهد التمريض (دفعة 2026 | التخرج 2027) وحفلة السكراب. نسعى لتقديم تجربة تليق بعطاء وتضحيات ملائكة الرحمة.
+              المنصة الرسمية المعتمدة لإدارة وتوثيق فعاليات معهد التمريض (دفعة 2027) وحفلة السكراب. نسعى لتقديم تجربة تليق بعطاء وتضحيات ملائكة الرحمة.
             </p>
 
             <div className="flex items-center gap-3">
@@ -39,7 +39,7 @@ export const Footer: React.FC = () => {
               </a>
               <div className="text-xs text-[#929BAA] flex items-center gap-1.5">
                 <HeartPulse className="w-4 h-4 text-[#21D4C2]" />
-                <span>دفعة 2026 | التخرج 2027</span>
+                <span>دفعة 2027</span>
               </div>
             </div>
           </div>
@@ -143,7 +143,7 @@ export const Footer: React.FC = () => {
         {/* Bottom Copyright */}
         <div className="border-t border-white/5 pt-4 flex flex-col sm:flex-row items-center justify-between text-xs text-[#929BAA] gap-3">
           <p className="text-center sm:text-right">
-            جميع الحقوق محفوظة — معهد التمريض (دفعة 2026 | التخرج 2027)
+            جميع الحقوق محفوظة — معهد التمريض (دفعة 2027)
           </p>
           <div className="flex items-center gap-4 text-[11px]">
             <span className="flex items-center gap-1 text-[#21D4C2]">

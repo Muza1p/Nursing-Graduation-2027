@@ -48,7 +48,7 @@ export const EventOverview: React.FC = () => {
       id: 'reg',
       title: 'بوابة تسجيل واعتماد الطلبة',
       subtitle: 'توثيق حساب الطالب وربط وصولات الكاش والبطاقة الرقمية',
-      date: 'متاح الآن لطلبة دفعة 2026',
+      date: 'متاح الآن لطلبة دفعة 2027',
       location: 'مراجعة واعتماد اللجنة المنظمة',
       badge: 'التسجيل مفتوح',
       badgeColor: 'bg-[#D7B875]/20 text-[#D7B875] border-[#D7B875]/40',
@@ -82,7 +82,7 @@ export const EventOverview: React.FC = () => {
               <span>محطات المسيرة الأكاديمية والاحتفالية</span>
             </div>
             <h2 className="text-xl sm:text-3xl font-black text-[#F4F8FC] leading-snug">
-              فعاليات معهد التمريض (دفعة 2026 | التخرج 2027)
+              فعاليات معهد التمريض (دفعة 2027)
             </h2>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 max-w-md leading-relaxed">

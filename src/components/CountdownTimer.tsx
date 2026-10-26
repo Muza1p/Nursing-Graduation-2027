@@ -179,9 +179,10 @@ export const CountdownTimer: React.FC<{ compact?: boolean }> = ({ compact = fals
     );
   }
 
-  const displayTitle =
+  const displayTitle = (
     eventConfig?.countdownTitle ||
-    'العد التنازلي لحفلة السكراب — معهد التمريض (دفعة 2026)';
+    'العد التنازلي لحفلة السكراب — معهد التمريض (دفعة 2027)'
+  ).replace(/دفعة 2026/g, 'دفعة 2027');
 
   const displayLocation =
     eventConfig?.countdownLocation ||
@@ -208,7 +209,7 @@ export const CountdownTimer: React.FC<{ compact?: boolean }> = ({ compact = fals
           بدأ الحفل
         </h2>
         <p className="text-xs sm:text-base text-[#A6F0DF] font-bold max-w-xl mx-auto">
-          مبارك لخريجي معهد التمريض (دفعة 2026 | التخرج 2027) — نتمنى لكم يوماً خالداً يليق برسالة التمريض الإنسانية.
+          مبارك لخريجي معهد التمريض (دفعة 2027) — نتمنى لكم يوماً خالداً يليق برسالة التمريض الإنسانية.
         </p>
         <div className="mt-5 grid grid-cols-4 gap-2 sm:gap-3 max-w-md mx-auto">
           {timeUnits.map((unit, idx) => (
@@ -243,7 +244,7 @@ export const CountdownTimer: React.FC<{ compact?: boolean }> = ({ compact = fals
           <div className="flex flex-wrap items-center justify-center lg:justify-start gap-1.5 sm:gap-2">
             <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-[#35D6C5]/15 border border-[#35D6C5]/35 text-[#35D6C5] text-[11px] sm:text-xs font-extrabold">
               <Stethoscope className="w-3.5 h-3.5 shrink-0" />
-              <span>معهد التمريض • دفعة 2026 | التخرج 2027</span>
+              <span>معهد التمريض • دفعة 2027</span>
             </span>
 
             <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-[#A6F0DF] text-[11px] sm:text-xs font-bold">

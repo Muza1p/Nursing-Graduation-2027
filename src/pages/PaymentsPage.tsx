@@ -179,7 +179,7 @@ export const PaymentsPage: React.FC = () => {
       <div className="text-center max-w-2xl mx-auto space-y-2.5">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#142638] border border-[#35D6C5]/35 text-xs font-bold text-white">
           <ShieldCheck className="w-3.5 h-3.5 text-[#35D6C5]" />
-          <span>معهد التمريض — دفعة 2026 | التخرج 2027</span>
+          <span>معهد التمريض — دفعة 2027</span>
         </div>
         <h1 className="text-2xl sm:text-4xl font-black text-white">
           استعلام المبلغ المدفوع للطالب
@@ -604,7 +604,7 @@ export const PaymentsPage: React.FC = () => {
               <div>
                 <h3 className="text-lg font-black text-white">الملخص المالي المعتمد للطالب</h3>
                 <p className="text-xs text-[#E8EEF2]/75">
-                  معهد التمريض — دفعة 2026 | التخرج 2027
+                  معهد التمريض — دفعة 2027
                 </p>
               </div>
               <div className="w-10 h-10 rounded-xl bg-[#D6B777]/20 text-[#D6B777] flex items-center justify-center">

@@ -51,7 +51,7 @@ export const Navbar: React.FC = () => {
             <span className="text-[#F4F8FC] font-medium truncate">حفلة السكراب الصباحية:</span>
             <span className="text-[#35D6C2] font-bold font-mono shrink-0">{eventConfig.scrubPartyDateDisplay || '12/12/2026'}</span>
             <span className="hidden sm:inline text-white/30">•</span>
-            <span className="hidden sm:inline font-semibold text-[#D7B875]">معهد التمريض — دفعة 2026 | التخرج 2027</span>
+            <span className="hidden sm:inline font-semibold text-[#D7B875]">معهد التمريض — دفعة 2027</span>
           </div>
           <a
             href={eventConfig.instagramUrl}
@@ -81,10 +81,10 @@ export const Navbar: React.FC = () => {
             <div className="flex flex-col min-w-0">
               <span className="font-extrabold text-xs sm:text-base tracking-wide text-[#F4F8FC] flex items-center gap-1.5 truncate">
                 <span>معهد التمريض</span>
-                <span className="text-[#35D6C2] font-mono text-[11px] sm:text-sm">2026/2027</span>
+                <span className="text-[#35D6C2] font-mono text-[11px] sm:text-sm">2027</span>
               </span>
               <span className="text-[10px] sm:text-xs text-[#D7B875] font-bold tracking-wide truncate">
-                دفعة 2026 | التخرج 2027 • حفلة السكراب
+                دفعة 2027 • حفلة السكراب
               </span>
             </div>
           </div>

@@ -23,10 +23,10 @@ const STORAGE_KEYS = {
 
 // Initial default configuration strictly as required by the user's updated brief
 export const DEFAULT_CONFIG: EventConfig = {
-  brandName: 'معهد التمريض — دفعة 2026 | التخرج 2027',
+  brandName: 'معهد التمريض — دفعة 2027',
   brandSubtitle: 'حفلة السكراب وحفل التخرج الرسمي',
   eventType: 'حفلة تخرج الممرضين',
-  cohortYear: 'دفعة 2026',
+  cohortYear: 'دفعة 2027',
   graduationYear: '2027',
   institutionName: 'معهد التمريض',
   
@@ -62,7 +62,7 @@ export const DEFAULT_CONFIG: EventConfig = {
   countdownEnabled: true,
   countdownPublished: true,
   countdownTarget: 'scrub_night',
-  countdownTitle: 'العد التنازلي لفعالية حفلة السكراب — دفعة 2026',
+  countdownTitle: 'العد التنازلي لفعالية حفلة السكراب — دفعة 2027',
   countdownDate: '2026-12-12',
   countdownTime: '09:00:00',
   countdownTimezone: 'Asia/Baghdad',
@@ -76,21 +76,21 @@ export const DEFAULT_CONFIG: EventConfig = {
       id: 'org-1',
       name: 'مصطفى علي حسون',
       role: 'اللجنة التحضيرية العليا — معهد التمريض',
-      bio: 'عضو اللجنة المنظمة لحفلة تخرج الممرضين وحفل التخرج الرسمي (دفعة 2026 | التخرج 2027).',
+      bio: 'عضو اللجنة المنظمة لحفلة تخرج الممرضين وحفل التخرج الرسمي (دفعة 2027).',
       instagram: 'https://www.instagram.com/mustafaa.hassoun',
     },
     {
       id: 'org-2',
       name: 'مصطفى أركان ساجت',
       role: 'لجنة المتابعة والتواصل — معهد التمريض',
-      bio: 'عضو اللجنة المنظمة لحفلة تخرج الممرضين وحفل التخرج الرسمي (دفعة 2026 | التخرج 2027).',
+      bio: 'عضو اللجنة المنظمة لحفلة تخرج الممرضين وحفل التخرج الرسمي (دفعة 2027).',
       instagram: 'https://www.instagram.com/t__suf',
     },
     {
       id: 'org-3',
       name: 'حسين عبدالله جاسم',
       role: 'لجنة التنظيم والتنسيق — معهد التمريض',
-      bio: 'عضو اللجنة المنظمة لحفلة تخرج الممرضين وحفل التخرج الرسمي (دفعة 2026 | التخرج 2027).',
+      bio: 'عضو اللجنة المنظمة لحفلة تخرج الممرضين وحفل التخرج الرسمي (دفعة 2027).',
       instagram: 'https://www.instagram.com/922r_h',
     },
   ],
@@ -109,7 +109,7 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
   {
     id: 'ann-2',
     title: 'تنويه: الحفل صباحي (الوقت يُعلن لاحقاً)',
-    description: 'نود إعلام جميع الزملاء في معهد التمريض (دفعة 2026 | التخرج 2027) بأن الحفل صباحي، وستحدد اللجنة المنظمة موعد الانطلاق (بين الساعة 8:00 صباحاً و 9:00 صباحاً) قريباً.',
+    description: 'نود إعلام جميع الزملاء في معهد التمريض (دفعة 2027) بأن الحفل صباحي، وستحدد اللجنة المنظمة موعد الانطلاق (بين الساعة 8:00 صباحاً و 9:00 صباحاً) قريباً.',
     publishedAt: '2026-10-22',
     status: 'published',
     displayOrder: 2,
@@ -118,7 +118,7 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
   {
     id: 'ann-3',
     title: 'حفل التخرج الرسمي 2027 (قريباً)',
-    description: 'بخصوص حفل التخرج الرسمي لدفعة 2026 المتخرجة عام 2027 ووشاح التمريض باللون التركوازي، فإن الموعد والقاعة قيد الإعداد وسيتم نشر التفاصيل فور ورودها.',
+    description: 'بخصوص حفل التخرج الرسمي لدفعة 2027 ووشاح التمريض باللون التركوازي، فإن الموعد والقاعة قيد الإعداد وسيتم نشر التفاصيل فور ورودها.',
     publishedAt: '2026-10-24',
     status: 'published',
     displayOrder: 3,
@@ -135,357 +135,51 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
   },
 ];
 
-export const INITIAL_GRADUATES: Graduate[] = [
-  {
-    id: 'grad-admin',
-    fullName: 'مصطفى علي حسون',
-    email: 'admin@nursing2027.iq',
-    phone: '07701234567',
-    studentId: 'NUR-2026-001',
-    role: 'admin',
-    status: 'approved',
-    preferredTitle: 'nurse_m',
-    displayTitle: 'الممرض مصطفى علي حسون',
-    cohortLabel: 'دفعة 2026 | التخرج 2027',
-    scrubDueIQD: 35000,
-    scrubPaidIQD: 35000,
-    scrubBalanceIQD: 0,
-    scrubStatus: 'completed',
-    gradDueIQD: 50000,
-    gradPaidIQD: 50000,
-    gradBalanceIQD: 0,
-    gradStatus: 'completed',
-    totalDueIQD: 85000,
-    totalPaidIQD: 85000,
-    remainingBalanceIQD: 0,
-    createdAt: '2026-10-01',
-    approvedAt: '2026-10-01',
-    approvedBy: 'النظام',
-    notes: 'حساب إدارة النظام واللجنة المنظمة — معهد التمريض',
-  },
-  {
-    id: 'grad-mod',
-    fullName: 'حسين عبدالله جاسم',
-    email: 'moderator@nursing2027.iq',
-    phone: '07709988776',
-    studentId: 'NUR-2026-002',
-    role: 'moderator',
-    status: 'approved',
-    preferredTitle: 'nurse_m',
-    displayTitle: 'الممرض حسين عبدالله جاسم',
-    cohortLabel: 'دفعة 2026 | التخرج 2027',
-    scrubDueIQD: 35000,
-    scrubPaidIQD: 35000,
-    scrubBalanceIQD: 0,
-    scrubStatus: 'completed',
-    gradDueIQD: 50000,
-    gradPaidIQD: 50000,
-    gradBalanceIQD: 0,
-    gradStatus: 'completed',
-    totalDueIQD: 85000,
-    totalPaidIQD: 85000,
-    remainingBalanceIQD: 0,
-    createdAt: '2026-10-02',
-    approvedAt: '2026-10-02',
-    approvedBy: 'مصطفى علي حسون',
-    notes: 'حساب مشرف النظام (إدارة المحتوى والإعلانات والدفعات النقدية)',
-  },
-  {
-    id: 'grad-2',
-    fullName: 'زينب أحمد الكعبي',
-    email: 'zainab.ahmed@example.com',
-    phone: '07719876543',
-    studentId: 'NUR-2026-018',
-    role: 'graduate',
-    status: 'approved',
-    preferredTitle: 'nurse_f',
-    displayTitle: 'الممرضة زينب أحمد الكعبي',
-    cohortLabel: 'دفعة 2026 | التخرج 2027',
-    scrubDueIQD: 35000,
-    scrubPaidIQD: 35000,
-    scrubBalanceIQD: 0,
-    scrubStatus: 'completed',
-    gradDueIQD: 50000,
-    gradPaidIQD: 50000,
-    gradBalanceIQD: 0,
-    gradStatus: 'completed',
-    totalDueIQD: 85000,
-    totalPaidIQD: 85000,
-    remainingBalanceIQD: 0,
-    createdAt: '2026-10-15',
-    approvedAt: '2026-10-16',
-    approvedBy: 'مصطفى علي حسون',
-    notes: 'تم تسديد كامل رسوم السكراب والتخرج نقداً',
-  },
-  {
-    id: 'grad-3',
-    fullName: 'كرار حيدر الموسوي',
-    email: 'karrar.haider@example.com',
-    phone: '07801122334',
-    studentId: 'NUR-2026-042',
-    role: 'graduate',
-    status: 'approved',
-    preferredTitle: 'nurse_m',
-    displayTitle: 'الممرض كرار حيدر الموسوي',
-    cohortLabel: 'دفعة 2026 | التخرج 2027',
-    scrubDueIQD: 35000,
-    scrubPaidIQD: 15000,
-    scrubBalanceIQD: 20000,
-    scrubStatus: 'deposit', // عربون
-    gradDueIQD: 50000,
-    gradPaidIQD: 0,
-    gradBalanceIQD: 50000,
-    gradStatus: 'unpaid',
-    totalDueIQD: 85000,
-    totalPaidIQD: 15000,
-    remainingBalanceIQD: 70000,
-    createdAt: '2026-10-18',
-    approvedAt: '2026-10-19',
-    approvedBy: 'حسين عبدالله جاسم',
-    notes: 'تم دفع عربون 15,000 د.ع لحفلة السكراب نايت (متبقي 20,000 د.ع)',
-  },
-  {
-    id: 'grad-4',
-    fullName: 'فاطمة محمد الربيعي',
-    email: 'fatima.mohammed@example.com',
-    phone: '07733445566',
-    studentId: 'NUR-2026-089',
-    role: 'graduate',
-    status: 'pending',
-    preferredTitle: 'nurse_f',
-    displayTitle: 'الممرضة فاطمة محمد الربيعي',
-    cohortLabel: 'دفعة 2026 | التخرج 2027',
-    scrubDueIQD: 35000,
-    scrubPaidIQD: 0,
-    scrubBalanceIQD: 35000,
-    scrubStatus: 'unpaid',
-    gradDueIQD: 50000,
-    gradPaidIQD: 0,
-    gradBalanceIQD: 50000,
-    gradStatus: 'unpaid',
-    totalDueIQD: 85000,
-    totalPaidIQD: 0,
-    remainingBalanceIQD: 85000,
-    createdAt: '2026-10-25',
-    notes: 'طلب تسجيل قيد التدقيق والمطابقة من قبل المشرف',
-  },
-  {
-    // Pre-recorded advance student (Registered offline by admin, waiting for student app sign-up)
-    id: 'grad-advance-1',
-    fullName: 'علي كريم الزيدي',
-    email: 'ali.kareem@example.com',
-    phone: '07722334455',
-    studentId: 'NUR-2026-077',
-    role: 'graduate',
-    status: 'approved',
-    preferredTitle: 'nurse_m',
-    displayTitle: 'الممرض علي كريم الزيدي',
-    cohortLabel: 'دفعة 2026 | التخرج 2027',
-    scrubDueIQD: 35000,
-    scrubPaidIQD: 20000,
-    scrubBalanceIQD: 15000,
-    scrubStatus: 'deposit',
-    gradDueIQD: 50000,
-    gradPaidIQD: 0,
-    gradBalanceIQD: 50000,
-    gradStatus: 'unpaid',
-    totalDueIQD: 85000,
-    totalPaidIQD: 20000,
-    remainingBalanceIQD: 65000,
-    isAdvanceLinked: true,
-    createdAt: '2026-10-22',
-    approvedAt: '2026-10-22',
-    approvedBy: 'مصطفى علي حسون',
-    notes: 'دفع عربون نقدي مقدماً قبل إنشاء الحساب وتم ربط السجل بنجاح برقم الهاتف',
-  },
-];
+export const DEMO_GRADUATE_IDS = new Set([
+  'grad-admin',
+  'grad-mod',
+  'grad-2',
+  'grad-3',
+  'grad-4',
+  'grad-advance-1',
+]);
 
-export const INITIAL_PAYMENTS: PaymentTransaction[] = [
-  {
-    id: 'pay-101',
-    receiptNumber: 'REC-2026-001',
-    graduateId: 'grad-admin',
-    graduateName: 'مصطفى علي حسون',
-    eventTarget: 'scrub_night',
-    amountIQD: 35000,
-    paymentStatus: 'completed',
-    date: '2026-10-02',
-    time: '14:30',
-    method: 'cash',
-    notes: 'تسديد رسوم حفلة السكراب كاملاً',
-    recordedBy: 'اللجنة المالية — معهد التمريض',
-    isVerified: true,
-    referenceCode: 'CASH-98214',
-  },
-  {
-    id: 'pay-102',
-    receiptNumber: 'REC-2026-002',
-    graduateId: 'grad-admin',
-    graduateName: 'مصطفى علي حسون',
-    eventTarget: 'official_grad',
-    amountIQD: 50000,
-    paymentStatus: 'completed',
-    date: '2026-10-02',
-    time: '14:35',
-    method: 'cash',
-    notes: 'تسديد رسوم حفل التخرج الرسمي',
-    recordedBy: 'اللجنة المالية — معهد التمريض',
-    isVerified: true,
-    referenceCode: 'CASH-98215',
-  },
-  {
-    id: 'pay-103',
-    receiptNumber: 'REC-2026-003',
-    graduateId: 'grad-2',
-    graduateName: 'زينب أحمد الكعبي',
-    eventTarget: 'scrub_night',
-    amountIQD: 35000,
-    paymentStatus: 'completed',
-    date: '2026-10-16',
-    time: '11:15',
-    method: 'cash',
-    notes: 'تسديد رسوم حفلة السكراب (مسرح تفاحة المصور)',
-    recordedBy: 'مصطفى علي حسون',
-    isVerified: true,
-    referenceCode: 'CASH-98216',
-  },
-  {
-    id: 'pay-104',
-    receiptNumber: 'REC-2026-004',
-    graduateId: 'grad-2',
-    graduateName: 'زينب أحمد الكعبي',
-    eventTarget: 'official_grad',
-    amountIQD: 50000,
-    paymentStatus: 'completed',
-    date: '2026-10-16',
-    time: '11:20',
-    method: 'cash',
-    notes: 'تسديد رسوم حفل التخرج الأكاديمي الرسمي وروب ووشاح التمريض',
-    recordedBy: 'مصطفى علي حسون',
-    isVerified: true,
-    referenceCode: 'CASH-98217',
-  },
-  {
-    id: 'pay-105',
-    receiptNumber: 'REC-2026-005',
-    graduateId: 'grad-3',
-    graduateName: 'كرار حيدر الموسوي',
-    eventTarget: 'scrub_night',
-    amountIQD: 15000,
-    paymentStatus: 'deposit', // عربون
-    date: '2026-10-19',
-    time: '13:00',
-    method: 'cash',
-    notes: 'عربون مقدم لحفلة السكراب (المتبقي 20,000 د.ع)',
-    recordedBy: 'حسين عبدالله جاسم',
-    isVerified: true,
-    referenceCode: 'CASH-98218',
-  },
-  {
-    // Advance pre-payment record for Ali Kareem
-    id: 'pay-106',
-    receiptNumber: 'REC-ADV-2026-001',
-    graduateId: 'grad-advance-1',
-    graduateName: 'علي كريم الزيدي',
-    eventTarget: 'scrub_night',
-    amountIQD: 20000,
-    paymentStatus: 'deposit',
-    matchingPhone: '07722334455',
-    matchingStudentId: 'NUR-2026-077',
-    isLinked: true,
-    date: '2026-10-22',
-    time: '10:45',
-    method: 'cash',
-    notes: 'عربون مسجل مسبقاً نقداً قبل فتح التسجيل الإلكتروني',
-    recordedBy: 'مصطفى علي حسون',
-    isVerified: true,
-    referenceCode: 'CASH-ADV-771',
-  },
-];
+export const DEMO_PAYMENT_IDS = new Set([
+  'pay-101',
+  'pay-102',
+  'pay-103',
+  'pay-104',
+  'pay-105',
+  'pay-106',
+]);
 
-export const INITIAL_MEDIA: MediaItem[] = [
-  {
-    id: 'media-1',
-    title: 'شعار وهوية حفلة السكراب — دفعة 2026 | التخرج 2027',
-    category: 'posters',
-    album: 'بوسترات وهوية الحفل',
-    url: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1200&q=80',
-    caption: 'الهوية البصرية الرسمية لحفلة السكراب لمعهد التمريض',
-    uploadedAt: '2026-10-15',
-    isPublic: true,
-    status: 'approved',
-    sizeMb: 1.2,
-  },
-  {
-    id: 'media-2',
-    title: 'السكراب الطبي ولقطات التحضير',
-    category: 'scrub_night',
-    album: 'أجواء التحضيرات',
-    url: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=1200&q=80',
-    caption: 'نحتفل بمسيرة الإنسانية لطلبة معهد التمريض',
-    uploadedAt: '2026-10-18',
-    isPublic: true,
-    status: 'approved',
-    sizeMb: 2.1,
-  },
-  {
-    id: 'media-3',
-    title: 'سماعة التمريض وقبعة التخرج الرمزية',
-    category: 'memories',
-    album: 'ذكريات المعهد',
-    url: 'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=1200&q=80',
-    caption: 'من مقاعد الدراسة إلى ميدان الرحمة والشفاء',
-    uploadedAt: '2026-10-21',
-    isPublic: true,
-    status: 'approved',
-    sizeMb: 1.8,
-  },
-  {
-    id: 'media-4',
-    title: 'تحضيرات مسرح تفاحة المصور',
-    category: 'scrub_night',
-    album: 'قاعة الحفل',
-    url: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=1200&q=80',
-    caption: 'تفاصيل قاعة مسرح تفاحة المصور للحفل الصباحي',
-    uploadedAt: '2026-10-22',
-    isPublic: true,
-    status: 'approved',
-    sizeMb: 1.5,
-  },
-];
+export const DEMO_MEDIA_IDS = new Set([
+  'media-1',
+  'media-2',
+  'media-3',
+  'media-4',
+]);
+
+export const DEMO_AUDIT_LOG_IDS = new Set([
+  'log-2',
+  'log-3',
+  'log-4',
+]);
+
+export const INITIAL_GRADUATES: Graduate[] = [];
+
+export const INITIAL_PAYMENTS: PaymentTransaction[] = [];
+
+export const INITIAL_MEDIA: MediaItem[] = [];
 
 export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
   {
     id: 'log-1',
     action: 'تهيئة النظام الأولي',
     performedBy: 'النظام الآلي',
-    details: 'تم تأسيس منصة معهد التمريض (دفعة 2026 | التخرج 2027) وتحديد حفلة السكراب في مسرح تفاحة المصور بعدسة باقر حسن بقيمة 35,000 د.ع.',
+    details: 'تم تأسيس منصة معهد التمريض (دفعة 2027) وتحديد حفلة السكراب في مسرح تفاحة المصور بعدسة باقر حسن بقيمة 35,000 د.ع.',
     timestamp: '2026-10-20 10:00',
     entityType: 'config',
-  },
-  {
-    id: 'log-2',
-    action: 'تسجيل عربون مسبق',
-    performedBy: 'مصطفى علي حسون',
-    details: 'تم تسجيل عربون نقدي مسبق بقيمة 20,000 د.ع للطالب علي كريم الزيدي برقم وصل REC-ADV-2026-001.',
-    timestamp: '2026-10-22 10:45',
-    entityType: 'payment',
-  },
-  {
-    id: 'log-3',
-    action: 'اعتماد حساب خريجة',
-    performedBy: 'مصطفى علي حسون',
-    details: 'تم اعتماد حساب الخريجة زينب أحمد الكعبي باللقب الرسمي "الممرضة زينب أحمد الكعبي".',
-    timestamp: '2026-10-16 11:00',
-    entityType: 'graduate',
-  },
-  {
-    id: 'log-4',
-    action: 'تسجيل عربون حفلة السكراب',
-    performedBy: 'حسين عبدالله جاسم',
-    details: 'تم قبض عربون 15,000 د.ع كاش للخريج كرار حيدر وإصدار الوصل REC-2026-005.',
-    timestamp: '2026-10-19 13:02',
-    entityType: 'payment',
   },
 ];
 
@@ -550,10 +244,13 @@ export class LocalStorageManager {
         scrubPartyDate: '2026-12-12T09:00:00+03:00',
         scrubPartyDateDisplay: parsed.scrubPartyDateDisplay || '12/12/2026',
         scrubCountdownEnabled: true,
-        brandName: 'معهد التمريض — دفعة 2026 | التخرج 2027',
+        brandName: 'معهد التمريض — دفعة 2027',
         institutionName: 'معهد التمريض',
-        cohortYear: 'دفعة 2026',
+        cohortYear: 'دفعة 2027',
         graduationYear: '2027',
+        countdownTitle: parsed.countdownTitle
+          ? parsed.countdownTitle.replace(/دفعة 2026/g, 'دفعة 2027')
+          : DEFAULT_CONFIG.countdownTitle,
         countdownEnabled: parsed.countdownEnabled ?? true,
         countdownPublished: parsed.countdownPublished ?? true,
         countdownTarget: parsed.countdownTarget || 'scrub_night',
@@ -583,7 +280,11 @@ export class LocalStorageManager {
         this.saveGraduates(INITIAL_GRADUATES);
         return INITIAL_GRADUATES;
       }
-      const list: Graduate[] = JSON.parse(data);
+      const rawList: Graduate[] = JSON.parse(data);
+      const list = rawList.filter((g) => !DEMO_GRADUATE_IDS.has(g.id));
+      if (list.length !== rawList.length) {
+        this.saveGraduates(list);
+      }
       return list.map((g) => {
         const scrubFee = g.scrubDueIQD && g.scrubDueIQD !== 100000 ? g.scrubDueIQD : 35000;
         const gradFee = g.gradDueIQD || 50000;
@@ -594,7 +295,7 @@ export class LocalStorageManager {
 
         return {
           ...g,
-          cohortLabel: 'دفعة 2026 | التخرج 2027',
+          cohortLabel: 'دفعة 2027',
           displayTitle: g.displayTitle || (g.preferredTitle === 'nurse_f' ? `الممرضة ${g.fullName}` : `الممرض ${g.fullName}`),
           scrubDueIQD: scrubFee,
           scrubPaidIQD: scrubPaid,
@@ -625,7 +326,13 @@ export class LocalStorageManager {
         this.savePayments(INITIAL_PAYMENTS);
         return INITIAL_PAYMENTS;
       }
-      const list: PaymentTransaction[] = JSON.parse(data);
+      const rawList: PaymentTransaction[] = JSON.parse(data);
+      const list = rawList.filter(
+        (p) => !DEMO_PAYMENT_IDS.has(p.id) && !DEMO_GRADUATE_IDS.has(p.graduateId)
+      );
+      if (list.length !== rawList.length) {
+        this.savePayments(list);
+      }
       return list.map((p) => ({
         ...p,
         eventTarget: p.eventTarget || 'scrub_night',
@@ -738,7 +445,12 @@ export class LocalStorageManager {
         this.saveMedia(INITIAL_MEDIA);
         return INITIAL_MEDIA;
       }
-      return JSON.parse(data);
+      const rawList: MediaItem[] = JSON.parse(data);
+      const list = rawList.filter((m) => !DEMO_MEDIA_IDS.has(m.id));
+      if (list.length !== rawList.length) {
+        this.saveMedia(list);
+      }
+      return list;
     } catch {
       return INITIAL_MEDIA;
     }
@@ -752,7 +464,7 @@ export class LocalStorageManager {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.PRIVATE_MEDIA);
       const all: GraduatePrivateMedia[] = data ? JSON.parse(data) : [];
-      return all.filter((item) => item.graduateId === graduateId);
+      return all.filter((item) => item.graduateId === graduateId && !DEMO_GRADUATE_IDS.has(item.graduateId));
     } catch {
       return [];
     }
@@ -787,7 +499,12 @@ export class LocalStorageManager {
         localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(INITIAL_AUDIT_LOGS));
         return INITIAL_AUDIT_LOGS;
       }
-      return JSON.parse(data);
+      const rawList: AuditLogEntry[] = JSON.parse(data);
+      const list = rawList.filter((l) => !DEMO_AUDIT_LOG_IDS.has(l.id));
+      if (list.length !== rawList.length) {
+        localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(list));
+      }
+      return list;
     } catch {
       return INITIAL_AUDIT_LOGS;
     }
@@ -809,7 +526,12 @@ export class LocalStorageManager {
   }
 
   static getCurrentUserId(): string | null {
-    return localStorage.getItem(STORAGE_KEYS.CURRENT_USER_ID);
+    const id = localStorage.getItem(STORAGE_KEYS.CURRENT_USER_ID);
+    if (id && DEMO_GRADUATE_IDS.has(id)) {
+      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER_ID);
+      return null;
+    }
+    return id;
   }
 
   static setCurrentUserId(id: string | null): void {
@@ -824,7 +546,7 @@ export class LocalStorageManager {
   static exportFullBackupJSON(): string {
     const backup = {
       exportedAt: new Date().toISOString(),
-      platform: 'معهد التمريض — دفعة 2026 | التخرج 2027',
+      platform: 'معهد التمريض — دفعة 2027',
       config: this.getEventConfig(),
       graduates: this.getGraduates(),
       payments: this.getPayments(),

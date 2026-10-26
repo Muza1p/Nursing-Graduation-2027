@@ -33,7 +33,7 @@ export const ScrubNightPage: React.FC = () => {
           <div className="lg:col-span-8 space-y-4">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#0A0D12]/60 border border-indigo-300/40 text-indigo-200 text-xs font-bold shadow-sm">
               <Sparkles className="w-3.5 h-3.5 text-[#D7B875]" />
-              <span>حفلة السكراب الصباحية • معهد التمريض (دفعة 2026 | التخرج 2027)</span>
+              <span>حفلة السكراب الصباحية • معهد التمريض (دفعة 2027)</span>
             </div>
 
             <h1 className="text-3xl sm:text-5xl font-black text-[#F4F8FC] tracking-tight">
@@ -42,7 +42,7 @@ export const ScrubNightPage: React.FC = () => {
 
             <p className="text-sm sm:text-base text-indigo-100/85 leading-relaxed max-w-2xl">
               احتفالية صباحية مميزة بالزي الطبي الموحد والسكراب السريري تجمع طلبة{' '}
-              <strong className="text-white">معهد التمريض — دفعة 2026</strong> لتوثيق أجمل ذكريات الدراسة والتدريب العملي قبل التخرج الرسمي في 2027.
+              <strong className="text-white">معهد التمريض — دفعة 2027</strong> لتوثيق أجمل ذكريات الدراسة والتدريب العملي قبل التخرج الرسمي في 2027.
             </p>
 
             {/* Clear Distinction between Confirmed & Provisional Details */}
@@ -177,7 +177,7 @@ export const ScrubNightPage: React.FC = () => {
                 <div>
                   <h4 className="font-bold text-[#F4F8FC] mb-0.5">التسجيل في بوابة معهد التمريض</h4>
                   <p className="text-slate-300 leading-relaxed">
-                    سجّل حسابك باسمك الرباعي ورقم هاتفك (ورقم القيد إن وجد) ليتم اعتمادك ضمن قائمة دفعة 2026.
+                    سجّل حسابك باسمك الرباعي ورقم هاتفك (ورقم القيد إن وجد) ليتم اعتمادك ضمن قائمة دفعة 2027.
                   </p>
                 </div>
               </div>
@@ -241,7 +241,7 @@ export const ScrubNightPage: React.FC = () => {
               <AlertCircle className="w-8 h-8 text-[#D7B875] mx-auto opacity-85" />
               <h4 className="text-sm font-bold text-[#F4F8FC]">تفاصيل الفقرات قيد الترتيب النهائي</h4>
               <p className="text-xs text-slate-300 leading-relaxed">
-                تشمل الحفلة الصباحية فقرات دخول الخريجين بالسكراب الطبي، كلمة دفعة 2026، جلسات التصوير الفردية والجماعية مع المصور باقر حسن، والتكريمات التذكارية.
+                تشمل الحفلة الصباحية فقرات دخول الخريجين بالسكراب الطبي، كلمة دفعة 2027، جلسات التصوير الفردية والجماعية مع المصور باقر حسن، والتكريمات التذكارية.
               </p>
             </div>
 

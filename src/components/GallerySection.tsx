@@ -172,7 +172,7 @@ export const GallerySection: React.FC<{ limit?: number }> = ({ limit }) => {
               <span>أرشيف التخرج والذكريات السريرية</span>
             </div>
             <h2 className="text-xl sm:text-3xl font-black text-[#F4F8FC] leading-snug">
-              معرض صور معهد التمريض (دفعة 2026 | التخرج 2027)
+              معرض صور معهد التمريض (دفعة 2027)
             </h2>
             <p className="text-xs text-slate-300 mt-1">
               توثيق حفلة السكراب في مسرح تفاحة المصور بعدسة باقر حسن، وذكريات التدريب والدفعة، ومستودع الصور الخاص بكل خريج.
@@ -321,9 +321,9 @@ export const GallerySection: React.FC<{ limit?: number }> = ({ limit }) => {
             {filteredPublicMedia.length === 0 ? (
               <div className="text-center py-16 rounded-3xl bg-[#101827]/40 border border-white/5 p-6 space-y-2">
                 <Camera className="w-12 h-12 text-[#929BAA] mx-auto opacity-50" />
-                <h4 className="text-base font-bold text-white">لا توجد صور متطابقة في هذا القسم</h4>
+                <h4 className="text-base font-bold text-white">لا توجد بيانات حالياً</h4>
                 <p className="text-xs text-[#929BAA]">
-                  جرب تغيير التصنيف أو البحث بكلمات أخرى.
+                  لم يتم نشر صور في هذا القسم بعد. سيتم عرض الصور فور اعتمادها من قبل اللجنة المنظمة.
                 </p>
               </div>
             ) : (
@@ -458,7 +458,7 @@ export const GallerySection: React.FC<{ limit?: number }> = ({ limit }) => {
                 {privateMediaList.length === 0 ? (
                   <div className="text-center py-16 rounded-3xl bg-[#101827]/40 border border-dashed border-white/10 p-6 space-y-2">
                     <FolderOpen className="w-12 h-12 text-[#929BAA] mx-auto opacity-50" />
-                    <h4 className="text-base font-bold text-white">خزانتك الخاصة فارغة حالياً</h4>
+                    <h4 className="text-base font-bold text-white">لا توجد بيانات حالياً</h4>
                     <p className="text-xs text-[#929BAA] max-w-sm mx-auto">
                       يمكنك حفظ صورك التذكارية وبطاقات التخرج الخاصة بك هنا لتبقى متاحة لك متى ما سجلت دخولك من هاتفك.
                     </p>
@@ -538,7 +538,7 @@ export const GallerySection: React.FC<{ limit?: number }> = ({ limit }) => {
                       <span className="text-[#D6B779] font-medium">ألبوم: {previewMedia.album}</span>
                     )}
                     <span>التاريخ: {previewMedia.uploadedAt}</span>
-                    <span className="text-[#21D4C2]">معهد التمريض — دفعة 2026</span>
+                    <span className="text-[#21D4C2]">معهد التمريض — دفعة 2027</span>
                   </div>
                 </div>
 

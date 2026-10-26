@@ -219,7 +219,6 @@ interface AppContextType {
     otpCode: string
   ) => { success: boolean; message: string; user?: Graduate };
   logout: () => void;
-  quickSwitchUser: (graduateId: string) => void;
   registerGraduate: (data: {
     fullName: string;
     email: string;
@@ -230,6 +229,8 @@ interface AppContextType {
   }) => { success: boolean; message: string; linkedAdvanceNotice?: string };
   // Admin & Moderator Operations
   updateEventConfig: (updates: Partial<EventConfig>) => void;
+  addGraduateManually: (newGrad: Graduate) => void;
+  deleteGraduate: (graduateId: string) => void;
   approveGraduate: (graduateId: string) => void;
   rejectGraduate: (graduateId: string) => void;
   suspendGraduate: (graduateId: string) => void;
@@ -364,8 +365,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (user) {
         if (isUserAdmin(user)) {
-          setCurrentUserId('grad-admin');
-          LocalStorageManager.setCurrentUserId('grad-admin');
+          setCurrentUserId(user.uid);
+          LocalStorageManager.setCurrentUserId(user.uid);
           try {
             const allReqs = await getAllRegistrationRequests();
             setPendingRegistrationRequests(
@@ -425,7 +426,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => unsubscribe();
   }, []);
 
-  const currentUser = graduates.find((g) => g.id === currentUserId) || null;
+  const matchedGraduateUser = graduates.find((g) => g.id === currentUserId) || null;
+  const currentUser: Graduate | null =
+    matchedGraduateUser ||
+    (firebaseUser && isUserAdmin(firebaseUser)
+      ? {
+          id: firebaseUser.uid,
+          fullName: firebaseUser.displayName || 'مصطفى علي حسون',
+          email: firebaseUser.email || BOOTSTRAP_ADMIN_EMAIL,
+          phone: '07800088386',
+          role: 'admin',
+          status: 'approved',
+          preferredTitle: 'nurse_m',
+          displayTitle: firebaseUser.displayName || 'الممرض مصطفى علي حسون',
+          cohortLabel: 'دفعة 2027',
+          scrubDueIQD: 0,
+          scrubPaidIQD: 0,
+          scrubBalanceIQD: 0,
+          scrubStatus: 'completed',
+          gradDueIQD: 0,
+          gradPaidIQD: 0,
+          gradBalanceIQD: 0,
+          gradStatus: 'completed',
+          totalDueIQD: 0,
+          totalPaidIQD: 0,
+          remainingBalanceIQD: 0,
+          createdAt: '2026-10-01',
+        }
+      : null);
   const isSuperAdmin = isSuperAdminUser(currentUser, firebaseUser);
   const isAdmin =
     isSuperAdmin ||
@@ -1921,19 +1949,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     navigateTo('home');
   };
 
-  const quickSwitchUser = (graduateId: string) => {
-    const found = graduates.find((g) => g.id === graduateId);
-    if (found) {
-      setCurrentUserId(found.id);
-      LocalStorageManager.setCurrentUserId(found.id);
-      if (found.role === 'admin' || found.role === 'moderator') {
-        navigateTo('admin_dashboard');
-      } else {
-        navigateTo('graduate_dashboard');
-      }
-    }
-  };
-
   const loginWithPhoneOtp = (phone: string, otpCode: string) => {
     const cleanPhone = phone.trim().replace(/[^0-9]/g, '');
     if (!otpCode || otpCode.length < 4) {
@@ -1953,7 +1968,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return {
         success: false,
         message:
-          'رقم الهاتف غير مسجل في قوائم خريجي معهد التمريض (دفعة 2026 | التخرج 2027).',
+          'رقم الهاتف غير مسجل في قوائم خريجي معهد التمريض (دفعة 2027).',
       };
     }
 
@@ -2037,12 +2052,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       phone: data.phone.trim(),
       studentId:
         data.studentId?.trim() ||
-        `NUR-2026-${Math.floor(100 + Math.random() * 900)}`,
+        `NUR-2027-${Math.floor(100 + Math.random() * 900)}`,
       role: 'graduate',
       status: 'pending',
       preferredTitle: data.preferredTitle || 'nurse_m',
       displayTitle,
-      cohortLabel: 'دفعة 2026 | التخرج 2027',
+      cohortLabel: 'دفعة 2027',
       scrubDueIQD: scrubDue,
       scrubPaidIQD: 0,
       scrubBalanceIQD: scrubDue,
@@ -2100,6 +2115,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       performedBy: actorDisplayName,
       details: 'تم تحديث إعدادات ومعلومات الحفل العامة وحالة العداد التنازلي.',
       entityType: 'config',
+    });
+    setAuditLogs(LocalStorageManager.getAuditLogs());
+  };
+
+  const addGraduateManually = (newGrad: Graduate) => {
+    setGraduates((prev) => [newGrad, ...prev]);
+    LocalStorageManager.addAuditLog({
+      action: 'إنشاء حساب خريج يدوياً',
+      performedBy: actorDisplayName,
+      details: `تم إضافة الخريج ${newGrad.displayTitle || newGrad.fullName} واعتماده مباشرة.`,
+      entityType: 'graduate',
+    });
+    setAuditLogs(LocalStorageManager.getAuditLogs());
+  };
+
+  const deleteGraduate = (graduateId: string) => {
+    const target = graduates.find((g) => g.id === graduateId);
+    setGraduates((prev) => prev.filter((g) => g.id !== graduateId));
+    LocalStorageManager.addAuditLog({
+      action: 'حذف سجل خريج',
+      performedBy: actorDisplayName,
+      details: `تم حذف سجل الخريج: ${target?.displayTitle || target?.fullName || graduateId}`,
+      entityType: 'graduate',
     });
     setAuditLogs(LocalStorageManager.getAuditLogs());
   };
@@ -2444,8 +2482,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const user = res.user;
 
       if (isUserAdmin(user)) {
-        setCurrentUserId('grad-admin');
-        LocalStorageManager.setCurrentUserId('grad-admin');
+        setCurrentUserId(user.uid);
+        LocalStorageManager.setCurrentUserId(user.uid);
         try {
           const allReqs = await getAllRegistrationRequests();
           setPendingRegistrationRequests(
@@ -2700,9 +2738,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         login,
         loginWithPhoneOtp,
         logout,
-        quickSwitchUser,
         registerGraduate,
         updateEventConfig,
+        addGraduateManually,
+        deleteGraduate,
         approveGraduate,
         rejectGraduate,
         suspendGraduate,

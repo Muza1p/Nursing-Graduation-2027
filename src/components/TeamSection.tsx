@@ -11,7 +11,7 @@ export const TeamSection: React.FC = () => {
         <div className="text-center max-w-2xl mx-auto mb-6 sm:mb-10">
           <div className="inline-flex items-center gap-1.5 text-xs text-[#D6B779] font-semibold mb-1.5">
             <Users className="w-3.5 h-3.5 text-[#D6B779]" />
-            <span>لجنة معهد التمريض — دفعة 2026 | التخرج 2027</span>
+            <span>لجنة معهد التمريض — دفعة 2027</span>
           </div>
           <h2 className="text-xl sm:text-3xl font-black text-white mb-1.5">
             فريق التنظيم والإشراف
@@ -78,7 +78,7 @@ export const TeamSection: React.FC = () => {
             </div>
             <div>
               <span className="text-[11px] font-bold text-[#D6B779]">القناة الإعلامية الرسمية</span>
-              <h4 className="text-base sm:text-lg font-black text-white leading-snug">تابعوا حساب دفعة معهد التمريض (2026/2027) على الإنستغرام</h4>
+              <h4 className="text-base sm:text-lg font-black text-white leading-snug">تابعوا حساب دفعة معهد التمريض (دفعة 2027) على الإنستغرام</h4>
               <p className="text-xs text-[#929BAA] mt-0.5">
                 نشر الكواليس، التصويت على الفقرات، والتعليمات الصادرة أولاً بأول.
               </p>

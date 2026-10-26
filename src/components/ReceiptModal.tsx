@@ -45,7 +45,7 @@ export const ReceiptModal: React.FC = () => {
               <span>وصل استلام مالي رسمي من اللجنة المنظمة</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-white tracking-wider">
-              معهد التمريض — دفعة 2026 | التخرج 2027
+              معهد التمريض — دفعة 2027
             </h2>
             <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
               {activeReceipt.eventTarget === 'scrub_night' ? (
@@ -76,7 +76,7 @@ export const ReceiptModal: React.FC = () => {
               )}
             </div>
             <p className="text-[10px] text-[#E8EEF2]/70 mt-1">
-              سند قبض تنظيمي صادر عن اللجنة التحضيرية لمعهد التمريض (دفعة 2026 | التخرج 2027)
+              سند قبض تنظيمي صادر عن اللجنة التحضيرية لمعهد التمريض (دفعة 2027)
             </p>
           </div>
 
