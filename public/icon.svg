@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#14B8A6" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#090B10" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gradCap" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2DD4BF"/>
+      <stop offset="100%" stop-color="#0D9488"/>
+    </linearGradient>
+    <linearGradient id="goldAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F5E6BE"/>
+      <stop offset="50%" stop-color="#D4AF37"/>
+      <stop offset="100%" stop-color="#997A24"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dark Obsidian Background -->
+  <rect width="512" height="512" rx="128" fill="#090B10"/>
+  <circle cx="256" cy="256" r="230" fill="url(#bgGlow)"/>
+  <rect x="16" y="16" width="480" height="480" rx="112" stroke="#2DD4BF" stroke-opacity="0.25" stroke-width="4"/>
+
+  <!-- Subtle Medical Pulse / ECG in Background -->
+  <path d="M 80 256 L 160 256 L 190 200 L 220 312 L 250 230 L 280 275 L 310 256 L 432 256" stroke="#2DD4BF" stroke-opacity="0.2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Graduation Cap -->
+  <polygon points="256,120 400,180 256,240 112,180" fill="url(#gradCap)"/>
+  <polygon points="256,132 384,180 256,228 128,180" fill="#090B10" fill-opacity="0.3"/>
+  <path d="M 176 215 L 176 270 Q 256 310 336 270 L 336 215" fill="none" stroke="url(#gradCap)" stroke-width="12" stroke-linecap="round"/>
+  
+  <!-- Tassel -->
+  <path d="M 256 180 L 150 230 L 145 285" fill="none" stroke="url(#goldAccent)" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="145" cy="290" r="10" fill="url(#goldAccent)"/>
+
+  <!-- Medical Caduceus / Stethoscope Emblem -->
+  <circle cx="256" cy="360" r="48" fill="#111827" stroke="url(#goldAccent)" stroke-width="6"/>
+  <path d="M 256 332 L 256 388 M 228 360 L 284 360" stroke="#2DD4BF" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="256" cy="360" r="12" fill="#D4AF37"/>
+</svg>

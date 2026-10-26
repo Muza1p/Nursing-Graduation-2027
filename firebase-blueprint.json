@@ -1,0 +1,638 @@
+{
+  "entities": {
+    "Admin": {
+      "title": "Admin",
+      "description": "Authorized administrators and role-based managers",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Administrator email"
+        },
+        "fullName": {
+          "type": "string",
+          "description": "Administrator full name in Arabic"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "super_admin",
+            "finance_manager",
+            "event_manager",
+            "gallery_moderator",
+            "notification_manager",
+            "admin",
+            "moderator"
+          ],
+          "description": "Administrative role tier"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when admin access was granted"
+        }
+      },
+      "required": ["email", "role", "createdAt"]
+    },
+    "ScrubStudent": {
+      "title": "ScrubStudent",
+      "description": "Scrub Party student record with automatic numbering, deposit tracking, and account linking",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Permanent internal student UUID/ID"
+        },
+        "studentNumber": {
+          "type": "number",
+          "description": "Visible sequential student number (ت)"
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120,
+          "description": "Original Arabic full name"
+        },
+        "normalizedName": {
+          "type": "string",
+          "description": "Normalized Arabic name for duplicate detection"
+        },
+        "preferredTitle": {
+          "type": "string",
+          "enum": ["nurse_m", "nurse_f"],
+          "description": "Preferred nursing title"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Optional phone number"
+        },
+        "institutionalStudentId": {
+          "type": "string",
+          "description": "Optional institutional student ID"
+        },
+        "totalFeeIQD": {
+          "type": "number",
+          "description": "Total Scrub Party fee in IQD (default 35000)"
+        },
+        "verifiedPaidIQD": {
+          "type": "number",
+          "description": "Sum of verified payments in IQD"
+        },
+        "pendingPaidIQD": {
+          "type": "number",
+          "description": "Sum of unverified/pending payments in IQD"
+        },
+        "remainingBalanceIQD": {
+          "type": "number",
+          "description": "Remaining balance = Total fee - Sum of verified payments"
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["unpaid", "deposit", "partial", "completed"],
+          "description": "Calculated payment status"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "archived"],
+          "description": "Record lifecycle status (active or soft-deleted/archived)"
+        },
+        "isLinkedToAccount": {
+          "type": "boolean",
+          "description": "True only if verified and linked to a user account by an admin"
+        },
+        "linkedUserId": {
+          "type": "string",
+          "description": "Linked Firebase Auth UID or graduate account ID"
+        },
+        "linkedUserEmail": {
+          "type": "string",
+          "description": "Linked user email"
+        },
+        "linkedAt": {
+          "type": "string",
+          "description": "Timestamp when account was linked"
+        },
+        "linkedBy": {
+          "type": "string",
+          "description": "Admin who verified and linked the account"
+        },
+        "needsReview": {
+          "type": "boolean",
+          "description": "Flagged if potential duplicate/similarity requires admin review"
+        },
+        "reviewNote": {
+          "type": "string",
+          "description": "Details about potential match for admin review"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Administrative notes"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        },
+        "archivedAt": {
+          "type": "string",
+          "description": "Timestamp when archived"
+        },
+        "archivedBy": {
+          "type": "string",
+          "description": "Super admin who archived the record"
+        }
+      },
+      "required": [
+        "id",
+        "studentNumber",
+        "fullName",
+        "normalizedName",
+        "totalFeeIQD",
+        "verifiedPaidIQD",
+        "remainingBalanceIQD",
+        "paymentStatus",
+        "status",
+        "isLinkedToAccount",
+        "createdAt"
+      ]
+    },
+    "StudentPayment": {
+      "title": "StudentPayment",
+      "description": "Individual payment record for a Scrub Party student",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Permanent payment record ID"
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Permanent internal ID of the ScrubStudent"
+        },
+        "studentNumber": {
+          "type": "number",
+          "description": "Display student number at time of payment"
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Arabic name of the student"
+        },
+        "linkedUserId": {
+          "type": "string",
+          "description": "Optional linked user UID for student privacy access"
+        },
+        "amountIQD": {
+          "type": "number",
+          "description": "Payment amount in IQD"
+        },
+        "paymentType": {
+          "type": "string",
+          "enum": ["initial_deposit", "installment", "final_settlement"],
+          "description": "Type of payment"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["cash", "bank_transfer"],
+          "description": "Payment method"
+        },
+        "receiptNumber": {
+          "type": "string",
+          "description": "Official receipt number"
+        },
+        "referenceCode": {
+          "type": "string",
+          "description": "Reference code"
+        },
+        "date": {
+          "type": "string",
+          "description": "Payment date YYYY-MM-DD"
+        },
+        "time": {
+          "type": "string",
+          "description": "Payment time HH:mm"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Payment notes"
+        },
+        "isVerified": {
+          "type": "boolean",
+          "description": "Whether payment is verified and affects confirmed balance"
+        },
+        "verificationStatus": {
+          "type": "string",
+          "enum": ["verified", "pending", "voided"],
+          "description": "Verification status"
+        },
+        "recordedBy": {
+          "type": "string",
+          "description": "Administrator who recorded the payment"
+        },
+        "verifiedBy": {
+          "type": "string",
+          "description": "Administrator who verified the payment"
+        },
+        "verifiedAt": {
+          "type": "string",
+          "description": "Verification timestamp"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": [
+        "id",
+        "studentId",
+        "studentName",
+        "amountIQD",
+        "paymentMethod",
+        "receiptNumber",
+        "date",
+        "isVerified",
+        "verificationStatus",
+        "recordedBy",
+        "createdAt"
+      ]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable administrative and financial audit log entry",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Audit log ID"
+        },
+        "action": {
+          "type": "string",
+          "description": "Action title"
+        },
+        "performedBy": {
+          "type": "string",
+          "description": "Actor display name or email"
+        },
+        "actorUid": {
+          "type": "string",
+          "description": "Actor Firebase UID"
+        },
+        "actorEmail": {
+          "type": "string",
+          "description": "Actor email"
+        },
+        "actorRole": {
+          "type": "string",
+          "description": "Actor role"
+        },
+        "details": {
+          "type": "string",
+          "description": "Detailed description of the operation and result"
+        },
+        "entityType": {
+          "type": "string",
+          "enum": ["scrub_student", "student_payment", "graduate", "payment", "config", "announcement", "security"],
+          "description": "Target entity type"
+        },
+        "affectedCount": {
+          "type": "number",
+          "description": "Number of records affected"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO timestamp"
+        }
+      },
+      "required": ["id", "action", "performedBy", "details", "timestamp"]
+    },
+    "RegistrationRequest": {
+      "title": "RegistrationRequest",
+      "description": "Student registration requests pending committee approval",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the student"
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 100,
+          "description": "Full Arabic name of the student"
+        },
+        "preferredTitle": {
+          "type": "string",
+          "enum": ["nurse_m", "nurse_f"],
+          "description": "Preferred title"
+        },
+        "studentId": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Optional institutional student ID"
+        },
+        "phoneNumber": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 20,
+          "description": "Student phone number"
+        },
+        "phoneVerified": {
+          "type": "boolean",
+          "description": "True only if authentic SMS OTP verification succeeded"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Authenticated user email"
+        },
+        "cohortLabel": {
+          "type": "string",
+          "description": "Cohort identifier: دفعة 2026 | التخرج 2027"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected"],
+          "description": "Review status"
+        },
+        "rejectionReason": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional reason if request was rejected"
+        },
+        "reviewedBy": {
+          "type": "string",
+          "description": "Admin UID who reviewed the request"
+        },
+        "reviewedAt": {
+          "type": "string",
+          "description": "Timestamp when review occurred"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["userId", "fullName", "preferredTitle", "phoneNumber", "phoneVerified", "email", "status", "createdAt"]
+    },
+    "Graduate": {
+      "title": "Graduate",
+      "description": "Approved graduate records with financial dues and identity",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID linked to this graduate record"
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 100,
+          "description": "Official Arabic name"
+        },
+        "preferredTitle": {
+          "type": "string",
+          "enum": ["nurse_m", "nurse_f"],
+          "description": "Preferred nursing title"
+        },
+        "studentId": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Institutional student ID"
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Phone number"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Email address"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["graduate", "moderator", "admin", "super_admin", "finance_manager", "event_manager", "gallery_moderator", "notification_manager"],
+          "description": "Access role"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "approved", "pending", "blocked"],
+          "description": "Account status"
+        },
+        "cohortLabel": {
+          "type": "string",
+          "description": "دفعة 2026 | التخرج 2027"
+        },
+        "scrubDueIQD": {
+          "type": "number",
+          "description": "Scrub party fee due in IQD (default 35000)"
+        },
+        "scrubPaidIQD": {
+          "type": "number",
+          "description": "Scrub party fee paid in IQD"
+        },
+        "scrubBalanceIQD": {
+          "type": "number",
+          "description": "Remaining scrub balance in IQD"
+        },
+        "scrubStatus": {
+          "type": "string",
+          "enum": ["unpaid", "deposit", "partial", "completed"],
+          "description": "Payment status for scrub party"
+        },
+        "gradDueIQD": {
+          "type": "number",
+          "description": "Official graduation fee due in IQD"
+        },
+        "gradPaidIQD": {
+          "type": "number",
+          "description": "Official graduation fee paid in IQD"
+        },
+        "gradBalanceIQD": {
+          "type": "number",
+          "description": "Remaining graduation balance in IQD"
+        },
+        "gradStatus": {
+          "type": "string",
+          "enum": ["unpaid", "deposit", "partial", "completed"],
+          "description": "Payment status for official graduation"
+        },
+        "totalDueIQD": {
+          "type": "number",
+          "description": "Total combined dues in IQD"
+        },
+        "totalPaidIQD": {
+          "type": "number",
+          "description": "Total combined paid in IQD"
+        },
+        "remainingBalanceIQD": {
+          "type": "number",
+          "description": "Total remaining balance in IQD"
+        },
+        "isAdvanceLinked": {
+          "type": "boolean",
+          "description": "Whether an advance cash payment was securely linked"
+        },
+        "linkedScrubStudentId": {
+          "type": "string",
+          "description": "Permanent ID of linked ScrubStudent record"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Update timestamp"
+        }
+      },
+      "required": ["userId", "fullName", "preferredTitle", "role", "status", "scrubDueIQD", "scrubPaidIQD", "totalDueIQD", "totalPaidIQD", "createdAt"]
+    },
+    "PaymentTransaction": {
+      "title": "PaymentTransaction",
+      "description": "Official payment receipts and cash ledgers",
+      "type": "object",
+      "properties": {
+        "graduateId": {
+          "type": "string",
+          "description": "Graduate record ID"
+        },
+        "studentId": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Student ID identifier"
+        },
+        "studentPhone": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Student phone number"
+        },
+        "studentName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Name on payment record"
+        },
+        "amountIQD": {
+          "type": "number",
+          "description": "Payment amount in Iraqi Dinars"
+        },
+        "eventTarget": {
+          "type": "string",
+          "enum": ["scrub_party", "scrub_night", "official_grad"],
+          "description": "Target event for the payment"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["cash", "manual_transfer", "bank_transfer", "advance_deposit"],
+          "description": "Payment method"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["completed", "pending", "verified"],
+          "description": "Transaction status"
+        },
+        "receiptNumber": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Official serial receipt number"
+        },
+        "recordedBy": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Organizer who recorded the cash"
+        },
+        "recordedAt": {
+          "type": "string",
+          "description": "Timestamp when recorded"
+        },
+        "isAdvance": {
+          "type": "boolean",
+          "description": "True if collected before student registered"
+        },
+        "isLinked": {
+          "type": "boolean",
+          "description": "True if linked to approved graduate"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Additional notes"
+        }
+      },
+      "required": ["amountIQD", "eventTarget", "paymentMethod", "status", "receiptNumber", "recordedBy", "recordedAt"]
+    },
+    "PrivateMedia": {
+      "title": "PrivateMedia",
+      "description": "Graduate private media locker uploads",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner"
+        },
+        "graduateId": {
+          "type": "string",
+          "description": "Associated graduate record ID"
+        },
+        "url": {
+          "type": "string",
+          "description": "Media URL or Base64 storage string"
+        },
+        "thumbnailUrl": {
+          "type": "string",
+          "description": "Thumbnail URL"
+        },
+        "album": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Album category"
+        },
+        "uploadedAt": {
+          "type": "string",
+          "description": "Upload timestamp"
+        }
+      },
+      "required": ["ownerId", "url", "uploadedAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{adminId}": {
+      "schema": "Admin",
+      "description": "Authorized administrators and role-based managers"
+    },
+    "/scrub_students/{studentId}": {
+      "schema": "ScrubStudent",
+      "description": "Scrub Party student list with deposits, balances, and account links"
+    },
+    "/student_payments/{paymentId}": {
+      "schema": "StudentPayment",
+      "description": "Verified and pending payment history for Scrub Party students"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Immutable administrative and financial audit trail"
+    },
+    "/registration_requests/{requestId}": {
+      "schema": "RegistrationRequest",
+      "description": "Student registration requests pending review"
+    },
+    "/graduates/{graduateId}": {
+      "schema": "Graduate",
+      "description": "Approved graduates"
+    },
+    "/payments/{paymentId}": {
+      "schema": "PaymentTransaction",
+      "description": "Cash receipts and payments"
+    },
+    "/private_media/{mediaId}": {
+      "schema": "PrivateMedia",
+      "description": "Private student media locker"
+    }
+  }
+}

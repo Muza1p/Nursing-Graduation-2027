@@ -1,0 +1,261 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-obsidian: #10151C;
+    --color-navy: #142638;
+    --color-clinical-blue: #1C354A;
+    --color-turquoise: #35D6C5;
+    --color-soft-mint: #A6F0DF;
+    --color-gold: #D6B777;
+    --color-white: #FFFFFF;
+    --color-medical-gray: #E8EEF2;
+    --color-emergency: #E85D65;
+    --color-slate: #94A3B8;
+  }
+
+  body {
+    font-family: 'Cairo', 'IBM Plex Sans Arabic', 'Tajawal', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #10151C;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(28, 53, 74, 0.55), transparent 70%),
+      radial-gradient(circle at 85% 20%, rgba(53, 214, 197, 0.08), transparent 45%),
+      radial-gradient(circle at 15% 75%, rgba(166, 240, 223, 0.05), transparent 50%),
+      linear-gradient(180deg, #10151C 0%, #142638 50%, #10151C 100%);
+    background-attachment: fixed;
+    color: #FFFFFF;
+    overflow-x: hidden;
+  }
+}
+
+/* Fine clinical medical grid background + subtle cross pattern */
+.clinical-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(53, 214, 197, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(53, 214, 197, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.clinical-grid-indigo {
+  background-image:
+    linear-gradient(to right, rgba(166, 240, 223, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(166, 240, 223, 0.045) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Refined Glass-Effect Medical Cards */
+.glass-panel {
+  background: linear-gradient(145deg, rgba(20, 38, 56, 0.84) 0%, rgba(16, 21, 28, 0.88) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(232, 238, 242, 0.1);
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.45);
+}
+
+.glass-panel-gold {
+  background: linear-gradient(145deg, rgba(28, 34, 42, 0.86) 0%, rgba(16, 21, 28, 0.9) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(214, 183, 119, 0.32);
+  box-shadow: 0 12px 36px -8px rgba(214, 183, 119, 0.14);
+}
+
+.glass-panel-turquoise {
+  background: linear-gradient(145deg, rgba(20, 38, 56, 0.88) 0%, rgba(28, 53, 74, 0.78) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(53, 214, 197, 0.32);
+  box-shadow: 0 12px 36px -8px rgba(53, 214, 197, 0.16);
+}
+
+.glass-panel-indigo {
+  background: linear-gradient(145deg, rgba(28, 53, 74, 0.86) 0%, rgba(20, 38, 56, 0.9) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(166, 240, 223, 0.28);
+  box-shadow: 0 12px 36px -8px rgba(53, 214, 197, 0.14);
+}
+
+/* Subtle medical luminescence glows */
+.glow-turquoise {
+  box-shadow: 0 0 38px -8px rgba(53, 214, 197, 0.36);
+}
+
+.glow-gold {
+  box-shadow: 0 0 38px -8px rgba(214, 183, 119, 0.34);
+}
+
+.glow-indigo {
+  box-shadow: 0 0 38px -8px rgba(28, 53, 74, 0.65);
+}
+
+/* Animated ECG Pulse Line & Floating Medical Symbols */
+@keyframes ecgDash {
+  0% {
+    stroke-dashoffset: 1200;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes ecgContinuousSweep {
+  0% {
+    stroke-dashoffset: 2400;
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.95;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.35;
+  }
+}
+
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes medFloatSlow {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    opacity: 0.45;
+  }
+  33% {
+    transform: translate3d(4px, -12px, 0) rotate(5deg) scale(1.03);
+    opacity: 0.85;
+  }
+  66% {
+    transform: translate3d(-4px, -6px, 0) rotate(-4deg) scale(0.98);
+    opacity: 0.6;
+  }
+}
+
+@keyframes medFloatMedium {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translate3d(-6px, -15px, 0) rotate(-6deg);
+    opacity: 0.85;
+  }
+}
+
+@keyframes medFloatReverse {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate3d(5px, 12px, 0) rotate(6deg);
+    opacity: 0.85;
+  }
+}
+
+@keyframes medParticleGlow {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(0.85);
+    opacity: 0.15;
+  }
+  50% {
+    transform: translate3d(0, -10px, 0) scale(1.2);
+    opacity: 0.65;
+  }
+}
+
+.animate-ecg-line {
+  stroke-dasharray: 1200;
+  animation: ecgDash 6s linear infinite;
+}
+
+.animate-float-slow {
+  animation: floatSlow 5s ease-in-out infinite;
+}
+
+.med-ecg-sweep {
+  stroke-dasharray: 420 780;
+  animation: ecgContinuousSweep 9s linear infinite;
+  will-change: stroke-dashoffset, opacity;
+}
+
+.med-ecg-sweep-delayed {
+  stroke-dasharray: 360 840;
+  animation: ecgContinuousSweep 12s linear infinite;
+  animation-delay: -4.5s;
+  will-change: stroke-dashoffset, opacity;
+}
+
+.med-float-slow {
+  animation: medFloatSlow 19s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.med-float-medium {
+  animation: medFloatMedium 17s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.med-float-reverse {
+  animation: medFloatReverse 21s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.med-particle-glow {
+  animation: medParticleGlow 8s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ecg-line,
+  .med-ecg-sweep,
+  .med-ecg-sweep-delayed,
+  .animate-float-slow,
+  .med-float-slow,
+  .med-float-medium,
+  .med-float-reverse,
+  .med-particle-glow {
+    animation: none !important;
+    stroke-dasharray: none !important;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #10151C;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #142638;
+  border-radius: 4px;
+  border: 1px solid rgba(53, 214, 197, 0.2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #1C354A;
+}
+
+/* Print styles for printable official receipts and cards */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+}
