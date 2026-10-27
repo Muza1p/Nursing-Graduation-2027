@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useMusic } from '../context/MusicContext';
 import {
   formatIQD,
   formatArabicDate,
@@ -104,13 +105,18 @@ export const AdminDashboard: React.FC = () => {
     moderatorRequests,
     approveModeratorRequest,
     rejectModeratorRequest,
+    revokeModeratorRole,
+    supervisors,
+    refreshSupervisors,
     refreshModeratorRequests,
   } = useApp();
+  const { songs } = useMusic();
 
   const [activeAdminTab, setActiveAdminTab] = useState<
     | 'scrub_students'
     | 'logged_in_users'
     | 'moderator_requests'
+    | 'supervisors_management'
     | 'overview'
     | 'pending_requests'
     | 'graduates'
@@ -130,6 +136,8 @@ export const AdminDashboard: React.FC = () => {
   const [modActionFeedback, setModActionFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [filterModStatus, setFilterModStatus] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
   const [searchModQuery, setSearchModQuery] = useState('');
+  const [revokeTargetSup, setRevokeTargetSup] = useState<{ userId: string; fullName: string; email: string } | null>(null);
+  const [loggedUsersRoleFilter, setLoggedUsersRoleFilter] = useState<'all' | 'super_admin' | 'moderator' | 'student'>('all');
 
   // Rejection modal state
   const [rejectModalReq, setRejectModalReq] = useState<any | null>(null);
@@ -521,7 +529,7 @@ export const AdminDashboard: React.FC = () => {
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>طلبات عضوية المشرفين</span>
+            <span>طلبات الإشراف</span>
             {moderatorRequests.filter((r) => r.status === 'pending').length > 0 ? (
               <span className="w-5 h-5 rounded-full bg-amber-500 text-black text-[10px] font-black flex items-center justify-center animate-pulse">
                 {moderatorRequests.filter((r) => r.status === 'pending').length}
@@ -531,6 +539,23 @@ export const AdminDashboard: React.FC = () => {
                 0
               </span>
             )}
+          </button>
+        )}
+
+        {(isAdmin || isModerator) && (
+          <button
+            onClick={() => {
+              setActiveAdminTab('supervisors_management');
+              refreshSupervisors();
+            }}
+            className={`px-4 py-2 rounded-xl transition-all shrink-0 flex items-center gap-1.5 ${
+              activeAdminTab === 'supervisors_management'
+                ? 'bg-[#35D6C5] text-[#10151C] shadow-md font-extrabold'
+                : 'bg-[#142638] text-[#E8EEF2] hover:text-white'
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span>إدارة المشرفين ({supervisors.length})</span>
           </button>
         )}
 
@@ -734,33 +759,85 @@ export const AdminDashboard: React.FC = () => {
             }).length;
 
             return (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <div className="p-4 sm:p-5 rounded-2xl bg-[#101827] border border-[#35D6C5]/30 shadow-lg space-y-1">
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-400">إجمالي الحسابات المسجلة</span>
-                  <div className="text-xl sm:text-3xl font-black text-white">{totalAccounts}</div>
-                  <span className="text-[10px] text-[#35D6C5]">حسابات معتمدة بالمنصة</span>
+              <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
+                <div className="p-4 rounded-2xl bg-[#101827] border border-[#35D6C5]/30 shadow-lg space-y-1">
+                  <span className="text-[11px] font-bold text-slate-400">إجمالي الحسابات المسجلة</span>
+                  <div className="text-xl sm:text-2xl font-black text-white">{totalAccounts}</div>
+                  <span className="text-[10px] text-[#35D6C5]">حسابات مسجلة بالمنصة</span>
                 </div>
 
-                <div className="p-4 sm:p-5 rounded-2xl bg-[#101827] border border-emerald-500/30 shadow-lg space-y-1">
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-400">الطلاب الذين سجلوا الدخول</span>
-                  <div className="text-xl sm:text-3xl font-black text-emerald-400">{actualLoggedIn}</div>
-                  <span className="text-[10px] text-emerald-300">سجلوا دخولهم وتفاعلوا مع المنصة</span>
+                <div className="p-4 rounded-2xl bg-[#101827] border border-emerald-500/30 shadow-lg space-y-1">
+                  <span className="text-[11px] font-bold text-slate-400">الطلاب الذين سجلوا الدخول</span>
+                  <div className="text-xl sm:text-2xl font-black text-emerald-400">{actualLoggedIn}</div>
+                  <span className="text-[10px] text-emerald-300">سجلوا دخولهم فعلياً</span>
                 </div>
 
-                <div className="p-4 sm:p-5 rounded-2xl bg-[#101827] border border-[#D6B777]/30 shadow-lg space-y-1">
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-400">النشطون مؤخراً (7 أيام)</span>
-                  <div className="text-xl sm:text-3xl font-black text-[#D6B777]">{activeRecently}</div>
-                  <span className="text-[10px] text-amber-200">دخول خلال الأسبوع الجاري</span>
+                <div className="p-4 rounded-2xl bg-[#101827] border border-[#D6B777]/30 shadow-lg space-y-1">
+                  <span className="text-[11px] font-bold text-slate-400">النشطون مؤخراً (7 أيام)</span>
+                  <div className="text-xl sm:text-2xl font-black text-[#D6B777]">{activeRecently}</div>
+                  <span className="text-[10px] text-amber-200">نشاط الأسبوع الجاري</span>
                 </div>
 
-                <div className="p-4 sm:p-5 rounded-2xl bg-[#101827] border border-cyan-500/30 shadow-lg space-y-1">
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-400">تسجيلات الدخول اليوم</span>
-                  <div className="text-xl sm:text-3xl font-black text-cyan-400">{todayLogins}</div>
+                <div className="p-4 rounded-2xl bg-[#101827] border border-cyan-500/30 shadow-lg space-y-1">
+                  <span className="text-[11px] font-bold text-slate-400">تسجيلات الدخول اليوم</span>
+                  <div className="text-xl sm:text-2xl font-black text-cyan-400">{todayLogins}</div>
                   <span className="text-[10px] text-cyan-300">نشاط اليوم الفعلي</span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-[#101827] border border-amber-500/30 shadow-lg space-y-1">
+                  <span className="text-[11px] font-bold text-slate-400">طلبات الإشراف</span>
+                  <div className="text-xl sm:text-2xl font-black text-amber-400">{moderatorRequests.length}</div>
+                  <span className="text-[10px] text-amber-300">
+                    {moderatorRequests.filter((r) => r.status === 'pending').length} قيد المراجعة
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-[#101827] border border-purple-500/30 shadow-lg space-y-1">
+                  <span className="text-[11px] font-bold text-slate-400">الأغاني المرفوعة</span>
+                  <div className="text-xl sm:text-2xl font-black text-purple-400">{songs.length}</div>
+                  <span className="text-[10px] text-purple-300">في مكتبة التخرج</span>
                 </div>
               </div>
             );
           })()}
+
+          {/* Role Filter Pills */}
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { id: 'all', label: 'جميع الحسابات', count: loggedInUsers.length },
+              {
+                id: 'super_admin',
+                label: 'مدير النظام',
+                count: loggedInUsers.filter((u) => u.role === 'super_admin' || u.role === 'admin').length,
+              },
+              {
+                id: 'moderator',
+                label: 'المشرفون المعتمدون',
+                count: loggedInUsers.filter((u) => u.role === 'moderator').length,
+              },
+              {
+                id: 'student',
+                label: 'الطلاب',
+                count: loggedInUsers.filter((u) => u.role !== 'super_admin' && u.role !== 'admin' && u.role !== 'moderator').length,
+              },
+            ].map((pill) => (
+              <button
+                key={pill.id}
+                type="button"
+                onClick={() => setLoggedUsersRoleFilter(pill.id as any)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                  loggedUsersRoleFilter === pill.id
+                    ? 'bg-[#35D6C5] text-[#0A0D12] border-[#35D6C5] font-black'
+                    : 'bg-[#101827] text-slate-300 border-white/10 hover:border-white/20'
+                }`}
+              >
+                <span>{pill.label}</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
+                  {pill.count}
+                </span>
+              </button>
+            ))}
+          </div>
 
           {/* Privacy & Historical Data Clarification Notice */}
           <div className="p-4 rounded-2xl bg-[#090E17] border border-white/10 flex items-start gap-3 text-xs text-slate-300">
@@ -800,6 +877,12 @@ export const AdminDashboard: React.FC = () => {
                   <tbody className="divide-y divide-white/5">
                     {loggedInUsers
                       .filter((u) => {
+                        const matchRole =
+                          loggedUsersRoleFilter === 'all' ||
+                          (loggedUsersRoleFilter === 'super_admin' && (u.role === 'super_admin' || u.role === 'admin')) ||
+                          (loggedUsersRoleFilter === 'moderator' && u.role === 'moderator') ||
+                          (loggedUsersRoleFilter === 'student' && u.role !== 'super_admin' && u.role !== 'admin' && u.role !== 'moderator');
+                        if (!matchRole) return false;
                         if (!loggedUsersSearch.trim()) return true;
                         const q = loggedUsersSearch.toLowerCase();
                         return (
@@ -1211,6 +1294,191 @@ export const AdminDashboard: React.FC = () => {
                     className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs font-bold cursor-pointer"
                   >
                     إلغاء
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: SUPERVISORS MANAGEMENT (إدارة المشرفين والصلاحيات) */}
+      {activeAdminTab === 'supervisors_management' && (
+        <div className="space-y-6">
+          <div className="rounded-3xl bg-[#101827] border border-[#35D6C5]/30 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-[#D7B875]/20 text-[#D7B875] flex items-center justify-center">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <h2 className="text-lg sm:text-xl font-black text-white">
+                  إدارة المشرفين والصلاحيات ({supervisors.length})
+                </h2>
+              </div>
+              <p className="text-xs text-[#929BAA] leading-relaxed max-w-2xl">
+                قائمة المشرفين المعتمدين حالياً في قاعدة البيانات. يحق للمشرف العام فقط مراجعة صلاحيات المشرفين أو إلغاء الإشراف وإعادة الحساب إلى رتبة طالب.
+              </p>
+            </div>
+
+            <button
+              onClick={() => refreshSupervisors()}
+              className="px-4 py-2 rounded-xl bg-[#35D6C5]/15 hover:bg-[#35D6C5]/25 text-[#35D6C5] font-bold text-xs border border-[#35D6C5]/30 flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>تحديث القائمة</span>
+            </button>
+          </div>
+
+          {modActionFeedback && (
+            <div
+              className={`p-4 rounded-2xl flex items-center gap-2.5 text-xs font-bold ${
+                modActionFeedback.type === 'success'
+                  ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30'
+                  : 'bg-red-500/15 text-red-200 border border-red-500/30'
+              }`}
+            >
+              {modActionFeedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              )}
+              <span>{modActionFeedback.text}</span>
+            </div>
+          )}
+
+          {!isSuperAdmin && (
+            <div className="p-4 rounded-2xl bg-[#090E17] border border-[#D7B875]/30 flex items-center gap-3 text-xs text-[#D7B875]">
+              <Lock className="w-4 h-4 shrink-0" />
+              <span>أنت تتصفح القائمة بصفتك مشرفاً معتمداً. صلاحية ترقية أو إلغاء إشراف المشرفين الآخرين محصورة بالمشرف العام فقط.</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {supervisors.map((sup) => {
+              const isRootAdmin =
+                sup.role === 'super_admin' ||
+                sup.email.toLowerCase() === 'mustafaaalihassonkazh@gmail.com';
+              return (
+                <div
+                  key={sup.userId}
+                  className="rounded-2xl bg-[#101827] border border-white/10 p-5 flex flex-col justify-between gap-4 shadow-xl"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${
+                            isRootAdmin
+                              ? 'bg-[#D7B875]/20 text-[#D7B875] border border-[#D7B875]/40'
+                              : 'bg-[#35D6C5]/15 text-[#35D6C5] border border-[#35D6C5]/30'
+                          }`}
+                        >
+                          {(sup.fullName || 'م').charAt(0)}
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-black text-white">{sup.fullName}</h3>
+                          <span className="text-[11px] font-mono text-slate-400 block" dir="ltr">
+                            {sup.email || sup.userId}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 ${
+                          isRootAdmin
+                            ? 'bg-[#D7B875]/20 text-[#D7B875] border-[#D7B875]/40'
+                            : 'bg-[#35D6C5]/15 text-[#35D6C5] border-[#35D6C5]/30'
+                        }`}
+                      >
+                        {isRootAdmin ? 'المشرف العام الأساسي' : 'مشرف معتمد'}
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-[#090E17] border border-white/5 space-y-1.5 text-xs">
+                      <div className="flex items-center justify-between text-slate-300">
+                        <span className="text-slate-400">المعرف (UID):</span>
+                        <span className="font-mono text-[11px] text-white" dir="ltr">
+                          {sup.userId}
+                        </span>
+                      </div>
+                      {sup.createdAt && (
+                        <div className="flex items-center justify-between text-slate-300">
+                          <span className="text-slate-400">تاريخ الاعتماد:</span>
+                          <span className="text-white">{formatArabicDate(sup.createdAt)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {isSuperAdmin && !isRootAdmin && (
+                    <div className="pt-2 border-t border-white/10 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRevokeTargetSup({
+                            userId: sup.userId,
+                            fullName: sup.fullName,
+                            email: sup.email,
+                          })
+                        }
+                        className="w-full py-2 px-3 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <UserX className="w-3.5 h-3.5" />
+                        <span>إلغاء صلاحية الإشراف</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Confirmation Modal for Revoking Moderator Role */}
+          {revokeTargetSup && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+              <div className="max-w-md w-full rounded-3xl bg-[#101827] border border-red-500/40 p-6 space-y-4 shadow-2xl text-right">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-red-500/20 text-red-400 flex items-center justify-center shrink-0">
+                    <UserX className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-white">تأكيد إلغاء صلاحية الإشراف</h3>
+                    <p className="text-xs text-slate-400">المشرف: {revokeTargetSup.fullName}</p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-[#090E17] border border-white/10 text-xs text-slate-300 space-y-1.5 leading-relaxed">
+                  <p className="font-bold text-red-400">تنبيه أمني:</p>
+                  <p>
+                    سيتم سحب صلاحيات الإشراف من «{revokeTargetSup.fullName}» فوراً من قاعدة البيانات (/admins) وإعادة حسابه إلى رتبة طالب عادي (student)، مع إرسال إشعار فوري له.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    disabled={isProcessingModAction}
+                    onClick={async () => {
+                      setIsProcessingModAction(true);
+                      setModActionFeedback(null);
+                      const res = await revokeModeratorRole(revokeTargetSup.userId);
+                      setModActionFeedback({
+                        type: res.success ? 'success' : 'error',
+                        text: res.notice,
+                      });
+                      setIsProcessingModAction(false);
+                      setRevokeTargetSup(null);
+                    }}
+                    className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-black text-xs shadow-lg transition-all cursor-pointer"
+                  >
+                    {isProcessingModAction ? 'جاري التنفيذ...' : 'تأكيد إلغاء الإشراف'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRevokeTargetSup(null)}
+                    className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs font-bold cursor-pointer"
+                  >
+                    تراجع
                   </button>
                 </div>
               </div>

@@ -332,6 +332,7 @@ export type SongCategory =
 
 export type SongStorageType =
   | 'firebase_storage'
+  | 'firestore_chunks'
   | 'external_url'
   | 'local_indexeddb';
 
@@ -342,9 +343,10 @@ export interface GraduationSong {
   durationSeconds: number;
   durationFormatted: string; // e.g. '03:45'
   category: SongCategory;
-  audioUrl: string; // Direct URL, Firebase Storage URL, or 'idb://<id>'
+  audioUrl: string; // Direct URL, Firebase Storage URL, 'firestore://<id>', or 'idb://<id>'
   storagePath?: string;
   storageType: SongStorageType;
+  chunkCount?: number;
   coverUrl?: string;
   mimeType: string;
   fileSizeBytes: number;

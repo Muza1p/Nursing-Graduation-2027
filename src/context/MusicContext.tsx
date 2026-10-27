@@ -6,6 +6,8 @@ import React, {
   useEffect,
   useCallback,
 } from 'react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../services/firebase';
 import { GraduationSong } from '../types';
 import {
   getLocalSongs,
@@ -14,6 +16,7 @@ import {
   resolvePlayableSongUrl,
   updateGraduationSongMetadata,
   formatSongDuration,
+  seedOfficialGraduationSongIfEmpty,
 } from '../services/musicLibrary';
 
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -83,8 +86,30 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  // Initial sync & Real-time onSnapshot listener for instant synchronization across all students and devices
   useEffect(() => {
     refreshSongs();
+
+    try {
+      const unsub = onSnapshot(
+        collection(db, 'graduation_songs'),
+        (snapshot) => {
+          const cloudSongs = snapshot.docs.map(
+            (d) => ({ ...d.data(), id: d.id } as GraduationSong)
+          );
+          cloudSongs.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+          saveLocalSongs(cloudSongs);
+          setSongsList(cloudSongs);
+        },
+        (error) => {
+          console.warn('Real-time graduation_songs snapshot warning:', error);
+        }
+      );
+
+      return () => unsub();
+    } catch (err) {
+      console.warn('Could not attach onSnapshot to graduation_songs:', err);
+    }
   }, [refreshSongs]);
 
   // Keep currentSong metadata in sync if edited in admin panel

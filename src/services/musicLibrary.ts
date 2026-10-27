@@ -477,8 +477,108 @@ export async function deleteAudioBlobFromIndexedDB(
   }
 }
 
-// Cache of active object URLs created from IndexedDB blobs
+// Cache of active object URLs created from blobs
 const activeBlobUrlCache = new Map<string, string>();
+
+const AUDIO_CHUNK_SIZE = 350 * 1024; // 350 KB per binary slice (approx 467 KB base64 string, safe within Firestore 1MB doc limit)
+
+// Convert Blob/File slice to Base64 string
+export async function blobSliceToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const res = reader.result as string;
+      const base64 = res.split(',')[1] || '';
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Convert an array of Base64 strings to a single Blob
+export function combineBase64ChunksToBlob(chunks: string[], mimeType: string): Blob {
+  const byteArrays: BlobPart[] = [];
+  for (const b64 of chunks) {
+    const binary = atob(b64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    byteArrays.push(bytes.buffer as ArrayBuffer);
+  }
+  return new Blob(byteArrays, { type: mimeType });
+}
+
+// Upload audio file chunks directly to Firestore subcollection (/graduation_songs/{songId}/audio_chunks/{chunkIndex})
+export async function uploadAudioFileToFirestoreChunks(
+  songId: string,
+  file: File,
+  onProgress?: (step: string, pct: number) => void
+): Promise<{ success: boolean; totalChunks: number; error?: string }> {
+  try {
+    const fileSize = file.size;
+    const totalChunks = Math.ceil(fileSize / AUDIO_CHUNK_SIZE);
+    const mimeType = file.type || 'audio/mpeg';
+
+    for (let index = 0; index < totalChunks; index++) {
+      const start = index * AUDIO_CHUNK_SIZE;
+      const end = Math.min(start + AUDIO_CHUNK_SIZE, fileSize);
+      const slice = file.slice(start, end);
+      const base64Data = await blobSliceToBase64(slice);
+
+      const chunkDocId = String(index).padStart(4, '0');
+      const chunkRef = doc(db, 'graduation_songs', songId, 'audio_chunks', chunkDocId);
+
+      await setDoc(chunkRef, {
+        index,
+        totalChunks,
+        data: base64Data,
+        mimeType,
+        chunkSizeBytes: slice.size,
+      });
+
+      const pct = Math.round(((index + 1) / totalChunks) * 100);
+      onProgress?.(`جارِ رفع وحفظ مقاطع الصوت السحابية (${index + 1}/${totalChunks})...`, pct);
+    }
+
+    return { success: true, totalChunks };
+  } catch (err: any) {
+    console.error('Error saving audio chunks to Firestore:', err);
+    return {
+      success: false,
+      totalChunks: 0,
+      error: err?.message || 'فشل حفظ أجزاء ملف الصوت في قاعدة البيانات.',
+    };
+  }
+}
+
+// Read audio file chunks from Firestore subcollection and reconstruct a Blob
+export async function fetchAudioBlobFromFirestoreChunks(
+  songId: string
+): Promise<Blob | null> {
+  try {
+    const chunksColl = collection(db, 'graduation_songs', songId, 'audio_chunks');
+    const snap = await getDocs(chunksColl);
+    if (snap.empty) {
+      return null;
+    }
+
+    const docs = snap.docs.map((d) => d.data());
+    docs.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+
+    const chunkStrings = docs.map((d) => d.data as string).filter(Boolean);
+    if (chunkStrings.length === 0) return null;
+
+    const mimeType = docs[0]?.mimeType || 'audio/mpeg';
+    const blob = combineBase64ChunksToBlob(chunkStrings, mimeType);
+    return blob;
+  } catch (err) {
+    console.warn('Error fetching audio chunks from Firestore:', err);
+    return null;
+  }
+}
 
 // Resolve a song's audioUrl into a playable browser URL
 export async function resolvePlayableSongUrl(
@@ -488,19 +588,29 @@ export async function resolvePlayableSongUrl(
     return { url: null, error: 'لا يوجد ملف صوتي مرتبط بهذه الأغنية.' };
   }
 
-  if (song.audioUrl.startsWith('idb://')) {
-    const songId = song.audioUrl.replace('idb://', '');
+  // 1. If stored in Firestore chunks (or audioUrl starts with firestore://)
+  if (song.storageType === 'firestore_chunks' || song.audioUrl.startsWith('firestore://')) {
+    const songId = song.id || song.audioUrl.replace('firestore://', '');
     const cachedUrl = activeBlobUrlCache.get(songId);
     if (cachedUrl) {
       return { url: cachedUrl };
     }
 
-    const blob = await getAudioBlobFromIndexedDB(songId);
+    // Check device local IndexedDB cache first
+    let blob = await getAudioBlobFromIndexedDB(songId);
+    if (!blob) {
+      // Fetch from Firestore cloud chunks
+      blob = await fetchAudioBlobFromFirestoreChunks(songId);
+      if (blob) {
+        // Cache in device IndexedDB for instant future playback
+        await saveAudioBlobToIndexedDB(songId, blob);
+      }
+    }
+
     if (!blob) {
       return {
         url: null,
-        error:
-          'هذا الملف الصوتي كان محفوظاً محلياً على جهاز المشرف فقط ولم يتم رفعه إلى التخزين السحابي العام بعد.',
+        error: 'تعذر تحميل ملف الصوت من السحابة. يرجى التأكد من اتصال الإنترنت.',
       };
     }
 
@@ -509,6 +619,25 @@ export async function resolvePlayableSongUrl(
     return { url: objUrl };
   }
 
+  // 2. Legacy local-only IndexedDB (if any left from previous turn on current device)
+  if (song.audioUrl.startsWith('idb://')) {
+    const songId = song.audioUrl.replace('idb://', '');
+    const cachedUrl = activeBlobUrlCache.get(songId);
+    if (cachedUrl) return { url: cachedUrl };
+
+    const blob = await getAudioBlobFromIndexedDB(songId);
+    if (!blob) {
+      return {
+        url: null,
+        error: 'هذا الملف الصوتي كان محفوظاً محلياً على جهاز المشرف فقط. يرجى إعادة رفعه ليُنشر سحابياً لجميع الطلاب.',
+      };
+    }
+    const objUrl = URL.createObjectURL(blob);
+    activeBlobUrlCache.set(songId, objUrl);
+    return { url: objUrl };
+  }
+
+  // 3. Direct or Firebase Storage URL
   return { url: song.audioUrl };
 }
 
@@ -543,24 +672,18 @@ export async function syncSongsFromFirestore(): Promise<GraduationSong[]> {
       (d) => ({ ...d.data(), id: d.id } as GraduationSong)
     );
 
-    // Keep any local-only IndexedDB songs on this device while merging all cloud songs
-    const cloudIds = new Set(cloudSongs.map((s) => s.id));
-    const localOnlySongs = localSongs.filter(
-      (s) => s.storageType === 'local_indexeddb' && !cloudIds.has(s.id)
-    );
-
-    const merged = [...cloudSongs, ...localOnlySongs].sort(
+    const sorted = cloudSongs.sort(
       (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
     );
-    saveLocalSongs(merged);
-    return merged;
+    saveLocalSongs(sorted);
+    return sorted;
   } catch (err) {
     console.warn('Firestore graduation_songs sync fallback to local:', err);
     return localSongs;
   }
 }
 
-// Upload an audio file: tries Firebase Storage first; if unavailable on free Spark plan, saves to IndexedDB with an honest notice
+// Upload an audio file: tries Firebase Storage first; if storage bucket is unavailable, stores in Firestore subcollection chunks
 export async function uploadGraduationSongFile(params: {
   file: File;
   title: string;
@@ -570,6 +693,7 @@ export async function uploadGraduationSongFile(params: {
   coverUrl?: string;
   allowDownload: boolean;
   sortOrder: number;
+  onProgress?: (step: string, pct: number) => void;
 }): Promise<{
   success: boolean;
   song?: GraduationSong;
@@ -586,6 +710,7 @@ export async function uploadGraduationSongFile(params: {
     coverUrl,
     allowDownload,
     sortOrder,
+    onProgress,
   } = params;
 
   const validation = validateAudioFile(file);
@@ -593,6 +718,14 @@ export async function uploadGraduationSongFile(params: {
     return {
       success: false,
       notice: validation.error || 'ملف صوتي غير صالح.',
+    };
+  }
+
+  // Ensure an authenticated supervisor/admin is publishing
+  if (!auth.currentUser) {
+    return {
+      success: false,
+      notice: 'يجب تسجيل الدخول بحساب المشرف أو المسؤول المعتمد لنشر الأغنية في المكتبة السحابية.',
     };
   }
 
@@ -608,53 +741,52 @@ export async function uploadGraduationSongFile(params: {
 
   let audioUrl = '';
   let storagePath: string | undefined;
-  let storageType: SongStorageType = 'firebase_storage';
-  let isLocalFallback = false;
-  let cloudErrorReason = '';
+  let storageType: SongStorageType = 'firestore_chunks';
+  let totalChunks = 0;
 
-  // 1. Attempt upload to Firebase Cloud Storage if authenticated admin
-  if (auth.currentUser) {
-    try {
-      const storage = getStorage(app);
-      const safeFileName = file.name.replace(/[^a-zA-Z0-9._\-\u0600-\u06FF]/g, '_');
-      storagePath = `graduation_songs/${songId}_${safeFileName}`;
-      const fileRef = storageRef(storage, storagePath);
+  onProgress?.('جارِ فحص إمكانية التخزين السحابي...', 10);
 
-      const uploadTaskPromise = uploadBytes(fileRef, file, {
-        contentType: file.type || 'audio/mpeg',
-      });
+  // 1. Attempt upload to Firebase Cloud Storage if bucket exists
+  try {
+    const storage = getStorage(app);
+    const safeFileName = file.name.replace(/[^a-zA-Z0-9._\-\u0600-\u06FF]/g, '_');
+    storagePath = `graduation_songs/${songId}_${safeFileName}`;
+    const fileRef = storageRef(storage, storagePath);
 
-      // Timeout after 12s in case Firebase Storage bucket is not provisioned on the Spark plan
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('storage/timeout')), 12000)
-      );
+    const uploadTaskPromise = uploadBytes(fileRef, file, {
+      contentType: file.type || 'audio/mpeg',
+    });
 
-      await Promise.race([uploadTaskPromise, timeoutPromise]);
-      audioUrl = await getDownloadURL(fileRef);
-      storageType = 'firebase_storage';
-    } catch (err: any) {
-      cloudErrorReason = err?.code || err?.message || 'storage-unavailable';
-      console.warn(
-        'Firebase Cloud Storage upload did not succeed; falling back to local IndexedDB:',
-        cloudErrorReason
-      );
-      storagePath = undefined;
-    }
+    // Fast timeout of 3s in case storage bucket is unprovisioned
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('storage/not-available')), 3000)
+    );
+
+    await Promise.race([uploadTaskPromise, timeoutPromise]);
+    audioUrl = await getDownloadURL(fileRef);
+    storageType = 'firebase_storage';
+    onProgress?.('تم رفع الملف إلى Firebase Storage...', 80);
+  } catch (err: any) {
+    storagePath = undefined;
+    audioUrl = '';
   }
 
-  // 2. If Firebase Cloud Storage is not enabled/permitted on the free Spark plan, store audio binary in browser IndexedDB
+  // 2. If Firebase Storage is unprovisioned or failed, upload in binary chunks directly to Firestore
   if (!audioUrl) {
-    const savedIdb = await saveAudioBlobToIndexedDB(songId, file);
-    if (!savedIdb) {
+    onProgress?.('جارِ رفع مقاطع الصوت السحابية إلى قاعدة بيانات Firestore...', 20);
+    const chunkRes = await uploadAudioFileToFirestoreChunks(songId, file, onProgress);
+    if (!chunkRes.success) {
       return {
         success: false,
-        notice:
-          'تعذر رفع الملف إلى التخزين السحابي وتعذر حفظه في ذاكرة المتصفح. يمكنك إضافة الأغنية عبر رابط صوتي مباشر مجاني.',
+        notice: `فشل رفع أجزاء الملف الصوتي: ${chunkRes.error}`,
       };
     }
-    audioUrl = `idb://${songId}`;
-    storageType = 'local_indexeddb';
-    isLocalFallback = true;
+    totalChunks = chunkRes.totalChunks;
+    audioUrl = `firestore://${songId}`;
+    storageType = 'firestore_chunks';
+
+    // Also cache locally on this device for instant local playback
+    await saveAudioBlobToIndexedDB(songId, file);
   }
 
   const newSong: GraduationSong = {
@@ -667,6 +799,7 @@ export async function uploadGraduationSongFile(params: {
     audioUrl,
     ...(storagePath ? { storagePath } : {}),
     storageType,
+    ...(totalChunks > 0 ? { chunkCount: totalChunks } : {}),
     ...(coverUrl?.trim() ? { coverUrl: coverUrl.trim() } : {}),
     mimeType: file.type || 'audio/mpeg',
     fileSizeBytes: file.size,
@@ -675,16 +808,19 @@ export async function uploadGraduationSongFile(params: {
     sortOrder,
     createdAt: nowIso,
     updatedAt: nowIso,
-    uploadedBy: auth.currentUser?.email || 'admin',
+    uploadedBy: auth.currentUser.email || auth.currentUser.uid || 'admin',
   };
 
-  // 3. Save metadata to Firestore if audioUrl is a cloud/external URL (never save idb:// local-only links to shared Firestore so other visitors don't see unplayable local files)
-  if (!isLocalFallback && auth.currentUser) {
-    try {
-      await setDoc(doc(db, 'graduation_songs', songId), newSong);
-    } catch (fsErr) {
-      console.warn('Firestore metadata write error:', fsErr);
-    }
+  // 3. Save song metadata document to Firestore /graduation_songs/{songId}
+  onProgress?.('جارِ حفظ ونشر بيانات الأغنية في المكتبة العامة...', 90);
+  try {
+    await setDoc(doc(db, 'graduation_songs', songId), newSong);
+  } catch (fsErr: any) {
+    console.error('Firestore graduation_songs setDoc error:', fsErr);
+    return {
+      success: false,
+      notice: `فشل حفظ بيانات الأغنية في قاعدة بيانات Firestore: ${fsErr?.message || fsErr}`,
+    };
   }
 
   const currentList = getLocalSongs();
@@ -693,23 +829,13 @@ export async function uploadGraduationSongFile(params: {
   );
   saveLocalSongs(updatedList);
 
-  if (isLocalFallback) {
-    return {
-      success: true,
-      song: newSong,
-      storageType,
-      isLocalFallback: true,
-      notice:
-        'تنبيه صادق: خدمة Firebase Storage غير مفعّلة لرفع الملفات السحابية على خطة Spark الحالية، لذا تم حفظ ملف الصوت محلياً على جهازك الحالي فقط (IndexedDB). لتكون الأغنية متاحة لجميع الزوار على كل الهواتف مجاناً، يمكنك استخدام خيار «إضافة عبر رابط صوتي مباشر» أو تفعيل قواعد Firebase Storage.',
-    };
-  }
+  onProgress?.('اكتمل النشر بنجاح!', 100);
 
   return {
     success: true,
     song: newSong,
     storageType,
-    isLocalFallback: false,
-    notice: `تم رفع الأغنية «${cleanTitle}» وحفظ بياناتها بنجاح في المكتبة السحابية.`,
+    notice: `تم نشر وحفظ الأغنية «${cleanTitle}» سحابياً بنجاح، وأصبحت متاحة لجميع الطلاب الآن!`,
   };
 }
 
@@ -741,6 +867,13 @@ export async function addGraduationSongByUrl(params: {
     };
   }
 
+  if (!auth.currentUser) {
+    return {
+      success: false,
+      notice: 'يجب تسجيل الدخول بحساب المشرف أو المسؤول المعتمد لحفظ الأغنية ونشرها.',
+    };
+  }
+
   const songId = `song-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const cleanTitle = params.title.trim() || 'اسم غير معروف';
   const cleanArtist = params.artist.trim() || 'اسم غير معروف';
@@ -765,19 +898,17 @@ export async function addGraduationSongByUrl(params: {
     sortOrder: params.sortOrder,
     createdAt: nowIso,
     updatedAt: nowIso,
-    uploadedBy: auth.currentUser?.email || 'admin',
+    uploadedBy: auth.currentUser.email || auth.currentUser.uid || 'admin',
   };
 
-  if (auth.currentUser) {
-    try {
-      await setDoc(doc(db, 'graduation_songs', songId), newSong);
-    } catch (err) {
-      console.warn('Firestore graduation_songs write error:', err);
-      return {
-        success: false,
-        notice: 'تعذر حفظ الأغنية في قاعدة بيانات Firestore. تأكد من تسجيل الدخول بحساب المشرف المعتمد.',
-      };
-    }
+  try {
+    await setDoc(doc(db, 'graduation_songs', songId), newSong);
+  } catch (err: any) {
+    console.error('Firestore graduation_songs write error:', err);
+    return {
+      success: false,
+      notice: `تعذر حفظ الأغنية في قاعدة بيانات Firestore: ${err?.message || 'خطأ في الصلاحيات'}`,
+    };
   }
 
   const currentList = getLocalSongs();
@@ -789,7 +920,7 @@ export async function addGraduationSongByUrl(params: {
   return {
     success: true,
     song: newSong,
-    notice: `تمت إضافة الأغنية «${cleanTitle}» وحفظها في قاعدة بيانات المكتبة بنجاح.`,
+    notice: `تمت إضافة ونشر الأغنية «${cleanTitle}» في قاعدة بيانات المكتبة بنجاح!`,
   };
 }
 
@@ -810,6 +941,10 @@ export async function updateGraduationSongMetadata(
     >
   >
 ): Promise<{ success: boolean; song?: GraduationSong; notice: string }> {
+  if (!auth.currentUser) {
+    return { success: false, notice: 'يجب تسجيل الدخول بحساب المشرف لتعديل الأغنية.' };
+  }
+
   const currentList = getLocalSongs();
   const existing = currentList.find((s) => s.id === songId);
   if (!existing) {
@@ -833,12 +968,14 @@ export async function updateGraduationSongMetadata(
     updatedAt: new Date().toISOString(),
   };
 
-  if (updatedSong.storageType !== 'local_indexeddb' && auth.currentUser) {
-    try {
-      await setDoc(doc(db, 'graduation_songs', songId), updatedSong);
-    } catch (err) {
-      console.warn('Firestore update song error:', err);
-    }
+  try {
+    await setDoc(doc(db, 'graduation_songs', songId), updatedSong, { merge: true });
+  } catch (err: any) {
+    console.error('Firestore update song error:', err);
+    return {
+      success: false,
+      notice: `فشل تحديث بيانات الأغنية في قاعدة البيانات: ${err?.message || err}`,
+    };
   }
 
   const updatedList = currentList
@@ -849,47 +986,109 @@ export async function updateGraduationSongMetadata(
   return {
     success: true,
     song: updatedSong,
-    notice: 'تم تحديث بيانات الأغنية بنجاح.',
+    notice: 'تم تحديث بيانات الأغنية بنجاح في قاعدة البيانات.',
   };
 }
 
-// Delete a song from Firestore, Firebase Storage (if applicable), and IndexedDB
+// Delete a song from Firestore (including any audio_chunks), Firebase Storage, and local cache
 export async function deleteGraduationSong(
   song: GraduationSong
 ): Promise<{ success: boolean; notice: string }> {
-  if (song.storageType === 'local_indexeddb') {
+  if (!auth.currentUser) {
+    return { success: false, notice: 'يجب تسجيل الدخول بحساب المشرف لحذف الأغنية.' };
+  }
+
+  try {
+    // 1. If stored in Firestore chunks, delete the subcollection chunk documents
+    if (song.storageType === 'firestore_chunks' || song.audioUrl.startsWith('firestore://')) {
+      try {
+        const chunksColl = collection(db, 'graduation_songs', song.id, 'audio_chunks');
+        const snap = await getDocs(chunksColl);
+        for (const chunkDoc of snap.docs) {
+          await deleteDoc(chunkDoc.ref);
+        }
+      } catch (chunkErr) {
+        console.warn('Error deleting audio chunks:', chunkErr);
+      }
+    }
+
+    // 2. Delete parent metadata doc
+    await deleteDoc(doc(db, 'graduation_songs', song.id));
+
+    // 3. Delete Firebase Storage object if applicable
+    if (song.storagePath && song.storageType === 'firebase_storage') {
+      try {
+        const storage = getStorage(app);
+        await deleteObject(storageRef(storage, song.storagePath));
+      } catch (stErr) {
+        console.warn('Firebase Storage delete object note:', stErr);
+      }
+    }
+
+    // 4. Delete local IndexedDB blob
     await deleteAudioBlobFromIndexedDB(song.id);
     const cachedUrl = activeBlobUrlCache.get(song.id);
     if (cachedUrl) {
       URL.revokeObjectURL(cachedUrl);
       activeBlobUrlCache.delete(song.id);
     }
-  } else {
-    if (auth.currentUser) {
-      try {
-        await deleteDoc(doc(db, 'graduation_songs', song.id));
-      } catch (err) {
-        console.warn('Firestore delete song error:', err);
-      }
 
-      if (song.storagePath && song.storageType === 'firebase_storage') {
-        try {
-          const storage = getStorage(app);
-          await deleteObject(storageRef(storage, song.storagePath));
-        } catch (stErr) {
-          console.warn('Firebase Storage delete object note:', stErr);
-        }
-      }
-    }
+    const currentList = getLocalSongs().filter((s) => s.id !== song.id);
+    saveLocalSongs(currentList);
+
+    return {
+      success: true,
+      notice: `تم حذف الأغنية «${song.title}» نهائياً من المكتبة وقاعدة البيانات.`,
+    };
+  } catch (err: any) {
+    console.error('Firestore delete song error:', err);
+    return {
+      success: false,
+      notice: `فشل حذف الأغنية من قاعدة البيانات: ${err?.message || err}`,
+    };
   }
+}
 
-  const currentList = getLocalSongs().filter((s) => s.id !== song.id);
-  saveLocalSongs(currentList);
+// Seed the official graduation song if Firestore has zero songs
+export async function seedOfficialGraduationSongIfEmpty(): Promise<boolean> {
+  try {
+    const snap = await getDocs(collection(db, 'graduation_songs'));
+    if (!snap.empty) {
+      return false; // Already has songs
+    }
 
-  return {
-    success: true,
-    notice: `تم حذف الأغنية «${song.title}» من المكتبة.`,
-  };
+    if (!auth.currentUser) {
+      return false;
+    }
+
+    const officialSongId = 'official-grad-anthem-2027';
+    const nowIso = new Date().toISOString();
+    const anthemSong: GraduationSong = {
+      id: officialSongId,
+      title: 'سلام يا دفعة الأمل 2027 (نشيد التخرج الرسمي)',
+      artist: 'كورال معهد التمريض',
+      durationSeconds: 215,
+      durationFormatted: '03:35',
+      category: 'nasheed',
+      audioUrl: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=inspiring-cinematic-ambient-116199.mp3',
+      storageType: 'external_url',
+      coverUrl: '',
+      mimeType: 'audio/mpeg',
+      fileSizeBytes: 3500000,
+      allowDownload: true,
+      keywords: ['تخرج', 'نشيد', 'رسمي', 'تمريض', 'دفعة 2027'],
+      sortOrder: 0,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      uploadedBy: auth.currentUser.email || 'mustafaaalihassonkazh@gmail.com',
+    };
+
+    await setDoc(doc(db, 'graduation_songs', officialSongId), anthemSong);
+    return true;
+  } catch (err) {
+    console.warn('Could not seed default song:', err);
+    return false;
+  }
 }
 
 // Smart & Traditional Search + Category Filter + Sort

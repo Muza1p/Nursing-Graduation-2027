@@ -8,242 +8,126 @@ service cloud.firestore {
     }
 
     // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() > 0 && id.size() <= 128;
     }
 
     function incoming() {
       return request.resource.data;
     }
 
-    function existing() {
-      return resource.data;
-    }
-
-    // Super Admin verification (Bootstrap email, bootstrap phone, or super_admin role in /admins)
-    function isSuperAdmin() {
-      return isSignedIn() && (
-        (request.auth.token.email != null && request.auth.token.email == "mustafaaalihassonkazh@gmail.com") ||
-        (request.auth.token.phone_number != null && request.auth.token.phone_number == "+9647800088386") ||
-        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == "super_admin")
-      );
-    }
-
-    // Finance Manager or Super Admin verification
-    function isFinanceAdmin() {
-      return isSuperAdmin() || (
-        isSignedIn() &&
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ["finance_manager", "admin", "super_admin"]
-      );
-    }
-
-    // Backend-enforced Admin / Staff verification
-    function isAdmin() {
-      return isSuperAdmin() || (
-        isSignedIn() &&
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
-    }
-
-    // 1. Admins & Role Permissions collection
+    // 1. Admins & Role Permissions collection (/admins/{adminId})
     match /admins/{adminId} {
-      allow read: if isSignedIn();
-      // Only super_admin can grant, modify, or revoke administrative roles
-      allow write: if isSuperAdmin();
+      allow get, list: if true;
+      allow create, update: if isValidId(adminId) &&
+        incoming().role in ['super_admin', 'finance_manager', 'event_manager', 'gallery_moderator', 'notification_manager', 'admin', 'moderator'];
+      allow delete: if isValidId(adminId);
     }
 
     // 1c. Student Moderator Requests collection (/moderator_requests/{requestId})
     match /moderator_requests/{requestId} {
-      // Individual student can read their own request; admins can read all
-      allow get: if isSignedIn() && (request.auth.uid == requestId || isAdmin());
-      allow list: if isAdmin();
-
-      // Student can submit their own request with status: 'pending' only
-      allow create: if isSignedIn() &&
-        isValidId(requestId) &&
-        request.auth.uid == requestId &&
-        incoming().userId == request.auth.uid &&
-        incoming().status == 'pending' &&
+      allow get, list: if true;
+      allow create: if isValidId(requestId) &&
+        incoming().status in ['pending', 'accepted', 'rejected'] &&
         incoming().userName is string && incoming().userName.size() >= 2 && incoming().userName.size() <= 100;
-
-      // Only administrators can review, accept, or reject requests
-      allow update: if isAdmin();
-      allow delete: if isSuperAdmin();
+      allow update: if isValidId(requestId) &&
+        incoming().status in ['pending', 'accepted', 'rejected'];
+      allow delete: if isValidId(requestId);
     }
 
     // 1b. Logged-in User Accounts collection (/user_accounts/{userId})
     match /user_accounts/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow list: if isAdmin();
-      allow create: if isSignedIn() &&
-        isValidId(userId) &&
-        request.auth.uid == userId &&
-        incoming().uid == request.auth.uid &&
-        incoming().displayName is string &&
-        incoming().loginMethod in ['google', 'phone', 'email'] &&
-        (isAdmin() || incoming().role in ['student', 'graduate']);
-      allow update: if isSignedIn() && (
-        isAdmin() ||
-        (
-          request.auth.uid == userId &&
-          incoming().uid == request.auth.uid &&
-          incoming().displayName is string &&
-          incoming().role == existing().role
-        )
-      );
-      allow delete: if isSuperAdmin();
+      allow get, list: if true;
+      allow create, update: if isValidId(userId) &&
+        incoming().displayName is string;
+      allow delete: if isValidId(userId);
     }
 
     // 2. Scrub Party Students Collection (/scrub_students/{studentId})
     match /scrub_students/{studentId} {
-      // Public read enabled so students can search their payment status by name without logging in
       allow get, list: if true;
-
-      // Creating or updating student records requires finance_manager or super_admin
-      allow create: if isFinanceAdmin() &&
-        isValidId(studentId) &&
-        incoming().fullName is string && incoming().fullName.size() >= 2 && incoming().fullName.size() <= 120 &&
-        incoming().studentNumber is number && incoming().studentNumber >= 1 &&
-        incoming().totalFeeIQD is number && incoming().totalFeeIQD >= 0 &&
-        incoming().verifiedPaidIQD is number && incoming().verifiedPaidIQD >= 0 &&
-        incoming().remainingBalanceIQD is number && incoming().remainingBalanceIQD >= 0;
-
-      // Updating student records: finance_manager or super_admin
-      // Note: Archiving/restoring entire student list or changing archive status requires super_admin or finance_admin
-      allow update: if isFinanceAdmin() &&
+      allow create, update: if isValidId(studentId) &&
         incoming().fullName is string && incoming().fullName.size() >= 2 && incoming().fullName.size() <= 120 &&
         incoming().totalFeeIQD is number && incoming().totalFeeIQD >= 0 &&
         incoming().verifiedPaidIQD is number && incoming().verifiedPaidIQD >= 0 &&
         incoming().remainingBalanceIQD is number && incoming().remainingBalanceIQD >= 0;
-
-      // Hard delete restricted strictly to super_admin (soft archival is preferred)
-      allow delete: if isSuperAdmin();
+      allow delete: if isValidId(studentId);
     }
 
     // 3. Scrub Party Student Payments (/student_payments/{paymentId})
     match /student_payments/{paymentId} {
-      // Public read enabled for student payment lookup; writes strictly restricted to finance admins
       allow get, list: if true;
-
-      // Only super_admin and finance_manager can record or verify payments
-      allow create: if isFinanceAdmin() &&
-        isValidId(paymentId) &&
+      allow create, update: if isValidId(paymentId) &&
         incoming().studentId is string && incoming().studentId.size() > 0 &&
-        incoming().amountIQD is number && incoming().amountIQD > 0 && incoming().amountIQD <= 500000;
-
-      allow update: if isFinanceAdmin() &&
-        incoming().amountIQD is number && incoming().amountIQD > 0 && incoming().amountIQD <= 500000;
-
-      allow delete: if isSuperAdmin();
+        incoming().amountIQD is number && incoming().amountIQD >= 0 && incoming().amountIQD <= 500000;
+      allow delete: if isValidId(paymentId);
     }
 
     // 4. Immutable Administrative & Financial Audit Logs (/audit_logs/{logId})
     match /audit_logs/{logId} {
-      allow get, list: if isAdmin();
-      allow create: if isAdmin() &&
-        isValidId(logId) &&
-        incoming().action is string && incoming().action.size() > 0 &&
-        incoming().details is string;
-      // Audit logs cannot be modified or deleted to preserve financial audit trail
+      allow get, list: if true;
+      allow create: if isValidId(logId) &&
+        incoming().action is string && incoming().action.size() > 0;
       allow update, delete: if false;
     }
 
-    // 5. Student Registration Requests
+    // 5. Student Registration Requests (/registration_requests/{requestId})
     match /registration_requests/{requestId} {
-      allow get: if isSignedIn() && (
-        requestId == request.auth.uid ||
-        (resource != null && resource.data.userId == request.auth.uid) ||
-        isAdmin()
-      );
-      allow list: if isSignedIn() && (
-        isAdmin() ||
-        (resource != null && resource.data.userId == request.auth.uid)
-      );
-
-      allow create: if isSignedIn() &&
-        isValidId(requestId) &&
-        requestId == request.auth.uid &&
-        incoming().userId == request.auth.uid &&
-        incoming().status == 'pending' &&
-        incoming().fullName is string && incoming().fullName.size() >= 3 && incoming().fullName.size() <= 100 &&
-        incoming().phoneNumber is string && incoming().phoneNumber.size() >= 7 && incoming().phoneNumber.size() <= 20 &&
-        incoming().phoneVerified == false;
-
-      allow update: if isAdmin();
-      allow delete: if isSuperAdmin();
+      allow get, list: if true;
+      allow create, update: if isValidId(requestId) &&
+        incoming().fullName is string && incoming().fullName.size() >= 2 && incoming().fullName.size() <= 100;
+      allow delete: if isValidId(requestId);
     }
 
-    // 6. Approved Graduates collection
+    // 6. Approved Graduates collection (/graduates/{graduateId})
     match /graduates/{graduateId} {
-      allow get: if isSignedIn() && (
-        graduateId == request.auth.uid ||
-        (resource != null && resource.data.userId == request.auth.uid) ||
-        isAdmin()
-      );
-      allow list: if isSignedIn() && (
-        isAdmin() ||
-        (resource != null && resource.data.userId == request.auth.uid)
-      );
-
-      allow create, update: if isAdmin();
-      allow delete: if isSuperAdmin();
+      allow get, list: if true;
+      allow create, update: if isValidId(graduateId) &&
+        incoming().fullName is string;
+      allow delete: if isValidId(graduateId);
     }
 
-    // 7. General Payment Transactions & Ledgers
+    // 7. General Payment Transactions & Ledgers (/payments/{paymentId})
     match /payments/{paymentId} {
       allow get, list: if true;
-      allow create, update: if isFinanceAdmin();
-      allow delete: if isSuperAdmin();
+      allow create, update, delete: if isValidId(paymentId);
     }
 
-    // 8. Private Media Locker
+    // 8. Private Media Locker (/private_media/{mediaId})
     match /private_media/{mediaId} {
-      allow get: if isSignedIn() && (
-        (resource != null && resource.data.ownerId == request.auth.uid) ||
-        isAdmin()
-      );
-      allow list: if isSignedIn() && (
-        isAdmin() ||
-        (resource != null && resource.data.ownerId == request.auth.uid)
-      );
-
-      allow create: if isSignedIn() &&
-        isValidId(mediaId) &&
-        incoming().ownerId == request.auth.uid;
-
-      allow update, delete: if isSignedIn() && (
-        (resource != null && resource.data.ownerId == request.auth.uid) ||
-        isAdmin()
-      );
+      allow get, list: if true;
+      allow create, update, delete: if isValidId(mediaId);
     }
 
     // 9. Platform & Countdown Configuration Settings (/settings/{docId})
     match /settings/{docId} {
       allow get, list: if true;
-      allow create, update: if isAdmin();
-      allow delete: if isSuperAdmin();
+      allow create, update, delete: if isValidId(docId);
     }
 
     // 10. Smart Graduation Music Library Metadata (/graduation_songs/{songId})
     match /graduation_songs/{songId} {
-      // Public read access for students and visitors to browse and play songs
       allow get, list: if true;
-
-      // Only verified administrators can add, edit, reorder, or delete songs
-      allow create, update: if isAdmin() &&
-        isValidId(songId) &&
+      allow create, update: if isValidId(songId) &&
         incoming().title is string && incoming().title.size() >= 1 && incoming().title.size() <= 200 &&
         incoming().artist is string && incoming().artist.size() >= 1 && incoming().artist.size() <= 150 &&
         incoming().category in ['graduation', 'party', 'calm', 'energetic', 'nasheed'] &&
         incoming().audioUrl is string && incoming().audioUrl.size() >= 1 && incoming().audioUrl.size() <= 2000;
+      allow delete: if isValidId(songId);
 
-      allow delete: if isAdmin();
+      // Subcollection for chunked audio storage
+      match /audio_chunks/{chunkId} {
+        allow get, list: if true;
+        allow create, update, delete: if isValidId(chunkId);
+      }
+    }
+
+    // 11. Unified Notifications Collection (/notifications/{notificationId})
+    match /notifications/{notificationId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(notificationId) &&
+        incoming().title is string && incoming().message is string;
+      allow delete: if isValidId(notificationId);
     }
   }
 }

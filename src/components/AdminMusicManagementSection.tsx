@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { sendAppNotification } from '../services/notificationService';
 import {
   Music,
   Upload,
@@ -36,7 +37,9 @@ import {
   formatSongDuration,
   getSongCategoryLabel,
   SONG_CATEGORIES,
+  seedOfficialGraduationSongIfEmpty,
 } from '../services/musicLibrary';
+import { useApp } from '../context/AppContext';
 
 interface StagedFileItem {
   id: string;
@@ -49,11 +52,13 @@ interface StagedFileItem {
   allowDownload: boolean;
   status: 'idle' | 'uploading' | 'success' | 'error';
   progress: number;
+  statusMessage?: string;
   error?: string;
 }
 
 export const AdminMusicManagementSection: React.FC = () => {
   const { songs, refreshSongs, playSong, currentSong, isPlaying, togglePlayPause } = useMusic();
+  const { firebaseUser, isAdmin, isModerator } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -62,6 +67,7 @@ export const AdminMusicManagementSection: React.FC = () => {
   const [isParsingFiles, setIsParsingFiles] = useState(false);
   const [isBatchUploading, setIsBatchUploading] = useState(false);
   const [overallProgress, setOverallProgress] = useState(0);
+  const [isSeedingDefault, setIsSeedingDefault] = useState(false);
 
   // Direct URL Add Form State
   const [showUrlForm, setShowUrlForm] = useState(false);
@@ -173,12 +179,13 @@ export const AdminMusicManagementSection: React.FC = () => {
 
   // Batch upload all staged files
   const handleStartBatchUpload = async () => {
-    if (stagedFiles.length === 0) return;
+    if (stagedFiles.length === 0 || isBatchUploading) return;
 
     setIsBatchUploading(true);
     setActionFeedback(null);
     let successCount = 0;
     let failCount = 0;
+    const errorsList: string[] = [];
 
     const total = stagedFiles.length;
 
@@ -187,7 +194,7 @@ export const AdminMusicManagementSection: React.FC = () => {
       if (item.status === 'success') continue;
 
       setStagedFiles((prev) =>
-        prev.map((s) => (s.id === item.id ? { ...s, status: 'uploading', progress: 5 } : s))
+        prev.map((s) => (s.id === item.id ? { ...s, status: 'uploading', progress: 5, statusMessage: 'جارِ بدء المعالجة...' } : s))
       );
 
       try {
@@ -199,30 +206,48 @@ export const AdminMusicManagementSection: React.FC = () => {
           durationSeconds: item.durationSeconds,
           allowDownload: item.allowDownload,
           sortOrder: songs.length + i,
+          onProgress: (step, pct) => {
+            setStagedFiles((prev) =>
+              prev.map((s) =>
+                s.id === item.id ? { ...s, progress: pct, statusMessage: step } : s
+              )
+            );
+          },
         });
 
         if (uploadRes.success) {
           setStagedFiles((prev) =>
-            prev.map((s) => (s.id === item.id ? { ...s, status: 'success', progress: 100 } : s))
+            prev.map((s) => (s.id === item.id ? { ...s, status: 'success', progress: 100, statusMessage: 'تم النشر بنجاح' } : s))
           );
           successCount++;
+          await sendAppNotification({
+            title: `أغنية تخرج جديدة: ${item.title.trim() || item.file.name}`,
+            message: `تمت إضافة أغنية جديدة «${item.title.trim() || item.file.name}» إلى مكتبة أغاني التخرج. استمع إليها الآن!`,
+            type: 'song',
+            targetAudience: 'all',
+            linkRoute: 'music',
+          });
         } else {
           failCount++;
+          errorsList.push(`${item.title}: ${uploadRes.notice}`);
           setStagedFiles((prev) =>
             prev.map((s) =>
-              s.id === item.id ? { ...s, status: 'error', error: uploadRes.notice } : s
+              s.id === item.id ? { ...s, status: 'error', error: uploadRes.notice, statusMessage: 'فشل النشر' } : s
             )
           );
         }
       } catch (err: any) {
         failCount++;
+        const errMsg = err?.message || 'تعذر حفظ ملف الصوت';
+        errorsList.push(`${item.title}: ${errMsg}`);
         setStagedFiles((prev) =>
           prev.map((s) =>
             s.id === item.id
               ? {
                   ...s,
                   status: 'error',
-                  error: err?.message || 'تعذر رفع الملف',
+                  error: errMsg,
+                  statusMessage: 'فشل الرفع',
                 }
               : s
           )
@@ -235,20 +260,48 @@ export const AdminMusicManagementSection: React.FC = () => {
     setIsBatchUploading(false);
     await refreshSongs();
 
-    if (failCount === 0) {
+    if (failCount === 0 && successCount > 0) {
       setActionFeedback({
         type: 'success',
-        text: `تم رفع وحفظ كافة الأغاني بنجاح (${successCount} أغانٍ)! تم تحديث مكتبة الموسيقى في الموقع.`,
+        text: `تم نشر وحفظ كافة الأغاني بنجاح (${successCount} أغانٍ) في قاعدة البيانات السحابية! وهي متاحة للطلاب الآن.`,
       });
       setTimeout(() => {
         setStagedFiles((prev) => prev.filter((s) => s.status !== 'success'));
         setOverallProgress(0);
-      }, 3000);
+      }, 3500);
     } else {
       setActionFeedback({
         type: 'error',
-        text: `تم رفع ${successCount} أغانٍ بنجاح، وفشل ${failCount} ملف. يرجى مراجعة الأخطاء في القائمة أدناه.`,
+        text: `تم نشر ${successCount} أغانٍ بنجاح، وفشل ${failCount} ملف: ${errorsList.join(' | ')}`,
       });
+    }
+  };
+
+  // Seed default official graduation song if database is currently empty
+  const handleSeedDefaultSong = async () => {
+    setIsSeedingDefault(true);
+    setActionFeedback(null);
+    try {
+      const seeded = await seedOfficialGraduationSongIfEmpty();
+      if (seeded) {
+        setActionFeedback({
+          type: 'success',
+          text: 'تم نشر الأغنية الرسمية الافتراضية لحفل التخرج 2027 بنجاح في قاعدة بيانات Firestore!',
+        });
+        await refreshSongs();
+      } else {
+        setActionFeedback({
+          type: 'info',
+          text: 'توجد أغاني منشورة بالفعل في قاعدة البيانات السحابية.',
+        });
+      }
+    } catch (e: any) {
+      setActionFeedback({
+        type: 'error',
+        text: `تعذر نشر الأغنية الافتراضية: ${e?.message || e}`,
+      });
+    } finally {
+      setIsSeedingDefault(false);
     }
   };
 
@@ -687,13 +740,18 @@ export const AdminMusicManagementSection: React.FC = () => {
                   </div>
 
                   {item.status === 'uploading' ? (
-                    <span className="text-[11px] font-mono text-[#35D6C5] font-bold">
-                      {item.progress}%
-                    </span>
+                    <div className="text-right">
+                      <span className="text-[11px] font-mono text-[#35D6C5] font-bold block">
+                        {item.progress}%
+                      </span>
+                      <span className="text-[9px] text-[#35D6C5]/80 block">
+                        {item.statusMessage || 'جارِ الرفع...'}
+                      </span>
+                    </div>
                   ) : item.status === 'success' ? (
-                    <span className="text-emerald-400 text-xs font-bold">✓ تم</span>
+                    <span className="text-emerald-400 text-xs font-bold">✓ تم النشر</span>
                   ) : item.status === 'error' ? (
-                    <span className="text-red-400 text-xs font-bold">خطأ</span>
+                    <span className="text-red-400 text-xs font-bold">فشل النشر</span>
                   ) : (
                     <button
                       type="button"
@@ -706,6 +764,13 @@ export const AdminMusicManagementSection: React.FC = () => {
                     </button>
                   )}
                 </div>
+
+                {item.status === 'error' && item.error && (
+                  <div className="col-span-full md:col-span-12 p-2.5 rounded-xl bg-red-950/50 border border-red-500/40 text-[11px] text-red-300 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span className="leading-relaxed">{item.error}</span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -755,12 +820,23 @@ export const AdminMusicManagementSection: React.FC = () => {
 
         {/* Songs List */}
         {filteredExistingSongs.length === 0 ? (
-          <div className="py-12 text-center space-y-3">
+          <div className="py-12 text-center space-y-4">
             <Music className="w-12 h-12 text-[#35D6C5]/40 mx-auto" />
-            <h4 className="text-sm font-bold text-white">لا توجد أغانٍ مسجلة حالياً</h4>
+            <h4 className="text-sm font-bold text-white">لا توجد أغانٍ مسجلة حالياً في قاعدة البيانات السحابية</h4>
             <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
-              اضغط على زر (اختيار عدة ملفات صوتية من الهاتف) بالأعلى لرفع باقة أغاني التخرج دفعة واحدة، وستظهر فوراً في مشغّل الموقع.
+              اضغط على زر (اختيار عدة ملفات صوتية من الهاتف) بالأعلى لرفع باقة أغاني التخرج دفعة واحدة، أو انقر الزر أدناه لنشر النشيد الرسمي الافتراضي فوراً لتجريبه:
             </p>
+            <div>
+              <button
+                type="button"
+                disabled={isSeedingDefault}
+                onClick={handleSeedDefaultSong}
+                className="py-2.5 px-5 rounded-2xl bg-[#35D6C5] hover:opacity-95 text-[#0A0D12] font-black text-xs inline-flex items-center gap-2 transition-all cursor-pointer shadow-lg disabled:opacity-50"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{isSeedingDefault ? 'جارِ النشر في السحابة...' : 'نشر النشيد الرسمي الافتراضي لحفل التخرج 2027'}</span>
+              </button>
+            </div>
           </div>
         ) : (
           <div className="divide-y divide-white/5 space-y-2">

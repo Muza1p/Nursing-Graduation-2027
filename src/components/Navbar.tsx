@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp, PageRoute } from '../context/AppContext';
 import {
   Menu,
@@ -12,14 +12,18 @@ import {
   CalendarDays,
   Image as ImageIcon,
   LogIn,
+  Bell,
 } from 'lucide-react';
 import { StethoscopeGradCapIllustration } from './MedicalIllustrations';
+import { NotificationCenterModal } from './NotificationCenterModal';
+import { subscribeToNotifications } from '../services/notificationService';
 
 export const Navbar: React.FC = () => {
   const {
     currentPage,
     navigateTo,
     currentUser,
+    firebaseUser,
     isAdmin,
     isModerator,
     canManageContent,
@@ -27,6 +31,19 @@ export const Navbar: React.FC = () => {
     eventConfig,
   } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  const currentUid = firebaseUser?.uid || currentUser?.id || 'guest_user';
+  const isStaff = Boolean(isAdmin || isModerator);
+
+  useEffect(() => {
+    const unsub = subscribeToNotifications(currentUid, isStaff, (items) => {
+      const unread = items.filter((n) => !n.isRead).length;
+      setUnreadCount(unread);
+    });
+    return () => unsub();
+  }, [currentUid, isStaff]);
 
   const navLinks = [
     {
@@ -154,6 +171,20 @@ export const Navbar: React.FC = () => {
 
           {/* User Action & Social Links */}
           <div className="hidden md:flex items-center gap-2.5 shrink-0">
+            <button
+              onClick={() => setIsNotificationOpen(true)}
+              className="relative p-2.5 rounded-xl bg-[#101B2C] hover:bg-[#35D6C5]/15 text-[#35D6C5] border border-white/10 transition-colors cursor-pointer"
+              title="مركز الإشعارات والتنبيهات"
+              aria-label="الإشعارات"
+            >
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-lg border border-[#0A0F1A]">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+
             <a
               href={eventConfig.instagramUrl}
               target="_blank"
@@ -194,7 +225,7 @@ export const Navbar: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={logout}
+                  onClick={() => logout()}
                   title="تسجيل الخروج"
                   className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors cursor-pointer"
                 >
@@ -214,6 +245,18 @@ export const Navbar: React.FC = () => {
 
           {/* Mobile Menu Button */}
           <div className="flex lg:hidden items-center gap-1.5">
+            <button
+              onClick={() => setIsNotificationOpen(true)}
+              className="relative p-2 rounded-xl bg-[#101B2C] text-[#35D6C5] border border-white/10"
+              aria-label="الإشعارات"
+            >
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-0.5 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center border border-[#0A0F1A]">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
             <a
               href={eventConfig.instagramUrl}
               target="_blank"
@@ -309,6 +352,11 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
       )}
+
+      <NotificationCenterModal
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+      />
     </header>
   );
 };

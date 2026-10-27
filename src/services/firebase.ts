@@ -1469,6 +1469,127 @@ export async function rejectModeratorRequest(
   };
 }
 
+export async function fbRevokeModeratorRole(
+  targetUserId: string,
+  adminUid: string,
+  adminName: string
+): Promise<{ success: boolean; notice: string }> {
+  const nowIso = new Date().toISOString();
+  try {
+    // 1. Remove from /admins
+    await deleteDoc(doc(db, 'admins', targetUserId));
+  } catch (err) {
+    console.warn('[fbRevokeModeratorRole] delete from admins:', err);
+  }
+
+  try {
+    // 2. Set role back to 'student' in /user_accounts
+    await setDoc(
+      doc(db, 'user_accounts', targetUserId),
+      {
+        role: 'student',
+        updatedAt: nowIso,
+        revokedBy: adminUid,
+        revokedAt: nowIso,
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('[fbRevokeModeratorRole] reset user_accounts:', err);
+  }
+
+  // 3. Update moderator_requests if present
+  try {
+    const requests = await getAllModeratorRequests();
+    const targetReq = requests.find((r) => r.userId === targetUserId || r.id === targetUserId);
+    if (targetReq) {
+      const updatedReq: ModeratorRequest = {
+        ...targetReq,
+        status: 'rejected',
+        reviewedAt: nowIso,
+        reviewedBy: adminUid,
+        reviewedByName: adminName,
+        adminNote: 'تم إلغاء صلاحية الإشراف بواسطة المشرف العام.',
+      };
+      const mergedLocal = [updatedReq, ...requests.filter((r) => r.id !== targetReq.id)];
+      saveLocalModeratorRequests(mergedLocal);
+      await setDoc(doc(db, 'moderator_requests', targetReq.id), updatedReq, { merge: true });
+    }
+  } catch (err) {
+    console.warn('[fbRevokeModeratorRole] update requests:', err);
+  }
+
+  return {
+    success: true,
+    notice: 'تم إلغاء صلاحية الإشراف بنجاح وإعادة الحساب إلى رتبة طالب.',
+  };
+}
+
+export interface SupervisorRecord {
+  userId: string;
+  email: string;
+  fullName: string;
+  role: 'super_admin' | 'moderator' | 'admin';
+  createdAt?: string;
+  approvedBy?: string;
+}
+
+export async function getAllSupervisors(): Promise<SupervisorRecord[]> {
+  const supervisors: SupervisorRecord[] = [
+    {
+      userId: 'super_admin_root',
+      email: BOOTSTRAP_ADMIN_EMAIL,
+      fullName: 'المشرف العام (مصطفى علي)',
+      role: 'super_admin',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    },
+  ];
+
+  try {
+    // Fetch from /admins
+    const adminSnap = await getDocs(collection(db, 'admins'));
+    adminSnap.forEach((d) => {
+      const data = d.data();
+      if (!supervisors.some((s) => s.userId === d.id || s.email.toLowerCase() === (data.email || '').toLowerCase())) {
+        supervisors.push({
+          userId: d.id,
+          email: data.email || '',
+          fullName: data.fullName || 'مشرف معتمد',
+          role: data.role === 'super_admin' ? 'super_admin' : 'moderator',
+          createdAt: data.createdAt,
+          approvedBy: data.approvedBy,
+        });
+      }
+    });
+  } catch (err) {
+    console.warn('[getAllSupervisors] admins collection fetch error:', err);
+  }
+
+  try {
+    // Fetch from /user_accounts where role is moderator
+    const userSnap = await getDocs(collection(db, 'user_accounts'));
+    userSnap.forEach((d) => {
+      const data = d.data();
+      if (
+        (data.role === 'moderator' || data.role === 'admin' || data.role === 'super_admin') &&
+        !supervisors.some((s) => s.userId === d.id || (data.email && s.email.toLowerCase() === data.email.toLowerCase()))
+      ) {
+        supervisors.push({
+          userId: d.id,
+          email: data.email || '',
+          fullName: data.displayName || 'مشرف',
+          role: data.role,
+          createdAt: data.createdAt,
+        });
+      }
+    });
+  } catch (err) {
+    console.warn('[getAllSupervisors] user_accounts collection fetch error:', err);
+  }
+
+  return supervisors;
+}
+
 
 // 4. Registration Workflow API
 export async function submitRegistrationRequest(data: {
@@ -1528,22 +1649,12 @@ export async function getStudentRegistrationRequest(userId: string): Promise<Reg
 }
 
 export async function getAllRegistrationRequests(): Promise<RegistrationRequestDoc[]> {
-  const path = 'registration_requests';
   try {
     const snap = await getDocs(collection(db, 'registration_requests'));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as RegistrationRequestDoc));
   } catch (err: any) {
-    if (
-      err?.code === 'unavailable' ||
-      (err?.message && (
-        err.message.includes('client is offline') ||
-        err.message.includes('Failed to get document')
-      ))
-    ) {
-      console.warn('getAllRegistrationRequests: Firestore is offline, returning empty list');
-      return [];
-    }
-    handleFirestoreError(err, OperationType.LIST, path);
+    console.warn('getAllRegistrationRequests warning:', err);
+    return [];
   }
 }
 

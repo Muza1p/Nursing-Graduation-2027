@@ -61,8 +61,12 @@ import {
   getAllModeratorRequests,
   approveModeratorRequest as fbApproveModeratorRequest,
   rejectModeratorRequest as fbRejectModeratorRequest,
+  fbRevokeModeratorRole,
+  getAllSupervisors,
+  SupervisorRecord,
   getLocalModeratorRequests,
 } from '../services/firebase';
+import { sendAppNotification } from '../services/notificationService';
 import {
   ScrubStudentStorage,
   importOfficial46ScrubStudents,
@@ -276,6 +280,11 @@ interface AppContextType {
     requestId: string,
     reason?: string
   ) => Promise<{ success: boolean; notice: string }>;
+  revokeModeratorRole: (
+    targetUserId: string
+  ) => Promise<{ success: boolean; notice: string }>;
+  supervisors: SupervisorRecord[];
+  refreshSupervisors: () => Promise<void>;
   refreshModeratorRequests: () => Promise<void>;
 
   // Legacy/Local methods for testing
@@ -286,7 +295,7 @@ interface AppContextType {
     phone: string,
     otpCode: string
   ) => { success: boolean; message: string; user?: Graduate };
-  logout: () => void;
+  logout: () => Promise<void> | void;
   registerGraduate: (data: {
     fullName: string;
     email: string;
@@ -389,6 +398,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     getLocalModeratorRequests()
   );
   const [myModeratorRequest, setMyModeratorRequest] = useState<ModeratorRequest | null>(null);
+  const [supervisors, setSupervisors] = useState<SupervisorRecord[]>([]);
 
   // Guards to prevent duplicate login processing between signInWithPopup, getRedirectResult, and onAuthStateChanged
   const redirectResultHandledRef = useRef<boolean>(false);
@@ -2351,10 +2361,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  const logout = () => {
-    setCurrentUserId(null);
-    LocalStorageManager.setCurrentUserId(null);
-    navigateTo('home');
+  const logout = async () => {
+    try {
+      processedAuthSessionRef.current = null;
+      inFlightAuthSessionRef.current = null;
+      setResolvedAdminRole(null);
+      setGoogleAuthError(null);
+      clearPersistedVerifiedAuthUser();
+      if (auth.currentUser) {
+        await fbSignOut(auth);
+      }
+    } catch (err) {
+      console.warn('Error during full sign out:', err);
+    } finally {
+      setFirebaseUser(null);
+      setCurrentUserId(null);
+      setMyRegistrationRequest(null);
+      setMyModeratorRequest(null);
+      LocalStorageManager.setCurrentUserId(null);
+      try {
+        localStorage.removeItem('nursing_app_current_user_id');
+        localStorage.removeItem('nursing_verified_auth_user');
+        localStorage.removeItem('nursing_auth_session_user');
+        sessionStorage.clear();
+      } catch (e) {
+        // ignore
+      }
+      navigateTo('login');
+    }
   };
 
   const loginWithPhoneOtp = (phone: string, otpCode: string) => {
@@ -3228,6 +3262,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const refreshSupervisors = useCallback(async () => {
+    try {
+      const list = await getAllSupervisors();
+      setSupervisors(list);
+    } catch (e) {
+      console.warn('Refresh supervisors error:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isAdmin || isSuperAdmin) {
+      refreshSupervisors();
+    }
+  }, [isAdmin, isSuperAdmin, refreshSupervisors]);
+
   const submitModeratorRequestAction = async (data: {
     userName: string;
     note?: string;
@@ -3248,6 +3297,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (res.success && res.request) {
       setMyModeratorRequest(res.request);
       await refreshModeratorRequests();
+      // Send persistent notification to administrators
+      await sendAppNotification({
+        title: 'طلب انضمام جديد لكادر الإشراف',
+        message: `قدم الطالب (${data.userName}) طلباً للانضمام إلى كادر الإشراف على الدفعة والحفلات.`,
+        type: 'moderator_request',
+        targetAudience: 'admins',
+        linkRoute: 'admin_dashboard',
+      });
     }
     return { success: res.success, notice: res.notice };
   };
@@ -3261,6 +3318,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (res.success) {
       await refreshModeratorRequests();
       await refreshLoggedInUsers();
+      await refreshSupervisors();
+      const targetReq = moderatorRequests.find((r) => r.id === requestId || r.userId === requestId);
+      const studentUid = targetReq?.userId || requestId;
+      await sendAppNotification({
+        title: 'تهانينا! تمت ترقيتك إلى مشرف معتمد 🎉',
+        message: 'وافقت الإدارة على طلبك للانضمام إلى كادر الإشراف. يمكنك الآن الدخول للوحة الإشراف والمساهمة في تنظيم فعاليات الدفعة.',
+        type: 'moderator_approval',
+        targetAudience: 'user',
+        targetUserId: studentUid,
+        linkRoute: 'admin_dashboard',
+      });
     }
     return res;
   };
@@ -3275,6 +3343,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (res.success) {
       await refreshModeratorRequests();
       await refreshLoggedInUsers();
+      await refreshSupervisors();
+      const targetReq = moderatorRequests.find((r) => r.id === requestId || r.userId === requestId);
+      const studentUid = targetReq?.userId || requestId;
+      await sendAppNotification({
+        title: 'تحديث بخصوص طلب الانضمام للإشراف',
+        message: reason?.trim() ? `تمت مراجعة طلبك: ${reason.trim()}` : 'تمت مراجعة طلبك من قبل المشرف العام.',
+        type: 'general',
+        targetAudience: 'user',
+        targetUserId: studentUid,
+        linkRoute: 'graduate_dashboard',
+      });
+    }
+    return res;
+  };
+
+  const revokeModeratorRoleAction = async (
+    targetUserId: string
+  ): Promise<{ success: boolean; notice: string }> => {
+    if (!isSuperAdmin) {
+      return { success: false, notice: 'عذراً، صلاحية إلغاء الإشراف محصورة بالمشرف العام فقط.' };
+    }
+    const adminUid = firebaseUser?.uid || 'super_admin';
+    const adminName = currentUser?.fullName || firebaseUser?.displayName || 'المشرف العام';
+    const res = await fbRevokeModeratorRole(targetUserId, adminUid, adminName);
+    if (res.success) {
+      await refreshSupervisors();
+      await refreshModeratorRequests();
+      await refreshLoggedInUsers();
+      await sendAppNotification({
+        title: 'إشعار إداري بخصوص صلاحية الإشراف',
+        message: 'تم إلغاء صلاحية الإشراف وإعادة الحساب إلى رتبة طالب من قبل المشرف العام.',
+        type: 'general',
+        targetAudience: 'user',
+        targetUserId,
+        linkRoute: 'graduate_dashboard',
+      });
     }
     return res;
   };
@@ -3348,6 +3452,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submitModeratorRequest: submitModeratorRequestAction,
         approveModeratorRequest: approveModeratorRequestAction,
         rejectModeratorRequest: rejectModeratorRequestAction,
+        revokeModeratorRole: revokeModeratorRoleAction,
+        supervisors,
+        refreshSupervisors,
         refreshModeratorRequests,
         login,
         loginWithPhoneOtp,

@@ -700,6 +700,143 @@
         }
       },
       "required": ["id", "userId", "userName", "status", "requestedAt"]
+    },
+    "GraduationSong": {
+      "title": "GraduationSong",
+      "description": "Graduation ceremony audio song metadata and playable reference",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Song unique identifier"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Song title"
+        },
+        "artist": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 150,
+          "description": "Artist or performer name"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["graduation", "party", "calm", "energetic", "nasheed"],
+          "description": "Song category"
+        },
+        "audioUrl": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Playable direct URL or internal firestore chunk reference"
+        },
+        "storageType": {
+          "type": "string",
+          "enum": ["firebase_storage", "firestore_chunks", "external_url", "local_indexeddb"],
+          "description": "Storage medium"
+        },
+        "durationSeconds": {
+          "type": "number",
+          "description": "Duration in seconds"
+        },
+        "durationFormatted": {
+          "type": "string",
+          "description": "Formatted duration (mm:ss)"
+        },
+        "fileSizeBytes": {
+          "type": "number",
+          "description": "Audio file size in bytes"
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "MIME type (e.g. audio/mpeg)"
+        },
+        "allowDownload": {
+          "type": "boolean",
+          "description": "Whether students are permitted to download this track"
+        },
+        "sortOrder": {
+          "type": "number",
+          "description": "Display order index"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "uploadedBy": {
+          "type": "string",
+          "description": "Email or UID of uploader"
+        }
+      },
+      "required": ["id", "title", "artist", "category", "audioUrl"]
+    },
+    "GraduationSongChunk": {
+      "title": "GraduationSongChunk",
+      "description": "Chunked binary audio segment stored in Firestore for reliable cross-device playback",
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "number",
+          "description": "Chunk sequence index starting at 0"
+        },
+        "totalChunks": {
+          "type": "number",
+          "description": "Total number of chunks composing the full audio file"
+        },
+        "data": {
+          "type": "string",
+          "description": "Base64 encoded binary chunk"
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "MIME type"
+        }
+      },
+      "required": ["index", "totalChunks", "data"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "Unified notifications for students, supervisors, and announcements",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique notification identifier"
+        },
+        "title": {
+          "type": "string",
+          "description": "Notification title in Arabic"
+        },
+        "message": {
+          "type": "string",
+          "description": "Notification body content in Arabic"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["system", "moderator_request", "moderator_approved", "moderator_rejected", "announcement", "song_added"],
+          "description": "Category of notification"
+        },
+        "targetAudience": {
+          "type": "string",
+          "enum": ["all", "admins", "user"],
+          "description": "Audience filter"
+        },
+        "targetUserId": {
+          "type": "string",
+          "description": "Target user ID if targetAudience is user"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation ISO date timestamp"
+        },
+        "read": {
+          "type": "boolean",
+          "description": "Whether read status is flagged"
+        }
+      },
+      "required": ["id", "title", "message", "type", "targetAudience", "createdAt"]
     }
   },
   "firestore": {
@@ -742,6 +879,18 @@
     "/private_media/{mediaId}": {
       "schema": "PrivateMedia",
       "description": "Private student media locker"
+    },
+    "/graduation_songs/{songId}": {
+      "schema": "GraduationSong",
+      "description": "Smart graduation music library metadata"
+    },
+    "/graduation_songs/{songId}/audio_chunks/{chunkId}": {
+      "schema": "GraduationSongChunk",
+      "description": "Stored audio binary chunks in Firestore for reliable cross-device playback"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "AppNotification",
+      "description": "Unified notifications collection for updates, supervisor decisions, and announcements"
     }
   }
 }
