@@ -71,19 +71,25 @@ export const DEFAULT_CONFIG: EventConfig = {
   isScrubDateConfirmed: true,
   isOfficialGradDateConfirmed: false,
 
+  supervisorTitle: '',
+  supervisorName: '',
+  jobWorthText: '',
+  jobCountText: '',
+  jobRightsText: '',
+
   organizers: [
     {
       id: 'org-1',
       name: 'مصطفى علي حسون',
-      role: 'اللجنة التحضيرية العليا — معهد التمريض',
-      bio: 'عضو اللجنة المنظمة لحفلة تخرج الممرضين وحفل التخرج الرسمي (دفعة 2027).',
+      role: 'معهد التمريض — دفعة 2027',
+      bio: '',
       instagram: 'https://www.instagram.com/mustafaa.hassoun',
     },
     {
       id: 'org-2',
       name: 'مصطفى أركان ساجت',
-      role: 'لجنة المتابعة والتواصل — معهد التمريض',
-      bio: 'عضو اللجنة المنظمة لحفلة تخرج الممرضين وحفل التخرج الرسمي (دفعة 2027).',
+      role: 'معهد التمريض — دفعة 2027',
+      bio: '',
       instagram: 'https://www.instagram.com/t__suf',
     },
   ],
@@ -254,6 +260,11 @@ export class LocalStorageManager {
             : parsed.countdownTime,
         countdownTimezone: 'Asia/Baghdad',
         isScrubDateConfirmed: true,
+        supervisorTitle: '',
+        supervisorName:
+          parsed.supervisorName && !parsed.supervisorName.includes('خليج النيجيرية')
+            ? parsed.supervisorName
+            : '',
       };
       this.saveEventConfig(merged);
       return merged;

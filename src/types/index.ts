@@ -82,16 +82,37 @@ export interface EventConfig {
   // Admin-Controlled Top Countdown Timer Configuration (Requirement 2)
   countdownEnabled?: boolean;
   countdownPublished?: boolean;
-  countdownTarget?: 'scrub_night' | 'official_grad';
+  countdownTarget?: 'scrub_night' | 'scrub_party' | 'official_grad' | 'custom';
   countdownTitle?: string;
   countdownDate?: string; // YYYY-MM-DD e.g. "2026-12-12"
   countdownTime?: string; // HH:mm e.g. "09:00"
   countdownTimezone?: string; // Default "Asia/Baghdad"
   countdownLocation?: string;
-  countdownStyle?: 'medical_turquoise' | 'champagne_gold' | 'clinical_navy';
+  countdownStyle?: 'medical_turquoise' | 'champagne_gold' | 'clinical_navy' | 'medical_glass' | 'gold_ceremonial' | 'compact';
   isScrubDateConfirmed?: boolean; // False until admin confirms exact start time/date
   isOfficialGradDateConfirmed?: boolean; // False until admin confirms official grad date
+  isOfficialGradPriceConfirmed?: boolean; // False until admin sets official graduation price
+
+  // Sponsorship & Job Info Fields
+  supervisorTitle?: string;
+  supervisorName?: string;
+  jobWorthText?: string;
+  jobCountText?: string;
+  jobRightsText?: string;
+  audioUrl?: string;
 }
+
+export interface LoggedInUserAccount {
+  uid: string;
+  displayName: string;
+  loginMethod: 'google' | 'phone' | 'email';
+  email?: string;
+  phoneNumber?: string;
+  role: UserRole;
+  createdAt: string;
+  lastLoginAt: string;
+}
+
 
 // Permanent Scrub Party Student Record (Requirement 1, 2, 3, 4, 5, 6)
 export interface ScrubStudent {
@@ -133,6 +154,7 @@ export interface StudentPayment {
   studentNumber: number; // Visible number at time of payment
   studentName: string; // Arabic student name
   linkedUserId?: string; // Synced if student is linked to an authenticated account
+  eventTarget?: PaymentEventTarget; // 'scrub_night' (default) or 'official_grad'
   amountIQD: number;
   paymentType: 'initial_deposit' | 'installment' | 'final_settlement';
   paymentMethod: PaymentMethod;
@@ -283,3 +305,37 @@ export interface UserSession {
   isModerator?: boolean;
   isAuthenticated: boolean;
 }
+
+export type SongCategory =
+  | 'graduation'
+  | 'party'
+  | 'calm'
+  | 'energetic'
+  | 'nasheed';
+
+export type SongStorageType =
+  | 'firebase_storage'
+  | 'external_url'
+  | 'local_indexeddb';
+
+export interface GraduationSong {
+  id: string;
+  title: string;
+  artist: string; // 'اسم غير معروف' if not available
+  durationSeconds: number;
+  durationFormatted: string; // e.g. '03:45'
+  category: SongCategory;
+  audioUrl: string; // Direct URL, Firebase Storage URL, or 'idb://<id>'
+  storagePath?: string;
+  storageType: SongStorageType;
+  coverUrl?: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  allowDownload: boolean;
+  keywords: string[];
+  sortOrder: number;
+  createdAt: string;
+  updatedAt?: string;
+  uploadedBy?: string;
+}
+

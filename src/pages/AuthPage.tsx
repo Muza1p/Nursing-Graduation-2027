@@ -1,408 +1,491 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { resolvedFirebaseConfig } from '../services/firebase';
 import {
   StethoscopeGradCapIllustration,
   AnimatedEcgWaveform,
 } from '../components/MedicalIllustrations';
 import {
-  GraduationCap,
   Lock,
-  Mail,
   User,
-  Phone,
-  Hash,
+  Mail,
   ShieldCheck,
   CheckCircle2,
   AlertCircle,
-  ArrowRight,
-  Sparkles,
-  KeyRound,
   Send,
   Clock,
-  XCircle,
   LogOut,
-  Info,
-  Check,
   Stethoscope,
+  Edit3,
+  ShieldAlert,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  UserPlus,
+  LogIn,
+  HelpCircle,
 } from 'lucide-react';
 
 export const AuthPage: React.FC<{ initialMode?: 'login' | 'register' | 'otp' }> = ({
-  initialMode = 'register',
+  initialMode = 'login',
 }) => {
   const {
-    login,
-    registerGraduate,
-    graduates,
-    eventConfig,
+    isFirebaseConfigured,
     firebaseUser,
     firebaseAuthLoading,
+    googleAuthError,
+    clearGoogleAuthError,
     signInWithGoogle,
+    signInWithGoogleRedirect,
+    registerWithEmail,
+    loginWithEmail,
+    resetPassword,
     signOutFirebase,
-    myRegistrationRequest,
-    submitStudentRegistration,
     currentUser,
     isAdmin,
+    isModerator,
     navigateTo,
+    updateMyDisplayName,
   } = useApp();
 
-  const [mode, setMode] = useState<'register' | 'login'>('register');
+  // Free Spark Plan Auth Tabs: 'google' | 'email'
+  const [authMethodTab, setAuthMethodTab] = useState<'google' | 'email'>(
+    initialMode === 'register' ? 'email' : 'google'
+  );
 
-  // Registration Form State
-  const [fullName, setFullName] = useState('');
-  const [studentId, setStudentId] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [preferredTitle, setPreferredTitle] = useState<'nurse_m' | 'nurse_f'>('nurse_m');
-  const [agreeTerms, setAgreeTerms] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Email/Password Sub-mode: 'login' | 'register' | 'reset'
+  const [emailSubMode, setEmailSubMode] = useState<'login' | 'register' | 'reset'>(
+    initialMode === 'register' ? 'register' : 'login'
+  );
+
+  // Email/Password Form State
+  const [fullNameInput, setFullNameInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isEmailSubmitting, setIsEmailSubmitting] = useState(false);
+  const [emailFeedback, setEmailFeedback] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+
+  // Google Auth State
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [formSuccess, setFormSuccess] = useState<string | null>(null);
 
-  // Existing user login state
-  const [loginIdentifier, setLoginIdentifier] = useState('');
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  // Display Name Update State for logged-in users
+  const [editDisplayNameInput, setEditDisplayNameInput] = useState('');
+  const [isSavingDisplayName, setIsSavingDisplayName] = useState(false);
+  const [displayNameFeedback, setDisplayNameFeedback] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+
+  const currentHostname =
+    typeof window !== 'undefined' ? window.location.hostname : '';
+
+  useEffect(() => {
+    if (googleAuthError) {
+      setFormError(googleAuthError);
+    }
+  }, [googleAuthError]);
+
+  useEffect(() => {
+    if (currentUser?.fullName) {
+      setEditDisplayNameInput(currentUser.fullName);
+    } else if (firebaseUser?.displayName) {
+      setEditDisplayNameInput(firebaseUser.displayName);
+    }
+  }, [currentUser, firebaseUser]);
 
   const handleGoogleAuth = async () => {
     setFormError(null);
-    setIsLoggingIn(true);
+    setEmailFeedback(null);
+    clearGoogleAuthError?.();
+    setIsGoogleLoading(true);
     const res = await signInWithGoogle();
-    setIsLoggingIn(false);
+    setIsGoogleLoading(false);
     if (!res.success && res.message) {
       setFormError(res.message);
     }
   };
 
-  const handleStudentRegisterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGoogleRedirectFallback = async () => {
     setFormError(null);
-    setFormSuccess(null);
-
-    if (!fullName.trim() || fullName.trim().length < 3) {
-      setFormError('يرجى إدخال الاسم الرباعي واللقب بشكل كامل (3 أحرف على الأقل).');
-      return;
-    }
-
-    if (!phoneNumber.trim() || phoneNumber.trim().length < 8) {
-      setFormError('يرجى إدخال رقم هاتف صحيح للتواصل ومطابقة سندات الكاش.');
-      return;
-    }
-
-    if (!agreeTerms) {
-      setFormError('يرجى تأكيد إقرار الانتماء لمعهد التمريض (دفعة 2027).');
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    // If student is signed in with Google, submit real pending registration request to backend
-    if (firebaseUser) {
-      const res = await submitStudentRegistration({
-        fullName: fullName.trim(),
-        preferredTitle,
-        studentId: studentId.trim() || undefined,
-        phoneNumber: phoneNumber.trim(),
-      });
-      setIsSubmitting(false);
-      if (res.success) {
-        setFormSuccess(res.message);
-      } else {
-        setFormError(res.message);
-      }
-    } else {
-      // In case user hasn't connected Google yet, prompt them to sign in first
-      setIsSubmitting(false);
-      setFormError('يرجى تسجيل الدخول بحساب Google أولاً ليتم حفظ طلبك وربطه بهويتك الرسمية.');
+    setEmailFeedback(null);
+    clearGoogleAuthError?.();
+    setIsGoogleLoading(true);
+    const res = await signInWithGoogleRedirect();
+    setIsGoogleLoading(false);
+    if (!res.success && res.message) {
+      setFormError(res.message);
     }
   };
 
-  const handleDirectLogin = (e: React.FormEvent) => {
+  const handleEmailAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoginError(null);
-    if (!loginIdentifier.trim()) {
-      setLoginError('يرجى إدخال البريد أو رقم القيد أو الهاتف المسجل.');
+    setEmailFeedback(null);
+    setFormError(null);
+
+    if (emailSubMode === 'reset') {
+      setIsEmailSubmitting(true);
+      const res = await resetPassword(emailInput);
+      setIsEmailSubmitting(false);
+      setEmailFeedback({
+        type: res.success ? 'success' : 'error',
+        text: res.message,
+      });
       return;
     }
 
-    const res = login(loginIdentifier);
-    if (!res.success) {
-      setLoginError(res.message);
+    if (emailSubMode === 'register') {
+      if (!fullNameInput.trim() || fullNameInput.trim().length < 2) {
+        setEmailFeedback({
+          type: 'error',
+          text: 'يرجى إدخال الاسم الكامل (حرفين على الأقل).',
+        });
+        return;
+      }
+      if (passwordInput.length < 6) {
+        setEmailFeedback({
+          type: 'error',
+          text: 'يجب أن تتكون كلمة المرور من 6 أحرف أو أرقام على الأقل.',
+        });
+        return;
+      }
+      if (passwordInput !== confirmPasswordInput) {
+        setEmailFeedback({
+          type: 'error',
+          text: 'كلمتا المرور غير متطابقتين. يرجى التأكد من إعادة كتابة كلمة المرور بشكل مطابق.',
+        });
+        return;
+      }
+
+      setIsEmailSubmitting(true);
+      const res = await registerWithEmail({
+        fullName: fullNameInput.trim(),
+        email: emailInput.trim(),
+        password: passwordInput,
+      });
+      setIsEmailSubmitting(false);
+      setEmailFeedback({
+        type: res.success ? 'success' : 'error',
+        text: res.message,
+      });
+      return;
     }
+
+    // Login mode
+    setIsEmailSubmitting(true);
+    const res = await loginWithEmail({
+      email: emailInput.trim(),
+      password: passwordInput,
+    });
+    setIsEmailSubmitting(false);
+    setEmailFeedback({
+      type: res.success ? 'success' : 'error',
+      text: res.message,
+    });
   };
+
+  const handleSaveDisplayName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDisplayNameFeedback(null);
+    if (!editDisplayNameInput.trim() || editDisplayNameInput.trim().length < 2) {
+      setDisplayNameFeedback({
+        type: 'error',
+        text: 'يرجى إدخال الاسم الظاهر (حرفين على الأقل).',
+      });
+      return;
+    }
+    setIsSavingDisplayName(true);
+    const res = await updateMyDisplayName(editDisplayNameInput.trim());
+    setIsSavingDisplayName(false);
+    setDisplayNameFeedback({
+      type: res.success ? 'success' : 'error',
+      text: res.message,
+    });
+  };
+
+  const isSignedIn = Boolean(firebaseUser && currentUser);
 
   return (
     <div className="py-6 sm:py-12 max-w-2xl mx-auto px-4 sm:px-6">
       {/* Medical Student Portal Brand Header */}
-      <div className="rounded-3xl bg-gradient-to-b from-[#101B2C] to-[#0A0D12] border border-[#35D6C2]/30 p-6 mb-6 text-center space-y-3 shadow-2xl relative overflow-hidden clinical-grid-bg">
+      <div className="rounded-3xl bg-gradient-to-b from-[#101B2C] to-[#0A0D12] border border-[#35D6C5]/35 p-6 mb-6 text-center space-y-3 shadow-2xl relative overflow-hidden clinical-grid-bg">
         <div className="w-36 h-28 mx-auto">
           <StethoscopeGradCapIllustration className="w-full h-full" />
         </div>
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#35D6C2]/15 border border-[#35D6C2]/30 text-[#35D6C2] text-xs font-bold">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#35D6C5]/15 border border-[#35D6C5]/35 text-[#35D6C5] text-xs font-bold">
           <Stethoscope className="w-3.5 h-3.5" />
-          <span>البوابة الطبية الأكاديمية الموحدة</span>
+          <span>البوابة الأكاديمية الموحدة • معهد التمريض</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-black text-[#F4F8FC]">
-          بوابة طلبة وخريجي معهد التمريض
+          الدخول وإنشاء الحساب — دفعة 2027
         </h1>
-        <p className="text-xs sm:text-sm text-[#D7B875] font-extrabold">
-          دفعة 2027 • Graduation 2027
+        <p className="text-xs sm:text-sm text-[#5CE1E6] font-extrabold">
+          معهد التمريض • Graduation 2027
         </p>
         <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
-          التسجيل الرسمي لطلبة الدفعة، متابعة حالة الاعتماد، استلام وصولات الكاش، وتوليد بطاقة التخرج الطبية.
+          سجّل دخولك عبر حساب Google أو عبر البريد الإلكتروني وكلمة المرور مع دعم استعادة كلمة المرور.
         </p>
-        <AnimatedEcgWaveform color="#35D6C2" opacity="opacity-25" className="w-full h-8" />
+        <AnimatedEcgWaveform color="#35D6C5" opacity="opacity-25" className="w-full h-8" />
       </div>
 
-      {/* CASE 1: Student is signed in and already approved as a graduate */}
-      {currentUser && currentUser.status === 'approved' && (
-        <div className="rounded-3xl bg-[#101827] border border-[#21D4C2]/40 p-6 sm:p-8 space-y-5 text-right shadow-2xl animate-in fade-in duration-300">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#21D4C2]/20 text-[#21D4C2] flex items-center justify-center">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-            <div>
-              <span className="text-[11px] font-bold text-[#21D4C2] bg-[#21D4C2]/10 px-2 py-0.5 rounded-full border border-[#21D4C2]/20">
-                حساب خريج معتمد
-              </span>
-              <h3 className="text-lg font-black text-white mt-1">
-                {currentUser.displayTitle || currentUser.fullName}
-              </h3>
-            </div>
+      {/* Firebase Connection Check */}
+      {!isFirebaseConfigured && (
+        <div className="mb-6 rounded-3xl bg-amber-500/15 border border-amber-400/40 p-5 text-right space-y-2 shadow-xl">
+          <div className="flex items-center gap-2 text-amber-300 font-black text-sm">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <span>تنبيه: إعدادات Firebase غير متصلة حالياً</span>
           </div>
-
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/5 text-xs text-[#929BAA] space-y-2">
-            <div className="flex justify-between">
-              <span>رقم القيد:</span>
-              <span className="text-white font-medium">{currentUser.studentId || 'مسجل بدون قيد'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>الدفعة:</span>
-              <span className="text-white font-medium">دفعة 2027</span>
-            </div>
-            <div className="flex justify-between">
-              <span>حالة السداد:</span>
-              <span className="text-[#21D4C2] font-bold">
-                {currentUser.remainingBalanceIQD === 0 ? 'مكتمل' : 'قيد التسديد'}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-2 pt-2">
-            <button
-              onClick={() => navigateTo('graduate_dashboard')}
-              className="flex-1 py-3 rounded-xl bg-[#21D4C2] hover:bg-[#1dbfad] text-black font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#21D4C2]/20"
-            >
-              <User className="w-4 h-4" />
-              <span>الانتقال لبوابة الخريج وحفظ البطاقة</span>
-            </button>
-            <button
-              onClick={signOutFirebase}
-              className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs"
-            >
-              تسجيل الخروج
-            </button>
-          </div>
+          <p className="text-xs text-amber-100 leading-relaxed">
+            يرجى ربط مشروع Firebase من خلال إعدادات المنصة أو التأكد من وجود ملف{' '}
+            <code className="font-mono text-white">firebase-applet-config.json</code>.
+          </p>
         </div>
       )}
 
-      {/* CASE 2: Student submitted registration and status is PENDING APPROVAL */}
-      {firebaseUser && myRegistrationRequest && myRegistrationRequest.status === 'pending' && (
-        <div className="rounded-3xl bg-gradient-to-b from-[#101827] via-[#151c2d] to-[#101827] border border-[#D6B779]/40 p-6 sm:p-8 space-y-5 text-right shadow-2xl animate-in fade-in duration-300">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#D6B779]/20 text-[#D6B779] flex items-center justify-center shrink-0">
-              <Clock className="w-6 h-6 animate-pulse" />
+      {/* Initial Auth Session Loading State */}
+      {firebaseAuthLoading ? (
+        <div className="rounded-3xl bg-[#0E1826] border border-[#35D6C5]/35 p-10 text-center space-y-3 shadow-2xl">
+          <Clock className="w-8 h-8 text-[#35D6C5] animate-spin mx-auto" />
+          <p className="text-sm font-bold text-white">جارِ التحقق من حالة تسجيل الدخول...</p>
+          <p className="text-xs text-slate-400">يرجى الانتظار لحظة</p>
+        </div>
+      ) : isSignedIn && currentUser ? (
+        /* ================================================================= */
+        /* ACTIVE ACCOUNT CARD (SHOWN IMMEDIATELY AFTER AUTHENTICATION)      */
+        /* ================================================================= */
+        <div className="rounded-3xl bg-[#0E1826] border border-[#35D6C5]/40 p-6 sm:p-8 space-y-6 text-right shadow-2xl animate-in fade-in duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-[#35D6C5]/20 text-[#35D6C5] flex items-center justify-center shrink-0">
+                {isAdmin || isModerator ? (
+                  <ShieldAlert className="w-6 h-6 text-[#D7B875]" />
+                ) : (
+                  <CheckCircle2 className="w-6 h-6" />
+                )}
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                      isAdmin || isModerator
+                        ? 'text-[#D7B875] bg-[#D7B875]/15 border-[#D7B875]/35'
+                        : 'text-[#35D6C5] bg-[#35D6C5]/10 border-[#35D6C5]/25'
+                    }`}
+                  >
+                    {isAdmin
+                      ? 'حساب مدير النظام المعتمد'
+                      : isModerator
+                      ? 'حساب مشرف معتمد'
+                      : 'تم تسجيل الدخول بنجاح'}
+                  </span>
+                </div>
+                <h3 className="text-lg sm:text-xl font-black text-white mt-1">
+                  {currentUser.displayTitle || currentUser.fullName}
+                </h3>
+                <p className="text-xs text-[#5CE1E6] font-mono mt-0.5" dir="ltr">
+                  {firebaseUser?.email || currentUser.email}
+                </p>
+              </div>
             </div>
-            <div>
-              <span className="text-[11px] font-bold text-[#D6B779] bg-[#D6B779]/15 px-2.5 py-0.5 rounded-full border border-[#D6B779]/30">
-                بانتظار موافقة المشرف (Pending Approval)
-              </span>
-              <h3 className="text-lg font-black text-white mt-1">
-                طلبك قيد التدقيق والمراجعة
-              </h3>
-            </div>
-          </div>
 
-          <p className="text-xs text-[#929BAA] leading-relaxed">
-            تم استلام بياناتك بنجاح من خلال حسابك الموثق. تخضع طلبات التسجيل للتدقيق من قِبل اللجنة المنظمة لمعهد التمريض للتأكد من هوية الطالب ومطابقة أي إيداعات كاش مسبقة قبل منح صلاحيات الخريج.
-          </p>
-
-          <div className="p-4 rounded-2xl bg-[#090B10]/70 border border-white/5 space-y-2 text-xs text-[#929BAA]">
-            <div className="flex justify-between border-b border-white/5 pb-2">
-              <span>الاسم الثلاثي/الرباعي:</span>
-              <span className="text-white font-bold">{myRegistrationRequest.fullName}</span>
-            </div>
-            <div className="flex justify-between border-b border-white/5 pb-2">
-              <span>اللقب المعتمد:</span>
-              <span className="text-[#21D4C2] font-semibold">
-                {myRegistrationRequest.preferredTitle === 'nurse_f' ? 'الممرضة' : 'الممرض'}
-              </span>
-            </div>
-            <div className="flex justify-between border-b border-white/5 pb-2">
-              <span>رقم القيد الجامعي:</span>
-              <span className="text-white font-medium">
-                {myRegistrationRequest.studentId || 'مسجل بدون رقم قيد (مقبول)'}
-              </span>
-            </div>
-            <div className="flex justify-between border-b border-white/5 pb-2">
-              <span>رقم الهاتف (غير موثق بـ OTP):</span>
-              <span className="text-white font-medium" dir="ltr">{myRegistrationRequest.phoneNumber}</span>
-            </div>
-            <div className="flex justify-between border-b border-white/5 pb-2">
-              <span>البريد الإلكتروني الموثق:</span>
-              <span className="text-[#D6B779] font-medium" dir="ltr">{myRegistrationRequest.email}</span>
-            </div>
-            <div className="flex justify-between pt-1">
-              <span>تاريخ تقديم الطلب:</span>
-              <span className="text-white/70">
-                {new Date(myRegistrationRequest.createdAt).toLocaleDateString('ar-IQ')}
-              </span>
-            </div>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200 flex items-start gap-2">
-            <Info className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>
-              لن تتمكن من استعراض الوصولات أو تحميل بطاقة التخرج حتى يتم اعتماد طلبك رسمياً من قبل الإدارة.
-            </span>
-          </div>
-
-          <div className="pt-2 flex justify-between items-center">
             <button
               onClick={signOutFirebase}
-              className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1.5"
+              className="px-4 py-2.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 font-bold text-xs flex items-center gap-1.5 self-start sm:self-center cursor-pointer transition-all"
             >
-              <LogOut className="w-3.5 h-3.5" />
+              <LogOut className="w-4 h-4" />
               <span>تسجيل الخروج</span>
             </button>
-            <span className="text-[11px] text-[#929BAA]">سيصلك إشعار بالاعتماد فور موافقة اللجنة</span>
+          </div>
+
+          {/* Display Name Editor */}
+          <form
+            onSubmit={handleSaveDisplayName}
+            className="p-4 rounded-2xl bg-[#090E17] border border-white/10 space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Edit3 className="w-3.5 h-3.5 text-[#35D6C5]" />
+                <span>الاسم الظاهر في الموقع وبطاقة التخرج:</span>
+              </label>
+              <span className="text-[10px] text-slate-400">يمكنك تعديله في أي وقت</span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={editDisplayNameInput}
+                onChange={(e) => setEditDisplayNameInput(e.target.value)}
+                placeholder="أدخل اسمك الكامل كما تحب أن يظهر"
+                className="flex-1 bg-[#101827] border border-white/15 rounded-xl py-2.5 px-3.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#35D6C5]"
+              />
+              <button
+                type="submit"
+                disabled={isSavingDisplayName}
+                className="px-5 py-2.5 rounded-xl bg-[#35D6C5]/20 hover:bg-[#35D6C5]/30 text-[#35D6C5] border border-[#35D6C5]/40 font-extrabold text-xs shrink-0 transition-all cursor-pointer"
+              >
+                {isSavingDisplayName ? 'جارِ الحفظ...' : 'حفظ الاسم'}
+              </button>
+            </div>
+
+            {displayNameFeedback && (
+              <p
+                className={`text-xs font-bold ${
+                  displayNameFeedback.type === 'success' ? 'text-emerald-400' : 'text-red-400'
+                }`}
+              >
+                {displayNameFeedback.text}
+              </p>
+            )}
+          </form>
+
+          {/* Primary Navigation Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-1">
+            {(isAdmin || isModerator) && (
+              <button
+                onClick={() => navigateTo('admin_dashboard')}
+                className="flex-1 py-3.5 px-5 rounded-2xl bg-gradient-to-r from-[#D7B875] to-[#bf9e5a] hover:opacity-95 text-[#0A0D12] font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#D7B875]/25 cursor-pointer"
+              >
+                <ShieldAlert className="w-4 h-4" />
+                <span>الدخول للوحة الإدارة والمالية</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => navigateTo('graduate_dashboard')}
+              className="flex-1 py-3.5 px-5 rounded-2xl bg-gradient-to-r from-[#35D6C5] to-[#5CE1E6] hover:opacity-95 text-[#0A0D12] font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#35D6C5]/25 cursor-pointer"
+            >
+              <User className="w-4 h-4" />
+              <span>الانتقال لصفحة حسابي وبطاقة التخرج</span>
+            </button>
           </div>
         </div>
-      )}
-
-      {/* CASE 3: Student's request was REJECTED by Admin */}
-      {firebaseUser && myRegistrationRequest && myRegistrationRequest.status === 'rejected' && (
-        <div className="rounded-3xl bg-[#101827] border border-red-500/40 p-6 sm:p-8 space-y-5 text-right shadow-2xl animate-in fade-in duration-300">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-red-500/20 text-red-400 flex items-center justify-center shrink-0">
-              <XCircle className="w-6 h-6" />
-            </div>
-            <div>
-              <span className="text-[11px] font-bold text-red-400 bg-red-500/15 px-2.5 py-0.5 rounded-full border border-red-500/30">
-                تم رفض الطلب (Rejected)
+      ) : (
+        /* =============================================================== */
+        /* AUTHENTICATION PANEL (SPARK FREE PLAN: GOOGLE + EMAIL/PASSWORD) */
+        /* =============================================================== */
+        <div className="space-y-6">
+          <div className="rounded-3xl bg-[#0E1826] border border-[#35D6C5]/35 p-5 sm:p-7 space-y-5 shadow-2xl text-right">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2 text-xs sm:text-sm font-black text-[#35D6C5]">
+                <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span>اختر وسيلة تسجيل الدخول</span>
+              </div>
+              <span className="text-[11px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 rounded-lg font-bold">
+                مجاني وآمن بالكامل
               </span>
-              <h3 className="text-lg font-black text-white mt-1">
-                تعذر اعتماد طلب التسجيل
-              </h3>
             </div>
-          </div>
 
-          <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 space-y-2 text-xs">
-            <span className="font-bold text-red-300">سبب الرفض الموضح من الإدارة:</span>
-            <p className="text-white/90 leading-relaxed">
-              {myRegistrationRequest.rejectionReason || 'البيانات غير مطابقة لقوائم طلبة معهد التمريض دفعة 2027.'}
-            </p>
-          </div>
-
-          <p className="text-xs text-[#929BAA]">
-            يرجى مراجعة اللجنة التحضيرية لمعهد التمريض أو تصحيح بياناتك وإعادة إرسال طلب جديد.
-          </p>
-
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={() => {
-                // allow editing and resubmitting
-                setFullName(myRegistrationRequest.fullName);
-                setPhoneNumber(myRegistrationRequest.phoneNumber);
-                setStudentId(myRegistrationRequest.studentId || '');
-                // clear local request state to show form
-                window.location.reload();
-              }}
-              className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs"
-            >
-              تعديل وإعادة التقديم
-            </button>
-            <button
-              onClick={signOutFirebase}
-              className="px-4 py-2.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 font-bold text-xs"
-            >
-              خروج
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* CASE 4: Not signed in, or signed in without a pending request (Ready to Register) */}
-      {(!currentUser || currentUser.status !== 'approved') &&
-        (!myRegistrationRequest || myRegistrationRequest.status === 'approved') && (
-          <div className="space-y-6">
-            {/* Mode Switcher Tabs */}
-            <div className="flex p-1 rounded-2xl bg-[#101827] border border-white/10 max-w-sm mx-auto shadow-lg">
+            {/* Method Selector Tabs (2 Primary Free Spark Plan Methods) */}
+            <div className="grid grid-cols-2 gap-2 p-1.5 rounded-2xl bg-[#090E17] border border-white/10">
               <button
+                type="button"
                 onClick={() => {
-                  setMode('register');
+                  setAuthMethodTab('google');
                   setFormError(null);
-                  setLoginError(null);
+                  setEmailFeedback(null);
                 }}
-                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  mode === 'register'
-                    ? 'bg-gradient-to-r from-[#21D4C2] to-[#1cb8a9] text-black shadow-md font-black'
-                    : 'text-[#929BAA] hover:text-white'
+                className={`py-3 px-3 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  authMethodTab === 'google'
+                    ? 'bg-gradient-to-r from-[#35D6C5] to-[#5CE1E6] text-[#0A0D12] shadow-lg shadow-[#35D6C5]/25'
+                    : 'text-slate-300 hover:text-white'
                 }`}
               >
-                <User className="w-3.5 h-3.5" />
-                <span>تسجيل طالب جديد</span>
+                <span>تسجيل الدخول عبر Google</span>
               </button>
 
               <button
+                type="button"
                 onClick={() => {
-                  setMode('login');
+                  setAuthMethodTab('email');
                   setFormError(null);
-                  setLoginError(null);
                 }}
-                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  mode === 'login'
-                    ? 'bg-gradient-to-r from-[#D6B779] to-[#bf9e5a] text-black shadow-md font-black'
-                    : 'text-[#929BAA] hover:text-white'
+                className={`py-3 px-3 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  authMethodTab === 'email'
+                    ? 'bg-gradient-to-r from-[#35D6C5] to-[#5CE1E6] text-[#0A0D12] shadow-lg shadow-[#35D6C5]/25'
+                    : 'text-slate-300 hover:text-white'
                 }`}
               >
-                <Lock className="w-3.5 h-3.5" />
-                <span>دخول الخريجين المعتمدين</span>
+                <Mail className="w-4 h-4 shrink-0" />
+                <span>البريد وكلمة المرور</span>
               </button>
             </div>
 
-            {mode === 'register' ? (
-              <div className="rounded-3xl bg-[#101827] border border-white/10 p-6 sm:p-8 space-y-6 shadow-2xl text-right">
-                {/* Google Sign-in Gate */}
-                <div className="space-y-3 pb-5 border-b border-white/10">
-                  <div className="flex items-center gap-2 text-xs font-bold text-[#21D4C2]">
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>الخطوة 1: توثيق الهوية السحابية الرسمية</span>
-                  </div>
+            {/* =========================================================== */}
+            {/* TAB 1: GOOGLE SIGN-IN (FREE ON SPARK PLAN)                  */}
+            {/* =========================================================== */}
+            {authMethodTab === 'google' && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  اضغط على الزر أدناه لتسجيل الدخول أو إنشاء حسابك فوراً باستخدام حساب Google الخاص بك:
+                </p>
 
-                  {firebaseUser ? (
-                    <div className="p-3.5 rounded-2xl bg-[#090B10] border border-[#21D4C2]/30 flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-[#21D4C2]/20 text-[#21D4C2] font-black flex items-center justify-center text-sm">
-                          {firebaseUser.displayName?.charAt(0) || firebaseUser.email?.charAt(0)}
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs font-bold text-white">{firebaseUser.displayName || firebaseUser.email}</p>
-                          <p className="text-[10px] text-[#21D4C2]" dir="ltr">{firebaseUser.email}</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={signOutFirebase}
-                        className="text-[11px] text-red-400 hover:text-red-300 px-2 py-1 rounded-lg bg-white/5"
-                      >
-                        تبديل الحساب
-                      </button>
+                {formError && (
+                  <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/35 text-xs text-red-200 space-y-2.5">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
+                      <span className="leading-relaxed font-semibold">{formError}</span>
                     </div>
+
+                    {(formError.includes('auth/internal-error') ||
+                      formError.includes('auth/unauthorized-domain') ||
+                      formError.includes('auth/operation-not-allowed')) && (
+                      <div className="p-3 rounded-xl bg-[#090E17] border border-white/10 text-[11px] text-slate-300 space-y-2">
+                        <p className="font-bold text-[#5CE1E6]">
+                          التشخيص الدقيق والحل في Firebase Console (خطة Spark المجانية):
+                        </p>
+                        <p>
+                          1. في مشروعك (<code className="text-white font-mono" dir="ltr">{resolvedFirebaseConfig.projectId}</code>) تم تفعيل إجبار <strong className="text-white">Firebase App Check Enforcement</strong> على خدمة <strong className="text-white">Authentication</strong> بدون مفتاح reCAPTCHA.
+                        </p>
+                        <p>
+                          2. لإيقاف هذا الحظر مجاناً: افتح{' '}
+                          <a
+                            href={`https://console.firebase.google.com/project/${resolvedFirebaseConfig.projectId}/appcheck/products`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#35D6C5] underline font-bold"
+                          >
+                            Firebase Console &gt; App Check &gt; APIs
+                          </a>{' '}
+                          واضغط على <strong className="text-white">Authentication</strong> ثم اختر <strong className="text-emerald-400">Unenforce (إلغاء الإجبار)</strong>.
+                        </p>
+                        <p>
+                          3. تأكد من وجود النطاق الحالي (<code className="text-[#35D6C5] font-mono" dir="ltr">{currentHostname}</code>) في <strong className="text-white">Authentication &gt; Settings &gt; Authorized domains</strong>.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAuthMethodTab('email');
+                            setFormError(null);
+                          }}
+                          className="mt-1 inline-flex items-center gap-1.5 text-[#35D6C5] hover:underline font-bold cursor-pointer"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          <span>أو سجل دخولك فوراً عبر تبويب (البريد وكلمة المرور)</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleGoogleAuth}
+                  disabled={isGoogleLoading}
+                  className="w-full py-4 px-5 rounded-2xl bg-white hover:bg-gray-100 disabled:opacity-60 text-gray-900 font-black text-xs sm:text-sm flex items-center justify-center gap-3 shadow-xl transition-all active:scale-[0.99] cursor-pointer"
+                >
+                  {isGoogleLoading ? (
+                    <>
+                      <Clock className="w-5 h-5 animate-spin text-gray-700" />
+                      <span>جارِ الاتصال بحساب Google...</span>
+                    </>
                   ) : (
-                    <button
-                      onClick={handleGoogleAuth}
-                      disabled={isLoggingIn}
-                      className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-gray-100 text-gray-900 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-3 shadow-lg transition-all active:scale-[0.99]"
-                    >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <>
+                      <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                         <path
                           fill="#4285F4"
                           d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -420,228 +503,254 @@ export const AuthPage: React.FC<{ initialMode?: 'login' | 'register' | 'otp' }> 
                           d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                         />
                       </svg>
-                      <span>{isLoggingIn ? 'جارِ التحقق...' : 'تسجيل الدخول والمتابعة بحساب Google'}</span>
-                    </button>
+                      <span>تسجيل الدخول عبر Google</span>
+                    </>
                   )}
+                </button>
 
-                  {/* Honest Disclosure Regarding Phone OTP */}
-                  <div className="p-3 rounded-xl bg-white/5 border border-white/5 text-[11px] text-[#929BAA] leading-relaxed flex items-start gap-2">
-                    <Info className="w-4 h-4 text-[#D6B779] shrink-0 mt-0.5" />
-                    <span>
-                      <strong>شفافية التحقق:</strong> يتطلب التحقق الفعلي بالرسائل القصيرة (SMS OTP) ربط بوابة الرسائل المعتمدة في Firebase. لضمان الأمان وتفادي الرموز الوهمية، يتم توثيق الحساب عبر Google Sign-in، ويُحفظ رقم هاتفك كبيانات تواصل ومطابقة كاش غير مؤكدة بـ OTP حتى اكتمال تفعيل البوابة.
-                    </span>
-                  </div>
+                <div className="pt-1 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+                  <button
+                    type="button"
+                    onClick={handleGoogleRedirectFallback}
+                    disabled={isGoogleLoading}
+                    className="text-[#5CE1E6] hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    <span>الدخول المباشر عبر المتصفح (للهواتف)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMethodTab('email');
+                      setEmailSubMode('register');
+                    }}
+                    className="text-[#35D6C5] hover:underline font-bold cursor-pointer"
+                  >
+                    أو إنشاء حساب بالبريد وكلمة المرور &larr;
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* =========================================================== */}
+            {/* TAB 2: EMAIL & PASSWORD (REGISTER, LOGIN, PASSWORD RESET)   */}
+            {/* =========================================================== */}
+            {authMethodTab === 'email' && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                {/* Sub-mode Switcher: Login vs Register vs Reset */}
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-[#090E17] border border-white/10 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmailSubMode('login');
+                      setEmailFeedback(null);
+                    }}
+                    className={`py-2 px-2 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      emailSubMode === 'login'
+                        ? 'bg-[#35D6C5]/20 text-[#35D6C5] border border-[#35D6C5]/40'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>تسجيل الدخول</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmailSubMode('register');
+                      setEmailFeedback(null);
+                    }}
+                    className={`py-2 px-2 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      emailSubMode === 'register'
+                        ? 'bg-[#35D6C5]/20 text-[#35D6C5] border border-[#35D6C5]/40'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>إنشاء حساب جديد</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmailSubMode('reset');
+                      setEmailFeedback(null);
+                    }}
+                    className={`py-2 px-2 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      emailSubMode === 'reset'
+                        ? 'bg-[#5CE1E6]/20 text-[#5CE1E6] border border-[#5CE1E6]/40'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span>نسيت كلمة المرور</span>
+                  </button>
                 </div>
 
-                {/* Registration Form (Step 2) */}
-                <form onSubmit={handleStudentRegisterSubmit} className="space-y-4">
-                  <div className="flex items-center gap-2 text-xs font-bold text-[#D6B779]">
-                    <User className="w-4 h-4" />
-                    <span>الخطوة 2: استمارة تسجيل طالب معهد التمريض</span>
+                {emailFeedback && (
+                  <div
+                    className={`p-3.5 rounded-xl border text-xs flex items-start gap-2 ${
+                      emailFeedback.type === 'success'
+                        ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-200'
+                        : 'bg-red-500/15 border-red-500/35 text-red-200'
+                    }`}
+                  >
+                    {emailFeedback.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
+                    )}
+                    <span className="leading-relaxed">{emailFeedback.text}</span>
                   </div>
+                )}
 
-                  {formError && (
-                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-400 flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                      <span>{formError}</span>
+                <form onSubmit={handleEmailAuthSubmit} className="space-y-3.5">
+                  {emailSubMode === 'register' && (
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-bold text-white">
+                        الاسم الكامل (كما سيظهر في الموقع وبطاقة التخرج) *
+                      </label>
+                      <div className="relative">
+                        <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          required
+                          value={fullNameInput}
+                          onChange={(e) => setFullNameInput(e.target.value)}
+                          placeholder="مثال: مصطفى علي حسون"
+                          className="w-full bg-[#090E17] border border-white/15 rounded-xl py-3 pr-10 pl-3.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#35D6C5]"
+                        />
+                      </div>
                     </div>
                   )}
 
-                  {formSuccess && (
-                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-start gap-2">
-                      <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-                      <span>{formSuccess}</span>
-                    </div>
-                  )}
-
-                  {/* Preferred Title Selection */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-[#929BAA]">
-                      اللقب المهني المفضل للبطاقة الرسمية:
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPreferredTitle('nurse_m')}
-                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
-                          preferredTitle === 'nurse_m'
-                            ? 'bg-[#21D4C2]/20 border-[#21D4C2] text-[#21D4C2]'
-                            : 'bg-white/5 border-white/10 text-[#929BAA] hover:text-white'
-                        }`}
-                      >
-                        {preferredTitle === 'nurse_m' && <Check className="w-3.5 h-3.5" />}
-                        <span>الممرض (للخريج)</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPreferredTitle('nurse_f')}
-                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
-                          preferredTitle === 'nurse_f'
-                            ? 'bg-[#21D4C2]/20 border-[#21D4C2] text-[#21D4C2]'
-                            : 'bg-white/5 border-white/10 text-[#929BAA] hover:text-white'
-                        }`}
-                      >
-                        {preferredTitle === 'nurse_f' && <Check className="w-3.5 h-3.5" />}
-                        <span>الممرضة (للخريجة)</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Full Name */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-white flex items-center justify-between">
-                      <span>الاسم الكامل (الرباعي واللقب) *</span>
-                      <span className="text-[10px] text-[#929BAA]">كما سيظهر في بطاقة التخرج</span>
+                    <label className="block text-xs font-bold text-white">
+                      البريد الإلكتروني *
                     </label>
                     <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
                       <input
-                        type="text"
+                        type="email"
                         required
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        placeholder="مثال: أحمد جاسم محمد الكعبي"
-                        className="w-full bg-[#090B10] border border-white/10 rounded-xl py-2.5 px-3.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#21D4C2]"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Phone Number */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-white flex items-center justify-between">
-                      <span>رقم الهاتف (للتواصل ومطابقة سندات الكاش) *</span>
-                      <span className="text-[10px] text-[#D6B779]">يُحفظ كبيانات تواصل</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="tel"
-                        required
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                        placeholder="0770xxxxxxx أو 0780xxxxxxx"
-                        className="w-full bg-[#090B10] border border-white/10 rounded-xl py-2.5 px-3.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#21D4C2]"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        placeholder="name@gmail.com"
+                        className="w-full bg-[#090E17] border border-white/15 rounded-xl py-3 pr-10 pl-3.5 text-xs sm:text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-[#35D6C5]"
                         dir="ltr"
                       />
                     </div>
                   </div>
 
-                  {/* Student ID (Optional per Requirement 1) */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-white flex items-center justify-between">
-                      <span>رقم القيد الجامعي / الهوية</span>
-                      <span className="text-[10px] text-[#21D4C2] font-semibold bg-[#21D4C2]/10 px-2 py-0.5 rounded-full">
-                        اختياري (يمكنك تركه فارغاً)
-                      </span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={studentId}
-                        onChange={(e) => setStudentId(e.target.value)}
-                        placeholder="اتركه فارغاً إذا لم تستلم الهوية أو رقم القيد بعد"
-                        className="w-full bg-[#090B10] border border-white/10 rounded-xl py-2.5 px-3.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#21D4C2]"
-                      />
+                  {emailSubMode !== 'reset' && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-white">
+                          كلمة المرور {emailSubMode === 'register' ? '(6 أحرف على الأقل)' : ''} *
+                        </label>
+                        {emailSubMode === 'login' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEmailSubMode('reset');
+                              setEmailFeedback(null);
+                            }}
+                            className="text-[11px] text-[#5CE1E6] hover:underline font-semibold cursor-pointer"
+                          >
+                            نسيت كلمة المرور؟
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          minLength={6}
+                          value={passwordInput}
+                          onChange={(e) => setPasswordInput(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full bg-[#090E17] border border-white/15 rounded-xl py-3 pr-10 pl-10 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#35D6C5]"
+                          dir="ltr"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                          aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="w-4 h-4" />
+                          ) : (
+                            <Eye className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* Cohort Confirmation Checkbox */}
-                  <div className="pt-2">
-                    <label className="flex items-start gap-2.5 cursor-pointer text-xs text-[#929BAA] leading-relaxed select-none">
-                      <input
-                        type="checkbox"
-                        checked={agreeTerms}
-                        onChange={(e) => setAgreeTerms(e.target.checked)}
-                        className="mt-0.5 rounded border-gray-700 text-[#21D4C2] focus:ring-[#21D4C2]"
-                      />
-                      <span>
-                        أؤكد أنني طالب/خريج في <strong className="text-white">معهد التمريض — دفعة 2027</strong>، وأوافق على إرسال بياناتي للجنة المنظمة للتدقيق والاعتماد قبل منح صلاحيات الخريج.
-                      </span>
-                    </label>
-                  </div>
+                  {emailSubMode === 'register' && (
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-bold text-white">
+                        تأكيد كلمة المرور *
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          minLength={6}
+                          value={confirmPasswordInput}
+                          onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                          placeholder="أعد كتابة كلمة المرور"
+                          className="w-full bg-[#090E17] border border-white/15 rounded-xl py-3 pr-10 pl-3.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#35D6C5]"
+                          dir="ltr"
+                        />
+                      </div>
+                    </div>
+                  )}
 
-                  {/* Submit Button */}
                   <button
                     type="submit"
-                    disabled={isSubmitting || !firebaseUser}
-                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#21D4C2] to-[#1cb8a9] hover:opacity-90 disabled:opacity-50 text-black font-extrabold text-xs sm:text-sm shadow-lg shadow-[#21D4C2]/20 transition-all flex items-center justify-center gap-2 mt-4"
+                    disabled={isEmailSubmitting}
+                    className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-[#35D6C5] to-[#5CE1E6] hover:opacity-95 disabled:opacity-50 text-[#0A0D12] font-black text-xs sm:text-sm shadow-lg shadow-[#35D6C5]/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
                   >
-                    {isSubmitting ? (
+                    {isEmailSubmitting ? (
                       <>
                         <Clock className="w-4 h-4 animate-spin" />
-                        <span>جارِ إرسال طلب التسجيل للجنة...</span>
+                        <span>
+                          {emailSubMode === 'register'
+                            ? 'جارِ إنشاء الحساب...'
+                            : emailSubMode === 'reset'
+                            ? 'جارِ إرسال رابط الاستعادة...'
+                            : 'جارِ تسجيل الدخول...'}
+                        </span>
+                      </>
+                    ) : emailSubMode === 'register' ? (
+                      <>
+                        <UserPlus className="w-4 h-4" />
+                        <span>إنشاء حساب جديد والدخول فوراً</span>
+                      </>
+                    ) : emailSubMode === 'reset' ? (
+                      <>
+                        <Send className="w-4 h-4" />
+                        <span>إرسال رابط إعادة تعيين كلمة المرور</span>
                       </>
                     ) : (
                       <>
-                        <Send className="w-4 h-4" />
-                        <span>إرسال طلب التسجيل للمراجعة والاعتماد</span>
+                        <LogIn className="w-4 h-4" />
+                        <span>تسجيل الدخول بالبريد الإلكتروني</span>
                       </>
                     )}
                   </button>
-
-                  {!firebaseUser && (
-                    <p className="text-[11px] text-amber-300 text-center">
-                      * يرجى الضغط على زر Google أعلاه أولاً لربط هويتك المعتمدة.
-                    </p>
-                  )}
                 </form>
-              </div>
-            ) : (
-              /* Approved Graduate / Direct Login Tab */
-              <div className="rounded-3xl bg-[#101827] border border-white/10 p-6 sm:p-8 space-y-6 shadow-2xl text-right">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#D6B779]/20 text-[#D6B779] flex items-center justify-center">
-                    <Lock className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-white">دخول الخريجين المعتمدين والمشرفين</h3>
-                    <p className="text-xs text-[#929BAA]">للطلبة والمشرفين الذين تم اعتماد حساباتهم مسبقاً</p>
-                  </div>
-                </div>
-
-                {loginError && (
-                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-400 flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>{loginError}</span>
-                  </div>
-                )}
-
-                <form onSubmit={handleDirectLogin} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-white">
-                      البريد الإلكتروني أو رقم القيد أو رقم الهاتف:
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={loginIdentifier}
-                      onChange={(e) => setLoginIdentifier(e.target.value)}
-                      placeholder="أدخل بريدك أو رقم القيد أو الهاتف"
-                      className="w-full bg-[#090B10] border border-white/10 rounded-xl py-2.5 px-3.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#D6B779]"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full py-3 rounded-xl bg-[#D6B779] hover:bg-[#c9a865] text-black font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2"
-                  >
-                    <span>تسجيل الدخول للحساب</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </form>
-
-                <div className="pt-4 border-t border-white/5 space-y-3">
-                  <span className="text-[11px] text-[#929BAA] block text-center">أو تسجيل الدخول السحابي المباشر:</span>
-                  <button
-                    onClick={handleGoogleAuth}
-                    className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold text-xs flex items-center justify-center gap-2"
-                  >
-                    <span>الدخول التلقائي بحساب Google</span>
-                  </button>
-                </div>
               </div>
             )}
           </div>
-        )}
+        </div>
+      )}
     </div>
   );
 };

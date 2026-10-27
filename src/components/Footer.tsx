@@ -6,7 +6,7 @@ export const Footer: React.FC = () => {
   const { navigateTo, eventConfig } = useApp();
 
   return (
-    <footer className="bg-[#090B10] border-t border-white/10 text-right pt-8 sm:pt-12 pb-24 sm:pb-8">
+    <footer id="footer-contact" className="bg-[#090B10] border-t border-white/10 text-right pt-8 sm:pt-12 pb-36 sm:pb-32">
       <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 mb-8 sm:mb-12">
           {/* Brand Info */}
@@ -117,7 +117,6 @@ export const Footer: React.FC = () => {
                 </a>
               </p>
               <div className="pt-2 text-[11px] text-[#929BAA] border-t border-white/5">
-                <p>اللجنة التحضيرية والتنظيمية:</p>
                 <p className="text-white/80">مصطفى علي حسون • مصطفى أركان ساجت</p>
               </div>
             </div>

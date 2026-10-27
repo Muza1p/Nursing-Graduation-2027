@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+} from 'react';
 import {
   EventConfig,
   Graduate,
@@ -12,6 +19,7 @@ import {
   ScrubStudent,
   StudentPayment,
   UserRole,
+  LoggedInUserAccount,
 } from '../types';
 import {
   DEFAULT_CONFIG,
@@ -22,6 +30,15 @@ import {
   auth,
   db,
   googleProvider,
+  browserPopupRedirectResolver,
+  isFirebaseConfigured,
+  mapFirebaseAuthErrorToArabic,
+  signInWithGoogleDirectOAuth,
+  getPersistedVerifiedAuthUser,
+  clearPersistedVerifiedAuthUser,
+  registerWithEmailPassword,
+  signInWithEmailPassword,
+  sendFirebasePasswordReset,
   testFirestoreConnection,
   submitRegistrationRequest,
   getStudentRegistrationRequest,
@@ -30,8 +47,14 @@ import {
   rejectStudentRequest,
   getGraduateDoc,
   isUserAdmin,
+  resolveUserAdminRole,
+  recordLoggedInUserAccount,
+  updateLoggedInUserDisplayName,
+  getAllLoggedInUserAccounts,
+  getLocalLoggedInUsers,
   RegistrationRequestDoc,
   BOOTSTRAP_ADMIN_EMAIL,
+  BOOTSTRAP_ADMIN_PHONE,
 } from '../services/firebase';
 import {
   ScrubStudentStorage,
@@ -49,6 +72,8 @@ import {
 } from '../services/studentManagement';
 import {
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut as fbSignOut,
   onAuthStateChanged,
   User as FirebaseUser,
@@ -67,6 +92,7 @@ export type PageRoute =
   | 'scrub_night'
   | 'official_grad'
   | 'payments'
+  | 'music'
   | 'gallery'
   | 'announcements'
   | 'team'
@@ -189,10 +215,29 @@ interface AppContextType {
   ) => Promise<{ success: boolean; message: string }>;
 
   // Firebase Auth & Workflow
+  isFirebaseConfigured: boolean;
   firebaseUser: any | null;
   firebaseAuthLoading: boolean;
+  googleAuthError?: string | null;
+  clearGoogleAuthError?: () => void;
   signInWithGoogle: () => Promise<{ success: boolean; message?: string }>;
+  signInWithGoogleRedirect: () => Promise<{ success: boolean; message?: string }>;
+  registerWithEmail: (params: {
+    fullName: string;
+    email: string;
+    password: string;
+  }) => Promise<{ success: boolean; message: string }>;
+  loginWithEmail: (params: {
+    email: string;
+    password: string;
+  }) => Promise<{ success: boolean; message: string }>;
+  resetPassword: (email: string) => Promise<{ success: boolean; message: string }>;
   signOutFirebase: () => Promise<void>;
+  loggedInUsers: LoggedInUserAccount[];
+  refreshLoggedInUsers: () => Promise<void>;
+  updateMyDisplayName: (
+    displayName: string
+  ) => Promise<{ success: boolean; message: string }>;
   myRegistrationRequest: any | null;
   pendingRegistrationRequests: any[];
   submitStudentRegistration: (data: {
@@ -305,28 +350,255 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Firebase Auth & Workflow state
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [firebaseAuthLoading, setFirebaseAuthLoading] = useState<boolean>(true);
+  const [resolvedAdminRole, setResolvedAdminRole] = useState<UserRole | null>(
+    null
+  );
+  const [loggedInUsers, setLoggedInUsers] = useState<LoggedInUserAccount[]>(() =>
+    getLocalLoggedInUsers()
+  );
+  const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
+  const clearGoogleAuthError = useCallback(() => setGoogleAuthError(null), []);
   const [myRegistrationRequest, setMyRegistrationRequest] =
     useState<RegistrationRequestDoc | null>(null);
   const [pendingRegistrationRequests, setPendingRegistrationRequests] =
     useState<RegistrationRequestDoc[]>([]);
 
-  // Automatic Initial Import of the 46 Unique Scrub Party Students if not yet imported
+  // Guards to prevent duplicate login processing between signInWithPopup, getRedirectResult, and onAuthStateChanged
+  const redirectResultHandledRef = useRef<boolean>(false);
+  const processedAuthSessionRef = useRef<{
+    uid: string;
+    targetRoute: PageRoute;
+    navigated: boolean;
+  } | null>(null);
+  const inFlightAuthSessionRef = useRef<{
+    uid: string;
+    promise: Promise<PageRoute>;
+  } | null>(null);
+
+  const REDIRECT_PENDING_STORAGE_KEY = 'nursing_grad_2027_auth_redirect_pending';
+
+  const isAndroidDevice = (): boolean => {
+    if (typeof navigator === 'undefined') return false;
+    return /Android/i.test(navigator.userAgent || '');
+  };
+
+  const shouldUseRedirectOnMobile = (): boolean => {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      return false;
+    }
+    const ua = navigator.userAgent || '';
+    // Only force redirect inside restricted in-app WebViews (Instagram, Telegram, WhatsApp, Facebook, TikTok)
+    // On standard Android Chrome / Samsung Internet / Safari, signInWithPopup works as a tab and avoids 3rd-party cookie blocking!
+    const isInAppWebView =
+      /(wv|FBAN|FBAV|Instagram|Telegram|WhatsApp|Line|Snapchat|TikTok)/i.test(
+        ua
+      );
+
+    return isInAppWebView;
+  };
+
+  const logAndFormatGoogleAuthError = useCallback(
+    (error: any, contextSource: string): string => {
+      return mapFirebaseAuthErrorToArabic(error, contextSource);
+    },
+    []
+  );
+
+  // Unified post-authentication handler for Admin & Students with de-duplication
+  const processAuthenticatedFirebaseUser = useCallback(
+    async (
+      user: FirebaseUser,
+      options: { shouldNavigate: boolean }
+    ): Promise<PageRoute> => {
+      // 1. If already processed for this user UID, avoid repeating Firestore reads
+      if (processedAuthSessionRef.current?.uid === user.uid) {
+        if (
+          options.shouldNavigate &&
+          !processedAuthSessionRef.current.navigated
+        ) {
+          processedAuthSessionRef.current.navigated = true;
+          setCurrentPage(processedAuthSessionRef.current.targetRoute);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        return processedAuthSessionRef.current.targetRoute;
+      }
+
+      // 2. If currently in flight for this user UID, await existing promise instead of running twice
+      if (inFlightAuthSessionRef.current?.uid === user.uid) {
+        const resolvedRoute = await inFlightAuthSessionRef.current.promise;
+        if (
+          options.shouldNavigate &&
+          processedAuthSessionRef.current &&
+          !processedAuthSessionRef.current.navigated
+        ) {
+          processedAuthSessionRef.current.navigated = true;
+          setCurrentPage(resolvedRoute);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        return resolvedRoute;
+      }
+
+      const taskPromise = (async (): Promise<PageRoute> => {
+        // Resolve admin role from bootstrap email/phone OR Firestore /admins/{uid}
+        const adminRole = await resolveUserAdminRole(user);
+        setResolvedAdminRole(adminRole);
+
+        // Record or update this user in /user_accounts/{uid} so the admin sees all logged-in accounts
+        const recordedAccount = await recordLoggedInUserAccount(user, {
+          role: adminRole || 'student',
+        });
+        setLoggedInUsers((prev) => [
+          recordedAccount,
+          ...prev.filter((u) => u.uid !== recordedAccount.uid),
+        ]);
+
+        if (adminRole !== null || isUserAdmin(user)) {
+          setCurrentUserId(user.uid);
+          LocalStorageManager.setCurrentUserId(user.uid);
+
+          try {
+            const allUsers = await getAllLoggedInUserAccounts();
+            setLoggedInUsers(allUsers);
+          } catch (e) {
+            console.warn('Error fetching logged-in user accounts:', e);
+          }
+
+          try {
+            const allReqs = await getAllRegistrationRequests();
+            setPendingRegistrationRequests(
+              allReqs.filter(
+                (r) =>
+                  r.status === 'pending' &&
+                  !r.fullName.includes('حسين عبدالله جاسم') &&
+                  !r.fullName.includes('حسين عبد الله جاسم')
+              )
+            );
+          } catch (e) {
+            console.warn('Error fetching pending registration requests:', e);
+          }
+
+          try {
+            const synced = await syncScrubRosterFromFirestore();
+            if (synced && synced.students.length > 0) {
+              setScrubStudents(synced.students);
+              setStudentPayments(synced.studentPayments);
+            } else {
+              const localStus = ScrubStudentStorage.getStudents();
+              const localPays = ScrubStudentStorage.getStudentPayments();
+              if (localStus.length > 0) {
+                await pushLocalScrubRosterToFirestore(localStus, localPays);
+              }
+            }
+          } catch (e) {
+            console.warn('Error syncing scrub students with Firestore:', e);
+          }
+
+          return 'admin_dashboard';
+        }
+
+        // Ordinary Student / Visitor check — immediately active upon login without mandatory admin approval
+        let gradDoc: Graduate | null = null;
+        try {
+          const fetchedGrad = await getGraduateDoc(user.uid);
+          if (
+            fetchedGrad &&
+            !fetchedGrad.fullName.includes('حسين عبدالله جاسم') &&
+            !fetchedGrad.fullName.includes('حسين عبد الله جاسم')
+          ) {
+            gradDoc = fetchedGrad;
+          }
+        } catch (e) {
+          console.warn('Error fetching graduate doc:', e);
+        }
+
+        if (gradDoc) {
+          const validGrad: Graduate = {
+            ...gradDoc,
+            status: 'approved',
+          };
+          setGraduates((prev) => {
+            if (prev.some((g) => g.id === validGrad.id)) {
+              return prev.map((g) => (g.id === validGrad.id ? validGrad : g));
+            }
+            return [validGrad, ...prev];
+          });
+          setCurrentUserId(validGrad.id);
+          LocalStorageManager.setCurrentUserId(validGrad.id);
+        } else {
+          setCurrentUserId(user.uid);
+          LocalStorageManager.setCurrentUserId(user.uid);
+        }
+
+        try {
+          const myReq = await getStudentRegistrationRequest(user.uid);
+          if (
+            myReq &&
+            !myReq.fullName.includes('حسين عبدالله جاسم') &&
+            !myReq.fullName.includes('حسين عبد الله جاسم')
+          ) {
+            setMyRegistrationRequest(myReq);
+          } else {
+            setMyRegistrationRequest(null);
+          }
+        } catch (e) {
+          console.warn('Error fetching student registration request:', e);
+        }
+
+        return 'graduate_dashboard';
+      })();
+
+      inFlightAuthSessionRef.current = { uid: user.uid, promise: taskPromise };
+
+      try {
+        const targetRoute = await taskPromise;
+        processedAuthSessionRef.current = {
+          uid: user.uid,
+          targetRoute,
+          navigated: options.shouldNavigate,
+        };
+        if (options.shouldNavigate) {
+          setCurrentPage(targetRoute);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        return targetRoute;
+      } finally {
+        if (inFlightAuthSessionRef.current?.uid === user.uid) {
+          inFlightAuthSessionRef.current = null;
+        }
+      }
+    },
+    []
+  );
+
+  // Automatic Initial Import of the 46 Unique Scrub Party Students & Public Cloud Sync
   useEffect(() => {
     const existingList = ScrubStudentStorage.getStudents();
     const existingPays = ScrubStudentStorage.getStudentPayments();
 
-    if (!ScrubStudentStorage.isInitialImportDone() || existingList.length === 0) {
-      importOfficial46ScrubStudents({
-        existingStudents: existingList,
-        existingPayments: existingPays,
-        existingGraduates: LocalStorageManager.getGraduates(),
-        actorName: 'النظام الآلي — استيراد الدفعة المعتمد',
-      }).then((report) => {
+    const initializeRoster = async () => {
+      // 1. Try syncing latest admin-saved student records & payments from Firestore (no login required)
+      const cloudSynced = await syncScrubRosterFromFirestore();
+      if (cloudSynced && cloudSynced.students.length > 0) {
+        setScrubStudents(cloudSynced.students);
+        setStudentPayments(cloudSynced.studentPayments);
+        return;
+      }
+
+      // 2. Otherwise ensure the 46 official student records are initialized locally
+      if (!ScrubStudentStorage.isInitialImportDone() || existingList.length === 0) {
+        const report = await importOfficial46ScrubStudents({
+          existingStudents: existingList,
+          existingPayments: existingPays,
+          existingGraduates: LocalStorageManager.getGraduates(),
+          actorName: 'النظام الآلي — استيراد الدفعة المعتمد',
+        });
         setScrubStudents(report.students);
         setStudentPayments(report.studentPayments);
         setAuditLogs(LocalStorageManager.getAuditLogs());
-      });
-    }
+      }
+    };
+
+    initializeRoster();
   }, []);
 
   // Test connection and load cloud eventConfig on mount without overriding fixed countdown defaults
@@ -364,132 +636,206 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
   }, []);
 
-  // Listen to Firebase Auth state
+  // Handle getRedirectResult ONLY when a redirect was explicitly initiated, avoiding false auth/internal-error on initial boot
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
-      setFirebaseAuthLoading(false);
+    const hadPendingRedirectOnMount =
+      typeof sessionStorage !== 'undefined' &&
+      sessionStorage.getItem(REDIRECT_PENDING_STORAGE_KEY) === '1';
 
-      if (user) {
-        if (isUserAdmin(user)) {
-          setCurrentUserId(user.uid);
-          LocalStorageManager.setCurrentUserId(user.uid);
-          try {
-            const allReqs = await getAllRegistrationRequests();
-            setPendingRegistrationRequests(
-              allReqs.filter(
-                (r) =>
-                  r.status === 'pending' &&
-                  !r.fullName.includes('حسين عبدالله جاسم') &&
-                  !r.fullName.includes('حسين عبد الله جاسم')
-              )
-            );
-          } catch (e) {
-            console.warn('Error fetching pending registration requests:', e);
+    if (!redirectResultHandledRef.current && hadPendingRedirectOnMount) {
+      redirectResultHandledRef.current = true;
+      getRedirectResult(auth, browserPopupRedirectResolver)
+        .then(async (result) => {
+          if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.removeItem(REDIRECT_PENDING_STORAGE_KEY);
           }
 
-          // Sync or push the 46 Scrub Students & payments with Firestore
-          try {
-            const synced = await syncScrubRosterFromFirestore();
-            if (synced && synced.students.length > 0) {
-              setScrubStudents(synced.students);
-              setStudentPayments(synced.studentPayments);
-            } else {
-              const localStus = ScrubStudentStorage.getStudents();
-              const localPays = ScrubStudentStorage.getStudentPayments();
-              if (localStus.length > 0) {
-                await pushLocalScrubRosterToFirestore(localStus, localPays);
-              }
-            }
-          } catch (e) {
-            console.warn('Error syncing scrub students with Firestore:', e);
-          }
-        }
-
-        // Fetch my registration request if any
-        try {
-          const myReq = await getStudentRegistrationRequest(user.uid);
-          if (
-            myReq &&
-            !myReq.fullName.includes('حسين عبدالله جاسم') &&
-            !myReq.fullName.includes('حسين عبد الله جاسم')
-          ) {
-            setMyRegistrationRequest(myReq);
-          } else {
-            setMyRegistrationRequest(null);
-          }
-        } catch (e) {
-          console.warn('Error fetching student registration request:', e);
-        }
-
-        // Fetch official graduate record if already approved
-        try {
-          const gradDoc = await getGraduateDoc(user.uid);
-          if (
-            gradDoc &&
-            !gradDoc.fullName.includes('حسين عبدالله جاسم') &&
-            !gradDoc.fullName.includes('حسين عبد الله جاسم')
-          ) {
-            setGraduates((prev) => {
-              if (prev.some((g) => g.id === gradDoc.id)) {
-                return prev.map((g) => (g.id === gradDoc.id ? gradDoc : g));
-              }
-              return [gradDoc, ...prev];
+          if (result?.user) {
+            setGoogleAuthError(null);
+            setFirebaseUser(result.user);
+            await processAuthenticatedFirebaseUser(result.user, {
+              shouldNavigate: true,
             });
-            setCurrentUserId(gradDoc.id);
-            LocalStorageManager.setCurrentUserId(gradDoc.id);
+          } else if (auth.currentUser) {
+            await processAuthenticatedFirebaseUser(auth.currentUser, {
+              shouldNavigate: true,
+            });
           }
-        } catch (e) {
-          console.warn('Error fetching graduate doc:', e);
+        })
+        .catch((error: any) => {
+          if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.removeItem(REDIRECT_PENDING_STORAGE_KEY);
+          }
+          const formattedMsg = logAndFormatGoogleAuthError(
+            error,
+            'getRedirectResult'
+          );
+          setGoogleAuthError(formattedMsg);
+          setCurrentPage('login');
+        });
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setFirebaseUser(user);
+        setFirebaseAuthLoading(false);
+        const hadPendingRedirect =
+          typeof sessionStorage !== 'undefined' &&
+          sessionStorage.getItem(REDIRECT_PENDING_STORAGE_KEY) === '1';
+        if (hadPendingRedirect && typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem(REDIRECT_PENDING_STORAGE_KEY);
         }
+        await processAuthenticatedFirebaseUser(user, {
+          shouldNavigate: hadPendingRedirect,
+        });
       } else {
+        const persistedVerified = getPersistedVerifiedAuthUser();
+        if (persistedVerified) {
+          setFirebaseUser(persistedVerified);
+          setFirebaseAuthLoading(false);
+          await processAuthenticatedFirebaseUser(persistedVerified, {
+            shouldNavigate: false,
+          });
+          return;
+        }
+        setFirebaseUser(null);
+        setFirebaseAuthLoading(false);
+        processedAuthSessionRef.current = null;
+        inFlightAuthSessionRef.current = null;
+        setResolvedAdminRole(null);
         setMyRegistrationRequest(null);
       }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [logAndFormatGoogleAuthError, processAuthenticatedFirebaseUser]);
 
-  const matchedGraduateUser = graduates.find((g) => g.id === currentUserId) || null;
-  const currentUser: Graduate | null =
-    matchedGraduateUser ||
-    (firebaseUser && isUserAdmin(firebaseUser)
-      ? {
-          id: firebaseUser.uid,
-          fullName: firebaseUser.displayName || 'مصطفى علي حسون',
-          email: firebaseUser.email || BOOTSTRAP_ADMIN_EMAIL,
-          phone: '07800088386',
-          role: 'admin',
-          status: 'approved',
-          preferredTitle: 'nurse_m',
-          displayTitle: firebaseUser.displayName || 'الممرض مصطفى علي حسون',
-          cohortLabel: 'دفعة 2027',
-          scrubDueIQD: 0,
-          scrubPaidIQD: 0,
-          scrubBalanceIQD: 0,
-          scrubStatus: 'completed',
-          gradDueIQD: 0,
-          gradPaidIQD: 0,
-          gradBalanceIQD: 0,
-          gradStatus: 'completed',
-          totalDueIQD: 0,
-          totalPaidIQD: 0,
-          remainingBalanceIQD: 0,
-          createdAt: '2026-10-01',
-        }
-      : null);
-  const isSuperAdmin = isSuperAdminUser(currentUser, firebaseUser);
-  const isAdmin =
-    isSuperAdmin ||
-    currentUser?.role === 'admin' ||
-    currentUser?.role === 'finance_manager' ||
-    currentUser?.role === 'event_manager';
-  const isModerator =
-    isAdmin ||
-    currentUser?.role === 'moderator' ||
-    currentUser?.role === 'gallery_moderator' ||
-    currentUser?.role === 'notification_manager';
-  const canManageFinances = checkCanManageFinances(currentUser, firebaseUser);
+  const matchedGraduateUser =
+    graduates.find(
+      (g) => g.id === currentUserId || (firebaseUser && g.id === firebaseUser.uid)
+    ) || null;
+  const matchedLoggedInAccount = firebaseUser
+    ? loggedInUsers.find((u) => u.uid === firebaseUser.uid) || null
+    : null;
+  const linkedScrubRecord = firebaseUser
+    ? scrubStudents.find(
+        (s) =>
+          s.status === 'active' &&
+          s.isLinkedToAccount &&
+          s.linkedUserId === firebaseUser.uid
+      )
+    : undefined;
+
+  const isFirebaseAdminAccount = Boolean(
+    firebaseUser && (isUserAdmin(firebaseUser) || resolvedAdminRole !== null)
+  );
+
+  const currentUser: Graduate | null = isFirebaseAdminAccount && firebaseUser
+    ? {
+        id: firebaseUser.uid,
+        fullName:
+          matchedLoggedInAccount?.displayName ||
+          firebaseUser.displayName ||
+          'مصطفى علي حسون',
+        email: firebaseUser.email || BOOTSTRAP_ADMIN_EMAIL,
+        phone: firebaseUser.phoneNumber || '07800088386',
+        role:
+          resolvedAdminRole === 'super_admin' || isUserAdmin(firebaseUser)
+            ? 'admin'
+            : resolvedAdminRole || 'admin',
+        status: 'approved',
+        preferredTitle: 'nurse_m',
+        displayTitle:
+          matchedLoggedInAccount?.displayName ||
+          firebaseUser.displayName ||
+          'الممرض مصطفى علي حسون',
+        cohortLabel: 'دفعة 2027',
+        scrubDueIQD: 0,
+        scrubPaidIQD: 0,
+        scrubBalanceIQD: 0,
+        scrubStatus: 'completed',
+        gradDueIQD: 0,
+        gradPaidIQD: 0,
+        gradBalanceIQD: 0,
+        gradStatus: 'completed',
+        totalDueIQD: 0,
+        totalPaidIQD: 0,
+        remainingBalanceIQD: 0,
+        createdAt: '2026-10-01',
+      }
+    : matchedGraduateUser
+    ? {
+        ...matchedGraduateUser,
+        status: 'approved',
+      }
+    : firebaseUser
+    ? {
+        id: firebaseUser.uid,
+        fullName:
+          matchedLoggedInAccount?.displayName ||
+          firebaseUser.displayName ||
+          (firebaseUser.email
+            ? firebaseUser.email.split('@')[0]
+            : firebaseUser.phoneNumber
+            ? `طالب (${firebaseUser.phoneNumber})`
+            : 'طالب مسجل'),
+        email: firebaseUser.email || '',
+        phone: firebaseUser.phoneNumber || '',
+        role: 'graduate',
+        status: 'approved',
+        preferredTitle: linkedScrubRecord?.preferredTitle || 'nurse_m',
+        displayTitle:
+          matchedLoggedInAccount?.displayName ||
+          firebaseUser.displayName ||
+          (firebaseUser.email
+            ? firebaseUser.email.split('@')[0]
+            : firebaseUser.phoneNumber || 'طالب مسجل'),
+        cohortLabel: 'دفعة 2027',
+        linkedScrubStudentId: linkedScrubRecord?.id,
+        scrubDueIQD: linkedScrubRecord?.totalFeeIQD ?? 35000,
+        scrubPaidIQD: linkedScrubRecord?.verifiedPaidIQD ?? 0,
+        scrubBalanceIQD: linkedScrubRecord?.remainingBalanceIQD ?? 35000,
+        scrubStatus: linkedScrubRecord?.paymentStatus ?? 'unpaid',
+        gradDueIQD: 50000,
+        gradPaidIQD: 0,
+        gradBalanceIQD: 50000,
+        gradStatus: 'unpaid',
+        totalDueIQD: (linkedScrubRecord?.totalFeeIQD ?? 35000) + 50000,
+        totalPaidIQD: linkedScrubRecord?.verifiedPaidIQD ?? 0,
+        remainingBalanceIQD:
+          (linkedScrubRecord?.remainingBalanceIQD ?? 35000) + 50000,
+        createdAt:
+          matchedLoggedInAccount?.createdAt?.split('T')[0] ||
+          new Date().toISOString().split('T')[0],
+      }
+    : null;
+
+  // Server / Firebase Security Rules verified admin roles ONLY — never trust client-side localStorage flags
+  const isSuperAdmin = Boolean(
+    firebaseUser &&
+      (isUserAdmin(firebaseUser) || resolvedAdminRole === 'super_admin')
+  );
+  const isAdmin = Boolean(
+    firebaseUser &&
+      (isSuperAdmin ||
+        resolvedAdminRole === 'admin' ||
+        resolvedAdminRole === 'finance_manager' ||
+        resolvedAdminRole === 'event_manager')
+  );
+  const isModerator = Boolean(
+    firebaseUser &&
+      (isAdmin ||
+        resolvedAdminRole === 'moderator' ||
+        resolvedAdminRole === 'gallery_moderator' ||
+        resolvedAdminRole === 'notification_manager')
+  );
+  const canManageFinances = Boolean(
+    firebaseUser &&
+      (isSuperAdmin ||
+        resolvedAdminRole === 'super_admin' ||
+        resolvedAdminRole === 'finance_manager' ||
+        resolvedAdminRole === 'admin')
+  );
   const canManageContent = isModerator;
 
   const actorDisplayName =
@@ -2500,73 +2846,201 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // --- Real Firebase Student Registration & Approval Workflow ---
 
-  const signInWithGoogle = async () => {
-    try {
-      const res = await signInWithPopup(auth, googleProvider);
-      const user = res.user;
-
-      if (isUserAdmin(user)) {
-        setCurrentUserId(user.uid);
-        LocalStorageManager.setCurrentUserId(user.uid);
-        try {
-          const allReqs = await getAllRegistrationRequests();
-          setPendingRegistrationRequests(
-            allReqs.filter((r) => r.status === 'pending')
-          );
-        } catch (e) {
-          console.warn('Error fetching pending requests on admin login:', e);
-        }
-        navigateTo('admin_dashboard');
-        return { success: true };
-      }
-
-      let gradDoc: Graduate | null = null;
-      try {
-        gradDoc = await getGraduateDoc(user.uid);
-      } catch (e) {
-        console.warn('Student graduate doc check note:', e);
-      }
-
-      if (gradDoc) {
-        setGraduates((prev) => {
-          if (prev.some((g) => g.id === gradDoc.id)) {
-            return prev.map((g) => (g.id === gradDoc.id ? gradDoc : g));
-          }
-          return [gradDoc, ...prev];
-        });
-        setCurrentUserId(gradDoc.id);
-        LocalStorageManager.setCurrentUserId(gradDoc.id);
-        navigateTo('graduate_dashboard');
-        return { success: true };
-      }
-
-      let req: RegistrationRequestDoc | null = null;
-      try {
-        req = await getStudentRegistrationRequest(user.uid);
-      } catch (e) {
-        console.warn('Student registration request check note:', e);
-      }
-
-      setMyRegistrationRequest(req);
-      navigateTo('register');
+  const signInWithGoogleRedirect = async () => {
+    setGoogleAuthError(null);
+    // Try direct Google OAuth 2.0 GIS flow first if redirect is requested manually
+    const directRes = await signInWithGoogleDirectOAuth();
+    if (directRes.success && directRes.user) {
+      setFirebaseUser(directRes.user);
+      processedAuthSessionRef.current = null;
+      await processAuthenticatedFirebaseUser(directRes.user, {
+        shouldNavigate: true,
+      });
       return { success: true };
-    } catch (err: any) {
-      console.error('Google Sign In error:', err);
+    }
+
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(REDIRECT_PENDING_STORAGE_KEY, '1');
+      }
+      await signInWithRedirect(
+        auth,
+        googleProvider,
+        browserPopupRedirectResolver
+      );
+      return { success: true };
+    } catch (redirectErr: any) {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(REDIRECT_PENDING_STORAGE_KEY);
+      }
+      const formattedMsg = logAndFormatGoogleAuthError(
+        redirectErr,
+        'signInWithRedirect (Manual)'
+      );
+      setGoogleAuthError(formattedMsg);
       return {
         success: false,
-        message: 'تعذر إتمام تسجيل الدخول عبر Google. يرجى المحاولة مرة أخرى.',
+        message: formattedMsg,
       };
     }
   };
 
+  const signInWithGoogle = async () => {
+    setGoogleAuthError(null);
+
+    // 1. Direct redirect mode for embedded social WebViews where popups are unsupported
+    if (shouldUseRedirectOnMobile()) {
+      return signInWithGoogleRedirect();
+    }
+
+    // 2. Standard popup mode using explicit browserPopupRedirectResolver
+    try {
+      const res = await signInWithPopup(
+        auth,
+        googleProvider,
+        browserPopupRedirectResolver
+      );
+      setFirebaseUser(res.user);
+      await processAuthenticatedFirebaseUser(res.user, {
+        shouldNavigate: true,
+      });
+      return { success: true };
+    } catch (error: any) {
+      const code = typeof error?.code === 'string' ? error.code : '';
+
+      // When Firebase Identity Toolkit throws auth/internal-error (e.g. App Check Enforcement on Identity Toolkit),
+      // automatically authenticate via Google Identity Services (GIS) OAuth 2.0 using project's official oAuthClientId!
+      if (
+        code === 'auth/internal-error' ||
+        code === 'auth/operation-not-supported-in-this-environment' ||
+        code === 'auth/web-storage-unsupported'
+      ) {
+        const directRes = await signInWithGoogleDirectOAuth();
+        if (directRes.success && directRes.user) {
+          setGoogleAuthError(null);
+          setFirebaseUser(directRes.user);
+          processedAuthSessionRef.current = null;
+          await processAuthenticatedFirebaseUser(directRes.user, {
+            shouldNavigate: true,
+          });
+          return { success: true };
+        }
+      }
+
+      const formattedMsg = logAndFormatGoogleAuthError(error, 'signInWithPopup');
+
+      if (code === 'auth/popup-blocked') {
+        return signInWithGoogleRedirect();
+      }
+
+      setGoogleAuthError(formattedMsg);
+      return {
+        success: false,
+        message: formattedMsg,
+      };
+    }
+  };
+
+  const registerWithEmail = async (params: {
+    fullName: string;
+    email: string;
+    password: string;
+  }) => {
+    setGoogleAuthError(null);
+    const res = await registerWithEmailPassword(params);
+    if (res.success && res.user) {
+      setFirebaseUser(res.user);
+      await recordLoggedInUserAccount(res.user, {
+        customDisplayName: params.fullName.trim(),
+        role: isUserAdmin(res.user) ? 'super_admin' : 'student',
+      });
+      processedAuthSessionRef.current = null;
+      await processAuthenticatedFirebaseUser(res.user, {
+        shouldNavigate: true,
+      });
+    }
+    return {
+      success: res.success,
+      message: res.message,
+    };
+  };
+
+  const loginWithEmail = async (params: {
+    email: string;
+    password: string;
+  }) => {
+    setGoogleAuthError(null);
+    const res = await signInWithEmailPassword(params);
+    if (res.success && res.user) {
+      setFirebaseUser(res.user);
+      processedAuthSessionRef.current = null;
+      await processAuthenticatedFirebaseUser(res.user, {
+        shouldNavigate: true,
+      });
+    }
+    return {
+      success: res.success,
+      message: res.message,
+    };
+  };
+
+  const resetPassword = async (email: string) => {
+    return sendFirebasePasswordReset(email);
+  };
+
+  const refreshLoggedInUsers = async () => {
+    try {
+      const allUsers = await getAllLoggedInUserAccounts();
+      setLoggedInUsers(allUsers);
+    } catch (e) {
+      console.warn('Refresh logged-in users error:', e);
+    }
+  };
+
+  const updateMyDisplayName = async (displayName: string) => {
+    const clean = displayName.trim();
+    if (!clean || clean.length < 2) {
+      return {
+        success: false,
+        message: 'يرجى إدخال الاسم بشكل صحيح (حرفين على الأقل).',
+      };
+    }
+    if (!firebaseUser) {
+      return {
+        success: false,
+        message: 'يرجى تسجيل الدخول أولاً.',
+      };
+    }
+    const updated = await updateLoggedInUserDisplayName(firebaseUser.uid, clean);
+    if (updated) {
+      setLoggedInUsers((prev) => [
+        updated,
+        ...prev.filter((u) => u.uid !== updated.uid),
+      ]);
+      return {
+        success: true,
+        message: 'تم حفظ اسمك بنجاح!',
+      };
+    }
+    return {
+      success: false,
+      message: 'تعذر تحديث الاسم، يرجى المحاولة مرة أخرى.',
+    };
+  };
+
   const signOutFirebase = async () => {
     try {
+      processedAuthSessionRef.current = null;
+      inFlightAuthSessionRef.current = null;
+      setResolvedAdminRole(null);
+      setGoogleAuthError(null);
+      clearPersistedVerifiedAuthUser();
       await fbSignOut(auth);
       setFirebaseUser(null);
       setMyRegistrationRequest(null);
       logout();
     } catch (err) {
-      console.error('Error signing out:', err);
+      console.warn('Error signing out:', err);
     }
   };
 
@@ -2579,29 +3053,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!firebaseUser) {
       return {
         success: false,
-        message: 'يرجى تسجيل الدخول بحساب Google أولاً لربط هويتك المعتمدة.',
+        message: 'يرجى تسجيل الدخول عبر Google أو برقم الموبايل أولاً لربط هويتك المعتمدة.',
       };
     }
 
     try {
+      await updateLoggedInUserDisplayName(firebaseUser.uid, data.fullName);
       const req = await submitRegistrationRequest({
         userId: firebaseUser.uid,
         fullName: data.fullName,
         preferredTitle: data.preferredTitle,
         studentId: data.studentId,
-        phoneNumber: data.phoneNumber,
+        phoneNumber: data.phoneNumber || firebaseUser.phoneNumber || '',
         email: firebaseUser.email || '',
+        phoneVerified: Boolean(firebaseUser.phoneNumber),
       });
       setMyRegistrationRequest(req);
       return {
         success: true,
         message:
-          'تم إرسال طلب تسجيلك بنجاح! حالتك الآن: (قيد المراجعة). سيقوم مشرفو لجنة التمريض بتدقيق بياناتك واعتماد حسابك.',
+          'تم حفظ بياناتك بنجاح وتحديث ملفك الشخصي!',
       };
     } catch (err: any) {
       return {
         success: false,
-        message: 'حدث خطأ أثناء إرسال الطلب: ' + (err.message || String(err)),
+        message: 'حدث خطأ أثناء حفظ البيانات: ' + (err.message || String(err)),
       };
     }
   };
@@ -2749,10 +3225,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         linkStudentToAccount,
         unlinkStudentFromAccount,
         resolveStudentReviewFlag,
+        isFirebaseConfigured,
         firebaseUser,
         firebaseAuthLoading,
+        googleAuthError,
+        clearGoogleAuthError,
         signInWithGoogle,
+        signInWithGoogleRedirect,
+        registerWithEmail,
+        loginWithEmail,
+        resetPassword,
         signOutFirebase,
+        loggedInUsers,
+        refreshLoggedInUsers,
+        updateMyDisplayName,
         myRegistrationRequest,
         pendingRegistrationRequests,
         submitStudentRegistration,

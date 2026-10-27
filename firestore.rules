@@ -24,10 +24,11 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // Super Admin verification (Bootstrap email or super_admin role in /admins)
+    // Super Admin verification (Bootstrap email, bootstrap phone, or super_admin role in /admins)
     function isSuperAdmin() {
       return isSignedIn() && (
         (request.auth.token.email != null && request.auth.token.email == "mustafaaalihassonkazh@gmail.com") ||
+        (request.auth.token.phone_number != null && request.auth.token.phone_number == "+9647800088386") ||
         (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == "super_admin")
       );
@@ -38,7 +39,7 @@ service cloud.firestore {
       return isSuperAdmin() || (
         isSignedIn() &&
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ["finance_manager", "admin"]
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ["finance_manager", "admin", "super_admin"]
       );
     }
 
@@ -57,17 +58,33 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // 1b. Logged-in User Accounts collection (/user_accounts/{userId})
+    match /user_accounts/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() &&
+        isValidId(userId) &&
+        request.auth.uid == userId &&
+        incoming().uid == request.auth.uid &&
+        incoming().displayName is string &&
+        incoming().loginMethod in ['google', 'phone', 'email'] &&
+        (isAdmin() || incoming().role in ['student', 'graduate']);
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (
+          request.auth.uid == userId &&
+          incoming().uid == request.auth.uid &&
+          incoming().displayName is string &&
+          incoming().role == existing().role
+        )
+      );
+      allow delete: if isSuperAdmin();
+    }
+
     // 2. Scrub Party Students Collection (/scrub_students/{studentId})
     match /scrub_students/{studentId} {
-      // Strict Financial Privacy: Only super_admin, finance_manager, OR the verified linked student can read this record
-      allow get: if isSignedIn() && (
-        isFinanceAdmin() ||
-        (resource != null && resource.data.isLinkedToAccount == true && resource.data.linkedUserId == request.auth.uid)
-      );
-      allow list: if isSignedIn() && (
-        isFinanceAdmin() ||
-        (resource != null && resource.data.isLinkedToAccount == true && resource.data.linkedUserId == request.auth.uid)
-      );
+      // Public read enabled so students can search their payment status by name without logging in
+      allow get, list: if true;
 
       // Creating or updating student records requires finance_manager or super_admin
       allow create: if isFinanceAdmin() &&
@@ -92,15 +109,8 @@ service cloud.firestore {
 
     // 3. Scrub Party Student Payments (/student_payments/{paymentId})
     match /student_payments/{paymentId} {
-      // Strict Financial Privacy: Only super_admin, finance_manager, OR the verified linked student can read payment records
-      allow get: if isSignedIn() && (
-        isFinanceAdmin() ||
-        (resource != null && resource.data.linkedUserId != null && resource.data.linkedUserId == request.auth.uid)
-      );
-      allow list: if isSignedIn() && (
-        isFinanceAdmin() ||
-        (resource != null && resource.data.linkedUserId != null && resource.data.linkedUserId == request.auth.uid)
-      );
+      // Public read enabled for student payment lookup; writes strictly restricted to finance admins
+      allow get, list: if true;
 
       // Only super_admin and finance_manager can record or verify payments
       allow create: if isFinanceAdmin() &&
@@ -168,19 +178,7 @@ service cloud.firestore {
 
     // 7. General Payment Transactions & Ledgers
     match /payments/{paymentId} {
-      allow get: if isSignedIn() && (
-        (resource != null && (
-          resource.data.graduateId == request.auth.uid ||
-          (resource.data.userId != null && resource.data.userId == request.auth.uid)
-        )) ||
-        isFinanceAdmin()
-      );
-      allow list: if isSignedIn() && (
-        isFinanceAdmin() ||
-        (resource != null && resource.data.graduateId == request.auth.uid) ||
-        (resource != null && resource.data.userId != null && resource.data.userId == request.auth.uid)
-      );
-
+      allow get, list: if true;
       allow create, update: if isFinanceAdmin();
       allow delete: if isSuperAdmin();
     }
@@ -211,6 +209,22 @@ service cloud.firestore {
       allow get, list: if true;
       allow create, update: if isAdmin();
       allow delete: if isSuperAdmin();
+    }
+
+    // 10. Smart Graduation Music Library Metadata (/graduation_songs/{songId})
+    match /graduation_songs/{songId} {
+      // Public read access for students and visitors to browse and play songs
+      allow get, list: if true;
+
+      // Only verified administrators can add, edit, reorder, or delete songs
+      allow create, update: if isAdmin() &&
+        isValidId(songId) &&
+        incoming().title is string && incoming().title.size() >= 1 && incoming().title.size() <= 200 &&
+        incoming().artist is string && incoming().artist.size() >= 1 && incoming().artist.size() <= 150 &&
+        incoming().category in ['graduation', 'party', 'calm', 'energetic', 'nasheed'] &&
+        incoming().audioUrl is string && incoming().audioUrl.size() >= 1 && incoming().audioUrl.size() <= 2000;
+
+      allow delete: if isAdmin();
     }
   }
 }

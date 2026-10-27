@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatIQD, formatArabicDate, LocalStorageManager } from '../services/storage';
+import {
+  formatIQD,
+  formatArabicDate,
+  LocalStorageManager,
+  getPaymentStatusBadgeClass,
+  getPaymentStatusArabic,
+} from '../services/storage';
 import { GraduatePrivateMedia } from '../types';
 import { CardGeneratorModal } from '../components/CardGeneratorModal';
 import { MediaUploadZone, UploadResult } from '../components/MediaUploadZone';
@@ -35,6 +41,9 @@ export const GraduateDashboard: React.FC = () => {
     logout,
     navigateTo,
     eventConfig,
+    isAdmin,
+    isModerator,
+    updateMyDisplayName,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'payments' | 'card' | 'media'>('overview');
@@ -43,6 +52,15 @@ export const GraduateDashboard: React.FC = () => {
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadUrl, setUploadUrl] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [displayNameInput, setDisplayNameInput] = useState(currentUser?.fullName || '');
+  const [nameSaveMsg, setNameSaveMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentUser?.fullName) {
+      setDisplayNameInput(currentUser.fullName);
+    }
+  }, [currentUser?.fullName]);
 
   // If not authenticated or visitor, redirect or show error
   if (!currentUser) {
@@ -99,13 +117,24 @@ export const GraduateDashboard: React.FC = () => {
     setPrivateMedia(LocalStorageManager.getPrivateMedia(currentUser.id));
   };
 
+  const handleSaveMyName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!displayNameInput.trim() || displayNameInput.trim().length < 2) return;
+    const res = await updateMyDisplayName(displayNameInput.trim());
+    setNameSaveMsg(res.message);
+    if (res.success) {
+      setEditingName(false);
+      setTimeout(() => setNameSaveMsg(null), 3000);
+    }
+  };
+
   const isFullyPaid = currentUser.remainingBalanceIQD === 0;
 
   return (
     <div className="py-8 sm:py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 text-right">
       {/* Header Profile Bar with Curated Medical Artwork */}
       <div className="rounded-3xl bg-gradient-to-br from-[#101B2C] via-[#122438] to-[#0A0D12] border border-[#35D6C2]/30 p-6 sm:p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 shadow-2xl clinical-grid-bg relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto">
           <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-[#101B2C] to-[#1d2a40] border-2 border-[#35D6C2]/50 flex items-center justify-center text-2xl font-black text-[#35D6C2] shadow-lg shrink-0">
             {currentUser.avatarUrl ? (
               <img src={currentUser.avatarUrl} alt={currentUser.fullName} className="w-full h-full object-cover rounded-2xl" />
@@ -113,13 +142,20 @@ export const GraduateDashboard: React.FC = () => {
               <span>{currentUser.fullName.charAt(0)}</span>
             )}
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-black text-[#F4F8FC]">
                 {currentUser.displayTitle || (currentUser.preferredTitle === 'nurse_f' ? `الممرضة ${currentUser.fullName}` : `الممرض ${currentUser.fullName}`)}
               </h1>
+              <button
+                type="button"
+                onClick={() => setEditingName(!editingName)}
+                className="px-2.5 py-0.5 rounded-lg bg-[#35D6C5]/15 text-[#35D6C5] border border-[#35D6C5]/30 text-[11px] font-bold hover:bg-[#35D6C5]/25 cursor-pointer"
+              >
+                {editingName ? 'إلغاء' : 'تعديل الاسم الظاهر'}
+              </button>
               <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold">
-                حساب خريج معتمد
+                حساب خريج مفعل
               </span>
               {currentUser.isAdvanceLinked && (
                 <span className="px-2.5 py-0.5 rounded-lg bg-[#342A78] text-indigo-200 border border-indigo-400/40 text-[11px] font-bold">
@@ -127,12 +163,33 @@ export const GraduateDashboard: React.FC = () => {
                 </span>
               )}
             </div>
+
+            {editingName && (
+              <form onSubmit={handleSaveMyName} className="flex flex-wrap items-center gap-2 pt-1 max-w-md">
+                <input
+                  type="text"
+                  value={displayNameInput}
+                  onChange={(e) => setDisplayNameInput(e.target.value)}
+                  placeholder="أدخل اسمك الظاهر في الموقع والبطاقة"
+                  className="flex-1 bg-[#090E17] border border-[#35D6C5]/40 rounded-xl py-2 px-3 text-xs text-white focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-[#35D6C5] text-[#0A0D12] font-extrabold text-xs cursor-pointer"
+                >
+                  حفظ الاسم
+                </button>
+              </form>
+            )}
+
+            {nameSaveMsg && (
+              <p className="text-xs text-emerald-400 font-bold">{nameSaveMsg}</p>
+            )}
+
             <p className="text-xs text-slate-300 flex flex-wrap items-center gap-2">
               <span className="text-[#D7B875] font-extrabold">معهد التمريض — دفعة 2027</span>
               <span>•</span>
-              <span>رقم القيد: {currentUser.studentId || 'NUR-2027'}</span>
-              <span>•</span>
-              <span>{currentUser.email}</span>
+              <span dir="ltr">{currentUser.phone || currentUser.email}</span>
             </p>
           </div>
         </div>
@@ -141,16 +198,25 @@ export const GraduateDashboard: React.FC = () => {
           <div className="hidden xl:block w-24 h-16">
             <StethoscopeGradCapIllustration className="w-full h-full" />
           </div>
+          {(isAdmin || isModerator) && (
+            <button
+              onClick={() => navigateTo('admin_dashboard')}
+              className="flex-1 lg:flex-initial px-4 py-2.5 rounded-xl bg-[#35D6C5]/20 hover:bg-[#35D6C5]/30 text-[#35D6C5] border border-[#35D6C5]/40 font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>لوحة الإدارة</span>
+            </button>
+          )}
           <button
             onClick={() => setShowCardModal(true)}
-            className="flex-1 lg:flex-initial px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#D7B875] to-[#bf9e5a] text-[#0A0D12] font-extrabold text-xs shadow-md shadow-[#D7B875]/20 flex items-center justify-center gap-2"
+            className="flex-1 lg:flex-initial px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#D7B875] to-[#bf9e5a] text-[#0A0D12] font-extrabold text-xs shadow-md shadow-[#D7B875]/20 flex items-center justify-center gap-2 cursor-pointer"
           >
             <Sparkles className="w-4 h-4" />
             <span>بطاقتي التذكارية</span>
           </button>
           <button
             onClick={logout}
-            className="p-2.5 rounded-xl bg-white/5 hover:bg-[#E85D65]/15 text-slate-300 hover:text-[#E85D65] border border-white/10 transition-colors"
+            className="p-2.5 rounded-xl bg-white/5 hover:bg-[#E85D65]/15 text-slate-300 hover:text-[#E85D65] border border-white/10 transition-colors cursor-pointer"
             title="تسجيل الخروج"
           >
             <LogOut className="w-4 h-4" />

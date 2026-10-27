@@ -599,12 +599,57 @@
         }
       },
       "required": ["ownerId", "url", "uploadedAt"]
+    },
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Logged-in user profile recorded upon Google or Phone authentication",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name"
+        },
+        "loginMethod": {
+          "type": "string",
+          "enum": ["google", "phone", "email"],
+          "description": "Authentication method used"
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address if signed in with Google/Email"
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "Phone number if signed in with Phone"
+        },
+        "role": {
+          "type": "string",
+          "description": "User role (student/graduate or admin role)"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Account creation timestamp"
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "description": "Most recent login timestamp"
+        }
+      },
+      "required": ["uid", "displayName", "loginMethod", "role", "createdAt", "lastLoginAt"]
     }
   },
   "firestore": {
     "/admins/{adminId}": {
       "schema": "Admin",
       "description": "Authorized administrators and role-based managers"
+    },
+    "/user_accounts/{userId}": {
+      "schema": "UserAccount",
+      "description": "All logged-in user accounts visible to administrators"
     },
     "/scrub_students/{studentId}": {
       "schema": "ScrubStudent",

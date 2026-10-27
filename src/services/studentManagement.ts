@@ -360,12 +360,11 @@ export async function recordSystemAuditLog(entry: {
   return logEntry;
 }
 
-// Fetch from Firestore if admin is signed in, merging safely with local state
+// Fetch from Firestore for public student lookup and admin roster, merging safely with local state
 export async function syncScrubRosterFromFirestore(): Promise<{
   students: ScrubStudent[];
   studentPayments: StudentPayment[];
 } | null> {
-  if (!auth.currentUser) return null;
   try {
     const stuSnap = await getDocs(collection(db, 'scrub_students'));
     const paySnap = await getDocs(collection(db, 'student_payments'));
@@ -836,11 +835,13 @@ export interface StudentLookupCandidate {
 }
 
 export interface DirectStudentPaymentResult {
-  status: 'single_match' | 'multiple_matches' | 'not_found';
+  status: 'single_match' | 'multiple_matches' | 'not_found' | 'empty_database';
   student?: {
     id: string;
     fullName: string;
     paidAmountIQD: number;
+    gradPaidAmountIQD: number;
+    totalFeeIQD: number;
   };
   candidates?: StudentLookupCandidate[];
 }
@@ -849,8 +850,11 @@ export function getActualPaidAmountForStudent(
   student: ScrubStudent,
   payments: StudentPayment[]
 ): number {
-  const recalculated = recalculateStudentFinancials(student, payments);
-  const activeVerifiedPayments = payments.filter(
+  const scrubOnlyPayments = payments.filter(
+    (p) => !p.eventTarget || p.eventTarget === 'scrub_night'
+  );
+  const recalculated = recalculateStudentFinancials(student, scrubOnlyPayments);
+  const activeVerifiedPayments = scrubOnlyPayments.filter(
     (p) =>
       p.studentId === student.id &&
       p.verificationStatus !== 'voided' &&
@@ -861,6 +865,24 @@ export function getActualPaidAmountForStudent(
     return recalculated.verifiedPaidIQD;
   }
   return Math.max(0, Number(student.verifiedPaidIQD) || 0);
+}
+
+export function getOfficialGradPaidAmountForStudent(
+  student: ScrubStudent,
+  payments: StudentPayment[]
+): number {
+  const activeGradPayments = payments.filter(
+    (p) =>
+      p.studentId === student.id &&
+      p.eventTarget === 'official_grad' &&
+      p.verificationStatus !== 'voided' &&
+      p.isVerified &&
+      p.verificationStatus === 'verified'
+  );
+  return activeGradPayments.reduce(
+    (sum, p) => sum + Math.max(0, Number(p.amountIQD) || 0),
+    0
+  );
 }
 
 export function searchStudentPaymentByName(
@@ -877,7 +899,7 @@ export function searchStudentPaymentByName(
   const activeStudents = students.filter((s) => s.status === 'active');
 
   if (activeStudents.length === 0) {
-    return { status: 'not_found' };
+    return { status: 'empty_database' };
   }
 
   // 1. If the user entered a single word (e.g., "عباس" or "زهراء"), find all records whose full name or first name matches
@@ -896,6 +918,8 @@ export function searchStudentPaymentByName(
           id: matched.id,
           fullName: matched.fullName,
           paidAmountIQD: getActualPaidAmountForStudent(matched, payments),
+          gradPaidAmountIQD: getOfficialGradPaidAmountForStudent(matched, payments),
+          totalFeeIQD: matched.totalFeeIQD > 0 ? matched.totalFeeIQD : 35000,
         },
       };
     }
@@ -951,6 +975,8 @@ export function searchStudentPaymentByName(
         id: matched.id,
         fullName: matched.fullName,
         paidAmountIQD: getActualPaidAmountForStudent(matched, payments),
+        gradPaidAmountIQD: getOfficialGradPaidAmountForStudent(matched, payments),
+        totalFeeIQD: matched.totalFeeIQD > 0 ? matched.totalFeeIQD : 35000,
       },
     };
   }
@@ -986,6 +1012,8 @@ export function searchStudentPaymentByName(
         id: matched.id,
         fullName: matched.fullName,
         paidAmountIQD: getActualPaidAmountForStudent(matched, payments),
+        gradPaidAmountIQD: getOfficialGradPaidAmountForStudent(matched, payments),
+        totalFeeIQD: matched.totalFeeIQD > 0 ? matched.totalFeeIQD : 35000,
       },
     };
   }
@@ -1007,7 +1035,13 @@ export function getStudentPaymentById(
   studentId: string,
   students: ScrubStudent[],
   payments: StudentPayment[]
-): { id: string; fullName: string; paidAmountIQD: number } | null {
+): {
+  id: string;
+  fullName: string;
+  paidAmountIQD: number;
+  gradPaidAmountIQD: number;
+  totalFeeIQD: number;
+} | null {
   const found = students.find((s) => s.id === studentId && s.status === 'active');
   if (!found) return null;
 
@@ -1015,6 +1049,8 @@ export function getStudentPaymentById(
     id: found.id,
     fullName: found.fullName,
     paidAmountIQD: getActualPaidAmountForStudent(found, payments),
+    gradPaidAmountIQD: getOfficialGradPaidAmountForStudent(found, payments),
+    totalFeeIQD: found.totalFeeIQD > 0 ? found.totalFeeIQD : 35000,
   };
 }
 

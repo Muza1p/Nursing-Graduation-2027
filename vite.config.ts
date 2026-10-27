@@ -57,6 +57,12 @@ export default defineConfig(() => {
             },
           ],
         },
+        workbox: {
+          cleanupOutdatedCaches: true,
+          clientsClaim: true,
+          skipWaiting: true,
+          navigateFallbackDenylist: [/^\/__\/auth/],
+        },
         devOptions: {
           enabled: false,
           type: 'module',

@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { MusicProvider } from './context/MusicContext';
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { Footer } from './components/Footer';
@@ -10,6 +11,7 @@ import { EventsPage } from './pages/EventsPage';
 import { ScrubNightPage } from './pages/ScrubNightPage';
 import { OfficialGraduationPage } from './pages/OfficialGraduationPage';
 import { PaymentsPage } from './pages/PaymentsPage';
+import { MusicLibraryPage } from './pages/MusicLibraryPage';
 import { AuthPage } from './pages/AuthPage';
 import { GraduateDashboard } from './pages/GraduateDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
@@ -36,6 +38,7 @@ const MainContent: React.FC = () => {
         {currentPage === 'scrub_night' && <ScrubNightPage />}
         {currentPage === 'official_grad' && <OfficialGraduationPage />}
         {currentPage === 'payments' && <PaymentsPage />}
+        {currentPage === 'music' && <MusicLibraryPage />}
         {currentPage === 'announcements' && (
           <div className="py-6 sm:py-10">
             <AnnouncementsSection />
@@ -75,7 +78,9 @@ const MainContent: React.FC = () => {
 export default function App() {
   return (
     <AppProvider>
-      <MainContent />
+      <MusicProvider>
+        <MainContent />
+      </MusicProvider>
     </AppProvider>
   );
 }

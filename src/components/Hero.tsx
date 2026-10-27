@@ -4,21 +4,25 @@ import { CountdownTimer } from './CountdownTimer';
 import {
   StethoscopeGradCapIllustration,
   ScrubUniformCoatIllustration,
-  AnimatedEcgWaveform,
 } from './MedicalIllustrations';
 import {
-  Sparkles,
   GraduationCap,
-  ShieldCheck,
-  HeartPulse,
-  Award,
+  CalendarDays,
   Instagram,
-  Search,
-  Stethoscope,
+  User,
+  ShieldCheck,
+  ExternalLink,
 } from 'lucide-react';
 
 export const Hero: React.FC = () => {
-  const { navigateTo, currentUser, eventConfig } = useApp();
+  const { navigateTo, currentUser, isAdmin, isModerator, eventConfig } = useApp();
+
+  const verifiedSupervisors = eventConfig.organizers.filter(
+    (org) =>
+      org.id !== 'org-3' &&
+      !org.name.includes('حسين عبدالله جاسم') &&
+      !org.name.includes('حسين عبد الله جاسم')
+  );
 
   return (
     <section className="relative overflow-hidden pt-4 pb-10 sm:pt-8 sm:pb-14 clinical-grid-bg border-b border-white/10">
@@ -31,7 +35,7 @@ export const Hero: React.FC = () => {
 
         {/* 2. Main 2-Column Medical Graduation Hero Split */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
-          {/* Right Column (RTL Primary Text & CTAs) */}
+          {/* Right Column (RTL Primary Text, CTAs & Social Icons) */}
           <div className="lg:col-span-7 text-center lg:text-right space-y-4 sm:space-y-5">
             {/* Institution & Cohort Subtitle */}
             <div className="inline-flex flex-wrap items-center justify-center lg:justify-start gap-2 px-3.5 py-1.5 rounded-xl bg-[#142638] border border-[#D6B777]/30">
@@ -57,27 +61,21 @@ export const Hero: React.FC = () => {
               </p>
             </div>
 
-            {/* Primary & Secondary Action CTAs (Organized 2x2 Grid on Mobile) */}
-            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-center lg:justify-start gap-2.5 sm:gap-3 pt-1">
+            {/* Primary Navigation CTAs Matching the 4 Core Destinations */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 items-center justify-center lg:justify-start gap-2.5 sm:gap-3 pt-1">
               <button
                 onClick={() => navigateTo('payments')}
-                className="w-full sm:w-auto justify-center px-4 sm:px-6 py-3 sm:py-3.5 rounded-xl font-black text-xs sm:text-sm text-[#10151C] bg-gradient-to-r from-[#35D6C5] to-[#A6F0DF] hover:opacity-95 shadow-lg shadow-[#35D6C5]/20 transition-all active:scale-95 flex items-center gap-1.5"
+                className="w-full justify-center px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl font-black text-xs sm:text-sm text-[#10151C] bg-gradient-to-r from-[#35D6C5] to-[#A6F0DF] hover:opacity-95 shadow-lg shadow-[#35D6C5]/20 transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
               >
-                <Search className="w-4 h-4 shrink-0" />
-                <span className="truncate">استعلام عن حسابي</span>
-              </button>
-
-              <button
-                onClick={() => navigateTo('register')}
-                className="w-full sm:w-auto justify-center px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl font-extrabold text-xs sm:text-sm text-white bg-[#1C354A] hover:bg-[#23435d] border border-[#35D6C5]/40 transition-all flex items-center"
-              >
-                <span className="truncate">تسجيل طالب بالدفعة</span>
+                <GraduationCap className="w-4 h-4 shrink-0" />
+                <span className="truncate">الدفعات والاستعلام</span>
               </button>
 
               <button
                 onClick={() => navigateTo('events')}
-                className="w-full sm:w-auto justify-center px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm text-[#E8EEF2] bg-[#142638] hover:bg-[#1C354A] border border-white/15 hover:border-[#35D6C5]/40 transition-all flex items-center"
+                className="w-full justify-center px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm text-[#E8EEF2] bg-[#142638] hover:bg-[#1C354A] border border-white/15 hover:border-[#35D6C5]/40 transition-all flex items-center gap-2 cursor-pointer"
               >
+                <CalendarDays className="w-4 h-4 text-[#35D6C5] shrink-0" />
                 <span className="truncate">تفاصيل الحفلات</span>
               </button>
 
@@ -85,7 +83,7 @@ export const Hero: React.FC = () => {
                 onClick={() => {
                   if (currentUser) {
                     navigateTo(
-                      currentUser.role === 'admin' || currentUser.role === 'super_admin'
+                      isAdmin || isModerator
                         ? 'admin_dashboard'
                         : 'graduate_dashboard'
                     );
@@ -93,25 +91,55 @@ export const Hero: React.FC = () => {
                     navigateTo('login');
                   }
                 }}
-                className="w-full sm:w-auto justify-center px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm text-[#D6B777] hover:text-white bg-[#D6B777]/10 hover:bg-[#D6B777]/20 border border-[#D6B777]/35 transition-all flex items-center"
+                className="w-full justify-center px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm text-[#D6B777] hover:text-white bg-[#D6B777]/10 hover:bg-[#D6B777]/20 border border-[#D6B777]/35 transition-all flex items-center gap-2 cursor-pointer"
               >
-                <span className="truncate">{currentUser ? 'بوابتي الطبية' : 'دخول الخريجين'}</span>
+                <User className="w-4 h-4 shrink-0" />
+                <span className="truncate">{currentUser ? 'حسابي' : 'الدخول'}</span>
               </button>
             </div>
 
-            {/* Concise Trust Line */}
-            <div className="pt-1 flex flex-wrap items-center justify-center lg:justify-start gap-x-3 gap-y-1.5 text-[11px] sm:text-xs text-[#E8EEF2]/75">
-              <span>استعلام مالي خاص وموثق لكل طالب</span>
-              <span className="text-white/20">•</span>
+            {/* Verified Social Media Icons & Links */}
+            <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-2.5 text-xs">
               <a
                 href={eventConfig.instagramUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 text-[#D6B777] hover:underline font-semibold"
+                aria-label="حساب دفعة التمريض 2027 على إنستغرام"
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#101827]/90 hover:bg-[#1C354A] border border-[#D6B777]/35 text-[#F4F8FC] hover:text-[#D6B777] transition-all shadow-md"
               >
-                <Instagram className="w-3.5 h-3.5" />
-                <span dir="ltr">@uofaon.1</span>
+                <span className="w-6 h-6 rounded-lg bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 flex items-center justify-center text-white shrink-0">
+                  <Instagram className="w-3.5 h-3.5" />
+                </span>
+                <span className="font-bold text-[11px] sm:text-xs">انستغرام الدفعة</span>
+                <span className="font-mono text-[11px] text-[#D6B777]" dir="ltr">
+                  @uofaon.1
+                </span>
+                <ExternalLink className="w-3 h-3 text-slate-400" />
               </a>
+
+              {verifiedSupervisors.map((sup) => {
+                const handle = sup.instagram
+                  ? sup.instagram.replace(/\/$/, '').split('/').pop()
+                  : '';
+                return (
+                  <a
+                    key={sup.id}
+                    href={sup.instagram || eventConfig.instagramUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`انستغرام ${sup.name}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-[#35D6C5]/15 border border-white/10 hover:border-[#35D6C5]/40 text-xs text-[#E8EEF2] hover:text-[#35D6C5] transition-all"
+                  >
+                    <Instagram className="w-3.5 h-3.5 text-[#35D6C5]" />
+                    <span className="font-bold">{sup.name}</span>
+                    {handle && (
+                      <span className="font-mono text-[10px] text-slate-400" dir="ltr">
+                        @{handle}
+                      </span>
+                    )}
+                  </a>
+                );
+              })}
             </div>
           </div>
 
@@ -119,8 +147,9 @@ export const Hero: React.FC = () => {
           <div className="lg:col-span-5 flex flex-col items-center justify-center">
             <div className="relative w-full max-w-md rounded-2xl sm:rounded-3xl glass-panel p-4 sm:p-6 border border-[#35D6C5]/30 shadow-2xl overflow-hidden">
               <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2.5 mb-3 text-[10px] sm:text-[11px]">
-                <span className="text-[#35D6C5] font-bold truncate">
-                  الهوية الطبية والتخرج الأكاديمي
+                <span className="text-[#35D6C5] font-bold truncate flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>الهوية الطبية والتخرج الأكاديمي</span>
                 </span>
                 <span className="font-mono text-[#D6B777] font-bold shrink-0">COHORT 2027</span>
               </div>
@@ -147,14 +176,14 @@ export const Hero: React.FC = () => {
 
                 <div
                   onClick={() => navigateTo('official_grad')}
-                  className="cursor-pointer p-2.5 rounded-xl bg-[#142638] border border-[#D6B777]/30 hover:border-[#D6B777] transition-colors flex items-center gap-2"
+                  className="cursor-pointer p-2.5 rounded-xl bg-[#142638] border border-[#5CE1E6]/30 hover:border-[#5CE1E6] transition-colors flex items-center gap-2"
                 >
                   <div className="w-8 h-8 shrink-0">
                     <ScrubUniformCoatIllustration variant="coat" className="w-full h-full" />
                   </div>
                   <div className="min-w-0">
                     <div className="text-[11px] font-extrabold text-white truncate">التخرج الرسمي</div>
-                    <div className="text-[10px] text-[#D6B777] truncate">الوشاح التركوازي</div>
+                    <div className="text-[10px] text-[#5CE1E6] truncate">الوشاح التركوازي</div>
                   </div>
                 </div>
               </div>
