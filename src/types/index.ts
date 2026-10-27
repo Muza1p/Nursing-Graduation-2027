@@ -111,6 +111,23 @@ export interface LoggedInUserAccount {
   role: UserRole;
   createdAt: string;
   lastLoginAt: string;
+  loginCount?: number;
+  hasEverLoggedIn?: boolean;
+}
+
+export interface ModeratorRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail?: string;
+  userPhone?: string;
+  note?: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  requestedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  reviewedByName?: string;
+  adminNote?: string;
 }
 
 

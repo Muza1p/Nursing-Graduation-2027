@@ -30,6 +30,7 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
   collection,
   query,
   where,
@@ -38,7 +39,7 @@ import {
   getDocFromServer,
 } from 'firebase/firestore';
 import firebaseConfigJson from '../../firebase-applet-config.json';
-import { Graduate, LoggedInUserAccount, PaymentTransaction, UserRole } from '../types';
+import { Graduate, LoggedInUserAccount, ModeratorRequest, PaymentTransaction, UserRole } from '../types';
 
 const env = (import.meta as any).env || {};
 
@@ -1127,6 +1128,13 @@ export async function recordLoggedInUserAccount(
         existingLocal?.role ||
         'student');
 
+  const previousLoginCount =
+    typeof existingCloud?.loginCount === 'number'
+      ? existingCloud.loginCount
+      : typeof existingLocal?.loginCount === 'number'
+      ? existingLocal.loginCount
+      : 0;
+
   const accountRecord: LoggedInUserAccount = {
     uid: user.uid,
     displayName: resolvedDisplayName,
@@ -1141,6 +1149,8 @@ export async function recordLoggedInUserAccount(
     createdAt:
       existingCloud?.createdAt || existingLocal?.createdAt || nowIso,
     lastLoginAt: nowIso,
+    loginCount: previousLoginCount + 1,
+    hasEverLoggedIn: true,
   };
 
   // Save to local cache immediately
@@ -1229,6 +1239,234 @@ export async function getAllLoggedInUserAccounts(): Promise<
       (b.lastLoginAt || '').localeCompare(a.lastLoginAt || '')
     );
   }
+}
+
+// ============================================================================
+// Moderator Membership Requests API (طلبات عضوية المشرف والموافقة عليها)
+// ============================================================================
+const MODERATOR_REQUESTS_STORAGE_KEY = 'nursing_grad_moderator_requests_v1';
+
+export function getLocalModeratorRequests(): ModeratorRequest[] {
+  try {
+    const raw = localStorage.getItem(MODERATOR_REQUESTS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as ModeratorRequest[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalModeratorRequests(requests: ModeratorRequest[]): void {
+  try {
+    localStorage.setItem(MODERATOR_REQUESTS_STORAGE_KEY, JSON.stringify(requests));
+  } catch {
+    // Ignore storage quota
+  }
+}
+
+export async function submitModeratorRequest(data: {
+  userId: string;
+  userName: string;
+  userEmail?: string;
+  userPhone?: string;
+  note?: string;
+}): Promise<{ success: boolean; notice: string; request?: ModeratorRequest }> {
+  const nowIso = new Date().toISOString();
+  const cleanName = data.userName.trim();
+  if (!cleanName || cleanName.length < 2) {
+    return { success: false, notice: 'يرجى كتابة اسم الطالب الثلاثي بشكل صحيح.' };
+  }
+
+  const reqDoc: ModeratorRequest = {
+    id: data.userId,
+    userId: data.userId,
+    userName: cleanName,
+    userEmail: data.userEmail || auth.currentUser?.email || '',
+    userPhone: data.userPhone || auth.currentUser?.phoneNumber || '',
+    note: data.note?.trim() || '',
+    status: 'pending',
+    requestedAt: nowIso,
+  };
+
+  // 1. Cache locally
+  const current = getLocalModeratorRequests();
+  const updatedLocal = [reqDoc, ...current.filter((r) => r.userId !== data.userId)];
+  saveLocalModeratorRequests(updatedLocal);
+
+  // 2. Persist to Firestore /moderator_requests/{userId}
+  try {
+    await setDoc(doc(db, 'moderator_requests', data.userId), reqDoc, { merge: true });
+    return {
+      success: true,
+      notice: 'تم إرسال طلب الانضمام إلى فريق الإشراف بنجاح، وهو قيد المراجعة والاعتماد من قبل إدارة الحفل.',
+      request: reqDoc,
+    };
+  } catch (err: any) {
+    console.warn('[Moderator Request] Firestore write error:', err);
+    return {
+      success: true,
+      notice: 'تم تسجيل طلبك بنجاح وهو بانتظار موافقة الإدارة.',
+      request: reqDoc,
+    };
+  }
+}
+
+export async function getMyModeratorRequest(userId: string): Promise<ModeratorRequest | null> {
+  if (!userId) return null;
+  const localList = getLocalModeratorRequests();
+  const localFound = localList.find((r) => r.userId === userId);
+
+  try {
+    const snap = await getDoc(doc(db, 'moderator_requests', userId));
+    if (snap.exists()) {
+      const data = snap.data() as ModeratorRequest;
+      // sync local
+      const updatedLocal = [data, ...localList.filter((r) => r.userId !== userId)];
+      saveLocalModeratorRequests(updatedLocal);
+      return data;
+    }
+  } catch {
+    // Ignore read errors
+  }
+
+  return localFound || null;
+}
+
+export async function getAllModeratorRequests(): Promise<ModeratorRequest[]> {
+  const localList = getLocalModeratorRequests();
+  try {
+    const snap = await getDocs(collection(db, 'moderator_requests'));
+    const cloudRequests = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ModeratorRequest));
+    const byId = new Map<string, ModeratorRequest>();
+    for (const r of localList) byId.set(r.id, r);
+    for (const r of cloudRequests) byId.set(r.id, r);
+    const merged = Array.from(byId.values()).sort((a, b) =>
+      b.requestedAt.localeCompare(a.requestedAt)
+    );
+    saveLocalModeratorRequests(merged);
+    return merged;
+  } catch {
+    return localList.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+  }
+}
+
+export async function approveModeratorRequest(
+  requestId: string,
+  adminUid: string,
+  adminName: string
+): Promise<{ success: boolean; notice: string }> {
+  const nowIso = new Date().toISOString();
+  const requests = await getAllModeratorRequests();
+  const targetReq = requests.find((r) => r.id === requestId || r.userId === requestId);
+
+  if (!targetReq) {
+    return { success: false, notice: 'لم يتم العثور على طلب العضوية المطلوب.' };
+  }
+
+  const updatedReq: ModeratorRequest = {
+    ...targetReq,
+    status: 'accepted',
+    reviewedAt: nowIso,
+    reviewedBy: adminUid,
+    reviewedByName: adminName,
+  };
+
+  // 1. Update local cache
+  const mergedLocal = [updatedReq, ...requests.filter((r) => r.id !== targetReq.id)];
+  saveLocalModeratorRequests(mergedLocal);
+
+  // 2. Update Firestore /moderator_requests/{id}
+  try {
+    await setDoc(doc(db, 'moderator_requests', targetReq.id), updatedReq, { merge: true });
+  } catch (err) {
+    console.warn('[Moderator Request] Could not update request doc:', err);
+  }
+
+  // 3. Grant real database-level moderator permissions in /admins/{targetReq.userId} & /user_accounts/{targetReq.userId}
+  try {
+    await setDoc(
+      doc(db, 'admins', targetReq.userId),
+      {
+        email: targetReq.userEmail || '',
+        fullName: targetReq.userName,
+        role: 'moderator',
+        createdAt: nowIso,
+        approvedBy: adminUid,
+      },
+      { merge: true }
+    );
+    await setDoc(
+      doc(db, 'user_accounts', targetReq.userId),
+      {
+        role: 'moderator',
+        updatedAt: nowIso,
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('[Moderator Role Grant] Error granting role in /admins:', err);
+  }
+
+  return {
+    success: true,
+    notice: `تم قبول طلب الطالب «${targetReq.userName}» ومنحه صلاحيات مشرف بنجاح.`,
+  };
+}
+
+export async function rejectModeratorRequest(
+  requestId: string,
+  adminUid: string,
+  adminName: string,
+  reason?: string
+): Promise<{ success: boolean; notice: string }> {
+  const nowIso = new Date().toISOString();
+  const requests = await getAllModeratorRequests();
+  const targetReq = requests.find((r) => r.id === requestId || r.userId === requestId);
+
+  if (!targetReq) {
+    return { success: false, notice: 'لم يتم العثور على طلب العضوية المطلوب.' };
+  }
+
+  const updatedReq: ModeratorRequest = {
+    ...targetReq,
+    status: 'rejected',
+    reviewedAt: nowIso,
+    reviewedBy: adminUid,
+    reviewedByName: adminName,
+    adminNote: reason?.trim() || 'تم رفض الطلب من قبل الإدارة.',
+  };
+
+  // 1. Update local cache
+  const mergedLocal = [updatedReq, ...requests.filter((r) => r.id !== targetReq.id)];
+  saveLocalModeratorRequests(mergedLocal);
+
+  // 2. Update Firestore /moderator_requests/{id}
+  try {
+    await setDoc(doc(db, 'moderator_requests', targetReq.id), updatedReq, { merge: true });
+  } catch (err) {
+    console.warn('[Moderator Request] Could not update request doc:', err);
+  }
+
+  // 3. Ensure student does NOT have administrative role
+  try {
+    await deleteDoc(doc(db, 'admins', targetReq.userId));
+    await setDoc(
+      doc(db, 'user_accounts', targetReq.userId),
+      {
+        role: 'student',
+        updatedAt: nowIso,
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('[Moderator Role Revoke] Note:', err);
+  }
+
+  return {
+    success: true,
+    notice: `تم رفض طلب الطالب «${targetReq.userName}» وتأكيد بقائه بحساب طالب عادي دون صلاحيات.`,
+  };
 }
 
 

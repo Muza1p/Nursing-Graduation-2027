@@ -58,6 +58,25 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // 1c. Student Moderator Requests collection (/moderator_requests/{requestId})
+    match /moderator_requests/{requestId} {
+      // Individual student can read their own request; admins can read all
+      allow get: if isSignedIn() && (request.auth.uid == requestId || isAdmin());
+      allow list: if isAdmin();
+
+      // Student can submit their own request with status: 'pending' only
+      allow create: if isSignedIn() &&
+        isValidId(requestId) &&
+        request.auth.uid == requestId &&
+        incoming().userId == request.auth.uid &&
+        incoming().status == 'pending' &&
+        incoming().userName is string && incoming().userName.size() >= 2 && incoming().userName.size() <= 100;
+
+      // Only administrators can review, accept, or reject requests
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
     // 1b. Logged-in User Accounts collection (/user_accounts/{userId})
     match /user_accounts/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());

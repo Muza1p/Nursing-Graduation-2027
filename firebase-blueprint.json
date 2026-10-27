@@ -640,12 +640,76 @@
         }
       },
       "required": ["uid", "displayName", "loginMethod", "role", "createdAt", "lastLoginAt"]
+    },
+    "ModeratorRequest": {
+      "title": "ModeratorRequest",
+      "description": "Student request to join the supervision and moderation team",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Request ID or Student UID"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Authenticated user UID"
+        },
+        "userName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100,
+          "description": "Student full Arabic name"
+        },
+        "userEmail": {
+          "type": "string",
+          "description": "Optional email address"
+        },
+        "userPhone": {
+          "type": "string",
+          "description": "Optional phone number"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Motivation or reason for joining"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "rejected"],
+          "description": "Request approval status"
+        },
+        "requestedAt": {
+          "type": "string",
+          "description": "Timestamp when request was submitted"
+        },
+        "reviewedAt": {
+          "type": "string",
+          "description": "Timestamp when admin took action"
+        },
+        "reviewedBy": {
+          "type": "string",
+          "description": "Admin UID who reviewed request"
+        },
+        "reviewedByName": {
+          "type": "string",
+          "description": "Admin name who reviewed request"
+        },
+        "adminNote": {
+          "type": "string",
+          "description": "Optional administrative response note"
+        }
+      },
+      "required": ["id", "userId", "userName", "status", "requestedAt"]
     }
   },
   "firestore": {
     "/admins/{adminId}": {
       "schema": "Admin",
       "description": "Authorized administrators and role-based managers"
+    },
+    "/moderator_requests/{requestId}": {
+      "schema": "ModeratorRequest",
+      "description": "Student requests to join the supervision team reviewed by admins"
     },
     "/user_accounts/{userId}": {
       "schema": "UserAccount",

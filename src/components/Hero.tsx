@@ -52,7 +52,7 @@ export const Hero: React.FC = () => {
               <h1 className="text-2xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.28] sm:leading-[1.18]">
                 دفعة 2027 — ملائكة الرحمة{' '}
                 <span className="block mt-1 bg-gradient-to-l from-[#35D6C5] via-[#A6F0DF] to-[#D6B777] bg-clip-text text-transparent">
-                  نحو التخرج الأكاديمي 2027
+                  حفل تخرج معهد التمريض 2027
                 </span>
               </h1>
               <p className="text-xs sm:text-lg text-[#E8EEF2]/90 font-medium max-w-2xl mx-auto lg:mx-0 leading-relaxed">

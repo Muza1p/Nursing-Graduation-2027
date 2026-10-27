@@ -44,9 +44,11 @@ export const GraduateDashboard: React.FC = () => {
     isAdmin,
     isModerator,
     updateMyDisplayName,
+    myModeratorRequest,
+    submitModeratorRequest,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'payments' | 'card' | 'media'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'payments' | 'card' | 'media' | 'moderator_request'>('overview');
   const [showCardModal, setShowCardModal] = useState(false);
   const [privateMedia, setPrivateMedia] = useState<GraduatePrivateMedia[]>([]);
   const [uploadTitle, setUploadTitle] = useState('');
@@ -56,11 +58,43 @@ export const GraduateDashboard: React.FC = () => {
   const [displayNameInput, setDisplayNameInput] = useState(currentUser?.fullName || '');
   const [nameSaveMsg, setNameSaveMsg] = useState<string | null>(null);
 
+  // Moderator request form state
+  const [reqFullName, setReqFullName] = useState(currentUser?.fullName || '');
+  const [reqPhone, setReqPhone] = useState(currentUser?.phone || '');
+  const [reqNote, setReqNote] = useState('');
+  const [isSubmittingReq, setIsSubmittingReq] = useState(false);
+  const [reqFeedback, setReqFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   useEffect(() => {
     if (currentUser?.fullName) {
       setDisplayNameInput(currentUser.fullName);
+      if (!reqFullName) setReqFullName(currentUser.fullName);
     }
-  }, [currentUser?.fullName]);
+    if (currentUser?.phone && !reqPhone) {
+      setReqPhone(currentUser.phone);
+    }
+  }, [currentUser]);
+
+  const handleSubmitModeratorApp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reqFullName.trim() || reqFullName.trim().length < 3) {
+      setReqFeedback({ type: 'error', text: 'يرجى كتابة الاسم الثلاثي كاملاً بشكل صحيح.' });
+      return;
+    }
+    setIsSubmittingReq(true);
+    setReqFeedback(null);
+    const res = await submitModeratorRequest({
+      userName: reqFullName.trim(),
+      userPhone: reqPhone.trim(),
+      note: reqNote.trim(),
+    });
+    setIsSubmittingReq(false);
+    if (res.success) {
+      setReqFeedback({ type: 'success', text: res.notice });
+    } else {
+      setReqFeedback({ type: 'error', text: res.notice });
+    }
+  };
 
   // If not authenticated or visitor, redirect or show error
   if (!currentUser) {
@@ -262,6 +296,35 @@ export const GraduateDashboard: React.FC = () => {
         >
           <ImageIcon className="w-4 h-4" />
           <span>مجلدي الخاص ({privateMedia.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('moderator_request')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+            activeTab === 'moderator_request'
+              ? 'bg-[#35D6C5] text-black shadow-md font-black'
+              : 'bg-[#101827] text-[#929BAA] hover:text-white'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          <span>طلب الانضمام للإشراف</span>
+          {myModeratorRequest && (
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                myModeratorRequest.status === 'accepted'
+                  ? 'bg-emerald-500/20 text-emerald-300'
+                  : myModeratorRequest.status === 'rejected'
+                  ? 'bg-red-500/20 text-red-300'
+                  : 'bg-amber-500/20 text-amber-300'
+              }`}
+            >
+              {myModeratorRequest.status === 'accepted'
+                ? 'مقبول'
+                : myModeratorRequest.status === 'rejected'
+                ? 'مرفوض'
+                : 'قيد المراجعة'}
+            </span>
+          )}
         </button>
       </div>
 
@@ -561,6 +624,174 @@ export const GraduateDashboard: React.FC = () => {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 4: Request to Join Supervision Team (طلبات عضوية المشرف) */}
+      {activeTab === 'moderator_request' && (
+        <div className="rounded-3xl bg-[#101827] border border-white/10 p-6 sm:p-8 space-y-6 shadow-2xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#35D6C5]/10 border border-[#35D6C5]/30 text-[#35D6C5] text-xs font-bold mb-2">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>فريق إدارة وإشراف حفل التخرج 2027</span>
+              </div>
+              <h3 className="text-lg sm:text-xl font-black text-white">
+                طلب الانضمام إلى فريق الإشراف
+              </h3>
+              <p className="text-xs text-[#929BAA] max-w-2xl mt-1">
+                تتيح هذه الاستمارة للطلبة الراغبين بالمشاركة في تنظيم وإدارة فعاليات تخرج معهد التمريض (اللجان التنظيمية، التوثيق، الاستقبال) تقديم طلب رسمي يخضع لتدقيق وموافقة الإدارة.
+              </p>
+            </div>
+
+            {isAdmin || isModerator ? (
+              <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 shrink-0">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>أنت مشرف معتمد بالفعل</span>
+              </span>
+            ) : null}
+          </div>
+
+          {/* Feedback message banner */}
+          {reqFeedback && (
+            <div
+              className={`p-4 rounded-2xl flex items-center gap-2.5 text-xs font-bold ${
+                reqFeedback.type === 'success'
+                  ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30'
+                  : 'bg-red-500/15 text-red-200 border border-red-500/30'
+              }`}
+            >
+              {reqFeedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              )}
+              <span>{reqFeedback.text}</span>
+            </div>
+          )}
+
+          {/* If already an admin/moderator */}
+          {isAdmin || isModerator ? (
+            <div className="p-6 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 text-center space-y-3">
+              <ShieldCheck className="w-12 h-12 text-emerald-400 mx-auto" />
+              <h4 className="text-base font-bold text-white">لديك صلاحيات إشرافية نشطة</h4>
+              <p className="text-xs text-slate-300 max-w-lg mx-auto">
+                تم اعتماد حسابك ضمن الكادر الإشرافي لحفل تخرج معهد التمريض. يمكنك الوصول المباشر إلى لوحة الإدارة لإدارة الحفلات والموسيقى وقوائم الطلبة.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigateTo('admin_dashboard')}
+                className="px-5 py-2.5 rounded-xl bg-[#35D6C5] text-[#0A0D12] font-black text-xs cursor-pointer shadow-lg shadow-[#35D6C5]/20"
+              >
+                الدخول إلى لوحة الإدارة
+              </button>
+            </div>
+          ) : myModeratorRequest?.status === 'pending' ? (
+            /* Pending Request Notice */
+            <div className="p-6 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3">
+              <div className="flex items-center gap-2.5">
+                <Clock className="w-5 h-5 text-amber-400 shrink-0" />
+                <h4 className="text-sm font-black text-white">طلبك قيد المراجعة والتدقيق</h4>
+              </div>
+              <p className="text-xs text-amber-200/90 leading-relaxed">
+                تم استلام طلب انضمامك إلى فريق الإشراف بتاريخ{' '}
+                <strong className="text-white">
+                  {formatArabicDate(myModeratorRequest.requestedAt)}
+                </strong>
+                . تجري الإدارة مراجعة الطلبات وسيتم تفعيل صلاحيات المشرف تلقائياً فور الموافقة الرسمية.
+              </p>
+              <div className="pt-2 text-[11px] text-slate-400 border-t border-amber-500/20">
+                الاسم المسجل في الطلب: <span className="text-white font-bold">{myModeratorRequest.userName}</span>
+              </div>
+            </div>
+          ) : myModeratorRequest?.status === 'rejected' ? (
+            /* Rejected Request Notice */
+            <div className="p-6 rounded-2xl bg-red-500/10 border border-red-500/30 space-y-3">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+                <h4 className="text-sm font-black text-white">حالة الطلب: غير معتمد حالياً</h4>
+              </div>
+              <p className="text-xs text-red-200/90 leading-relaxed">
+                اعتذرت الإدارة عن قبول الطلب في الوقت الراهن: {myModeratorRequest.adminNote || 'شروط غير مستوفاة أو اكتفاء الكادر'}.
+                يبقى حسابك نشطاً كطالب خريج للاطلاع على كافة الفعاليات والوصولات.
+              </p>
+              <p className="text-xs text-slate-300">
+                إذا كنت ترغب بتقديم طلب جديد مع توضيح إضافي، يمكنك استخدام النموذج أدناه.
+              </p>
+            </div>
+          ) : null}
+
+          {/* Application Form (Visible if not approved admin) */}
+          {!(isAdmin || isModerator) && myModeratorRequest?.status !== 'pending' && (
+            <form onSubmit={handleSubmitModeratorApp} className="space-y-4 max-w-2xl bg-[#090E17] border border-white/10 p-5 sm:p-6 rounded-2xl">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <span>الاسم الثلاثي للطالب</span>
+                  <span className="text-[#35D6C5]">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={reqFullName}
+                  onChange={(e) => setReqFullName(e.target.value)}
+                  placeholder="مثال: علي محمد حسن"
+                  className="w-full bg-[#101827] border border-white/15 rounded-xl py-2.5 px-3.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#35D6C5]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <span>رقم الهاتف أو الواتساب للتواصل</span>
+                </label>
+                <input
+                  type="tel"
+                  value={reqPhone}
+                  onChange={(e) => setReqPhone(e.target.value)}
+                  placeholder="07XXXXXXXXX"
+                  className="w-full bg-[#101827] border border-white/15 rounded-xl py-2.5 px-3.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#35D6C5]"
+                  dir="ltr"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <span>مجال المساهمة أو سبب الرغبة بالانضمام</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={reqNote}
+                  onChange={(e) => setReqNote(e.target.value)}
+                  placeholder="مثال: تنظيم القاعات، لجان الاستقبال، توثيق وتصوير، إدارة فقرات السكراب..."
+                  className="w-full bg-[#101827] border border-white/15 rounded-xl py-2.5 px-3.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#35D6C5]"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-[11px] text-slate-400 space-y-1">
+                <div className="font-bold text-slate-300">ملاحظة أمنية ونظامية:</div>
+                <div>
+                  • إرسال هذا النموذج لا يمنح أي صلاحيات مشرف بشكل فوري.
+                </div>
+                <div>
+                  • تخضع جميع الطلبات لتدقيق واعتماد المشرف العام من لوحة الإدارة المركزية حصراً.
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmittingReq}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#35D6C5] to-[#5CE1E6] text-[#0A0D12] font-black text-xs shadow-lg shadow-[#35D6C5]/20 hover:opacity-95 active:scale-95 transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+              >
+                {isSubmittingReq ? (
+                  <span>جاري إرسال الطلب...</span>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>إرسال طلب الانضمام للإشراف</span>
+                  </>
+                )}
+              </button>
+            </form>
           )}
         </div>
       )}

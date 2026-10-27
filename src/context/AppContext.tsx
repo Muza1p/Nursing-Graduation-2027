@@ -20,6 +20,7 @@ import {
   StudentPayment,
   UserRole,
   LoggedInUserAccount,
+  ModeratorRequest,
 } from '../types';
 import {
   DEFAULT_CONFIG,
@@ -55,6 +56,12 @@ import {
   RegistrationRequestDoc,
   BOOTSTRAP_ADMIN_EMAIL,
   BOOTSTRAP_ADMIN_PHONE,
+  submitModeratorRequest as fbSubmitModeratorRequest,
+  getMyModeratorRequest,
+  getAllModeratorRequests,
+  approveModeratorRequest as fbApproveModeratorRequest,
+  rejectModeratorRequest as fbRejectModeratorRequest,
+  getLocalModeratorRequests,
 } from '../services/firebase';
 import {
   ScrubStudentStorage,
@@ -254,6 +261,22 @@ interface AppContextType {
     reason: string
   ) => Promise<{ success: boolean; message: string }>;
   refreshPendingRequests: () => Promise<void>;
+  moderatorRequests: ModeratorRequest[];
+  myModeratorRequest: ModeratorRequest | null;
+  submitModeratorRequest: (data: {
+    userName: string;
+    note?: string;
+    userEmail?: string;
+    userPhone?: string;
+  }) => Promise<{ success: boolean; notice: string }>;
+  approveModeratorRequest: (
+    requestId: string
+  ) => Promise<{ success: boolean; notice: string }>;
+  rejectModeratorRequest: (
+    requestId: string,
+    reason?: string
+  ) => Promise<{ success: boolean; notice: string }>;
+  refreshModeratorRequests: () => Promise<void>;
 
   // Legacy/Local methods for testing
   login: (
@@ -362,6 +385,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     useState<RegistrationRequestDoc | null>(null);
   const [pendingRegistrationRequests, setPendingRegistrationRequests] =
     useState<RegistrationRequestDoc[]>([]);
+  const [moderatorRequests, setModeratorRequests] = useState<ModeratorRequest[]>(() =>
+    getLocalModeratorRequests()
+  );
+  const [myModeratorRequest, setMyModeratorRequest] = useState<ModeratorRequest | null>(null);
 
   // Guards to prevent duplicate login processing between signInWithPopup, getRedirectResult, and onAuthStateChanged
   const redirectResultHandledRef = useRef<boolean>(false);
@@ -542,6 +569,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch (e) {
           console.warn('Error fetching student registration request:', e);
+        }
+
+        try {
+          const modReq = await getMyModeratorRequest(user.uid);
+          setMyModeratorRequest(modReq);
+          if (isUserAdmin(user)) {
+            const allModReqs = await getAllModeratorRequests();
+            setModeratorRequests(allModReqs);
+          }
+        } catch (e) {
+          console.warn('Error fetching moderator request:', e);
         }
 
         return 'graduate_dashboard';
@@ -3181,6 +3219,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const refreshModeratorRequests = async () => {
+    try {
+      const all = await getAllModeratorRequests();
+      setModeratorRequests(all);
+    } catch (e) {
+      console.warn('Refresh moderator requests error:', e);
+    }
+  };
+
+  const submitModeratorRequestAction = async (data: {
+    userName: string;
+    note?: string;
+    userEmail?: string;
+    userPhone?: string;
+  }): Promise<{ success: boolean; notice: string }> => {
+    const uid = firebaseUser?.uid || currentUser?.id;
+    if (!uid) {
+      return { success: false, notice: 'يجب تسجيل الدخول أولاً لتقديم طلب الإشراف.' };
+    }
+    const res = await fbSubmitModeratorRequest({
+      userId: uid,
+      userName: data.userName,
+      userEmail: data.userEmail || firebaseUser?.email || currentUser?.email,
+      userPhone: data.userPhone || firebaseUser?.phoneNumber || currentUser?.phone,
+      note: data.note,
+    });
+    if (res.success && res.request) {
+      setMyModeratorRequest(res.request);
+      await refreshModeratorRequests();
+    }
+    return { success: res.success, notice: res.notice };
+  };
+
+  const approveModeratorRequestAction = async (
+    requestId: string
+  ): Promise<{ success: boolean; notice: string }> => {
+    const adminUid = firebaseUser?.uid || 'super_admin';
+    const adminName = currentUser?.fullName || firebaseUser?.displayName || 'المشرف العام';
+    const res = await fbApproveModeratorRequest(requestId, adminUid, adminName);
+    if (res.success) {
+      await refreshModeratorRequests();
+      await refreshLoggedInUsers();
+    }
+    return res;
+  };
+
+  const rejectModeratorRequestAction = async (
+    requestId: string,
+    reason?: string
+  ): Promise<{ success: boolean; notice: string }> => {
+    const adminUid = firebaseUser?.uid || 'super_admin';
+    const adminName = currentUser?.fullName || firebaseUser?.displayName || 'المشرف العام';
+    const res = await fbRejectModeratorRequest(requestId, adminUid, adminName, reason);
+    if (res.success) {
+      await refreshModeratorRequests();
+      await refreshLoggedInUsers();
+    }
+    return res;
+  };
+
   const openReceipt = (transaction: PaymentTransaction) => {
     setActiveReceipt(transaction);
   };
@@ -3245,6 +3343,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         approveStudentRegistration,
         rejectStudentRegistration,
         refreshPendingRequests,
+        moderatorRequests,
+        myModeratorRequest,
+        submitModeratorRequest: submitModeratorRequestAction,
+        approveModeratorRequest: approveModeratorRequestAction,
+        rejectModeratorRequest: rejectModeratorRequestAction,
+        refreshModeratorRequests,
         login,
         loginWithPhoneOtp,
         logout,

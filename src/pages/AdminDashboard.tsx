@@ -15,16 +15,20 @@ import {
   PaymentStatus,
   MediaItem,
   UserRole,
+  ModeratorRequest,
 } from '../types';
 import { MediaUploadZone, UploadResult } from '../components/MediaUploadZone';
 import { ScrubStudentManagementSection } from '../components/ScrubStudentManagementSection';
+import { AdminMusicManagementSection } from '../components/AdminMusicManagementSection';
 import {
   ShieldAlert,
+  ShieldCheck,
   Users,
   CreditCard,
   Settings,
   Bell,
   Image,
+  Music,
   FileSpreadsheet,
   CheckCircle2,
   XCircle,
@@ -97,11 +101,16 @@ export const AdminDashboard: React.FC = () => {
     refreshPendingRequests,
     loggedInUsers,
     refreshLoggedInUsers,
+    moderatorRequests,
+    approveModeratorRequest,
+    rejectModeratorRequest,
+    refreshModeratorRequests,
   } = useApp();
 
   const [activeAdminTab, setActiveAdminTab] = useState<
     | 'scrub_students'
     | 'logged_in_users'
+    | 'moderator_requests'
     | 'overview'
     | 'pending_requests'
     | 'graduates'
@@ -109,8 +118,18 @@ export const AdminDashboard: React.FC = () => {
     | 'announcements'
     | 'event_config'
     | 'media'
+    | 'music_library'
     | 'audit'
   >(canManageFinances ? 'scrub_students' : 'event_config');
+
+  // Moderator Requests review state
+  const [selectedModReq, setSelectedModReq] = useState<ModeratorRequest | null>(null);
+  const [modDecision, setModDecision] = useState<'accept' | 'reject' | null>(null);
+  const [modRejectReason, setModRejectReason] = useState('');
+  const [isProcessingModAction, setIsProcessingModAction] = useState(false);
+  const [modActionFeedback, setModActionFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [filterModStatus, setFilterModStatus] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
+  const [searchModQuery, setSearchModQuery] = useState('');
 
   // Rejection modal state
   const [rejectModalReq, setRejectModalReq] = useState<any | null>(null);
@@ -485,7 +504,33 @@ export const AdminDashboard: React.FC = () => {
             }`}
           >
             <Users className="w-3.5 h-3.5" />
-            <span>الحسابات المسجلة والدخول ({loggedInUsers.length})</span>
+            <span>إحصائيات الطلاب ({loggedInUsers.length})</span>
+          </button>
+        )}
+
+        {(isAdmin || isModerator) && (
+          <button
+            onClick={() => {
+              setActiveAdminTab('moderator_requests');
+              refreshModeratorRequests();
+            }}
+            className={`px-4 py-2 rounded-xl transition-all shrink-0 flex items-center gap-1.5 ${
+              activeAdminTab === 'moderator_requests'
+                ? 'bg-[#35D6C5] text-[#10151C] shadow-md font-extrabold'
+                : 'bg-[#142638] text-[#E8EEF2] hover:text-white'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>طلبات عضوية المشرفين</span>
+            {moderatorRequests.filter((r) => r.status === 'pending').length > 0 ? (
+              <span className="w-5 h-5 rounded-full bg-amber-500 text-black text-[10px] font-black flex items-center justify-center animate-pulse">
+                {moderatorRequests.filter((r) => r.status === 'pending').length}
+              </span>
+            ) : (
+              <span className="w-4 h-4 rounded-full bg-white/10 text-white text-[10px] flex items-center justify-center">
+                0
+              </span>
+            )}
           </button>
         )}
 
@@ -600,6 +645,18 @@ export const AdminDashboard: React.FC = () => {
         </button>
 
         <button
+          onClick={() => setActiveAdminTab('music_library')}
+          className={`px-4 py-2 rounded-xl transition-all shrink-0 flex items-center gap-1.5 ${
+            activeAdminTab === 'music_library'
+              ? 'bg-[#35D6C5] text-[#10151C] shadow-md font-extrabold'
+              : 'bg-[#142638] text-[#E8EEF2] hover:text-white'
+          }`}
+        >
+          <Music className="w-3.5 h-3.5 text-current" />
+          <span>مكتبة الأغاني والموسيقى</span>
+        </button>
+
+        <button
           onClick={() => setActiveAdminTab('audit')}
           className={`px-4 py-2 rounded-xl transition-all shrink-0 flex items-center gap-1.5 ${
             activeAdminTab === 'audit'
@@ -614,7 +671,10 @@ export const AdminDashboard: React.FC = () => {
       {/* TAB: SCRUB PARTY STUDENT MANAGEMENT SYSTEM (46+ ROSTER) */}
       {activeAdminTab === 'scrub_students' && <ScrubStudentManagementSection />}
 
-      {/* TAB: ALL LOGGED-IN USER ACCOUNTS (GOOGLE & PHONE AUTH) */}
+      {/* TAB: MUSIC LIBRARY MANAGEMENT (MULTI-FILE PHONE UPLOAD & FIREBASE PERSISTENCE) */}
+      {activeAdminTab === 'music_library' && <AdminMusicManagementSection />}
+
+      {/* TAB: STUDENT LOGIN STATISTICS & ACCOUNTS (إحصائيات الطلاب وسجل الدخول) */}
       {activeAdminTab === 'logged_in_users' && (
         <div className="space-y-6">
           <div className="rounded-3xl bg-[#101827] border border-[#35D6C5]/30 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
@@ -624,11 +684,11 @@ export const AdminDashboard: React.FC = () => {
                   <Users className="w-5 h-5" />
                 </div>
                 <h2 className="text-lg sm:text-xl font-black text-white">
-                  سجل جميع الحسابات المسجلة والدخول ({loggedInUsers.length})
+                  إحصائيات الطلاب وسجل الحسابات ({loggedInUsers.length})
                 </h2>
               </div>
               <p className="text-xs text-[#929BAA] leading-relaxed max-w-2xl">
-                يعرض هذا القسم كافة المستخدمين والطلبة الذين قاموا بتسجيل الدخول عبر حساب Google أو رقم الموبايل (+964) مع الاسم الظاهر، طريقة الدخول، معرف الحساب (UID)، وتوقيت آخر دخول.
+                إحصائيات دقيقة ومباشرة لجميع الحسابات والطلبة المسجلين، مع التمييز الواضح بين إجمالي الحسابات والطلبة الذين دخلوا المنصة فعلياً وتوقيت آخر دخول.
               </p>
             </div>
 
@@ -653,6 +713,66 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
+          {/* KPI Statistics Summary Cards */}
+          {(() => {
+            const nowTime = Date.now();
+            const sevenDaysAgo = nowTime - 7 * 24 * 60 * 60 * 1000;
+            const todayIso = new Date().toISOString().split('T')[0];
+
+            const totalAccounts = loggedInUsers.length;
+            const actualLoggedIn = loggedInUsers.filter(
+              (u) => Boolean(u.lastLoginAt) || u.hasEverLoggedIn
+            ).length;
+            const activeRecently = loggedInUsers.filter((u) => {
+              if (!u.lastLoginAt) return false;
+              const t = new Date(u.lastLoginAt).getTime();
+              return !isNaN(t) && t >= sevenDaysAgo;
+            }).length;
+            const todayLogins = loggedInUsers.filter((u) => {
+              if (!u.lastLoginAt) return false;
+              return u.lastLoginAt.startsWith(todayIso);
+            }).length;
+
+            return (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="p-4 sm:p-5 rounded-2xl bg-[#101827] border border-[#35D6C5]/30 shadow-lg space-y-1">
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-400">إجمالي الحسابات المسجلة</span>
+                  <div className="text-xl sm:text-3xl font-black text-white">{totalAccounts}</div>
+                  <span className="text-[10px] text-[#35D6C5]">حسابات معتمدة بالمنصة</span>
+                </div>
+
+                <div className="p-4 sm:p-5 rounded-2xl bg-[#101827] border border-emerald-500/30 shadow-lg space-y-1">
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-400">الطلاب الذين سجلوا الدخول</span>
+                  <div className="text-xl sm:text-3xl font-black text-emerald-400">{actualLoggedIn}</div>
+                  <span className="text-[10px] text-emerald-300">سجلوا دخولهم وتفاعلوا مع المنصة</span>
+                </div>
+
+                <div className="p-4 sm:p-5 rounded-2xl bg-[#101827] border border-[#D6B777]/30 shadow-lg space-y-1">
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-400">النشطون مؤخراً (7 أيام)</span>
+                  <div className="text-xl sm:text-3xl font-black text-[#D6B777]">{activeRecently}</div>
+                  <span className="text-[10px] text-amber-200">دخول خلال الأسبوع الجاري</span>
+                </div>
+
+                <div className="p-4 sm:p-5 rounded-2xl bg-[#101827] border border-cyan-500/30 shadow-lg space-y-1">
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-400">تسجيلات الدخول اليوم</span>
+                  <div className="text-xl sm:text-3xl font-black text-cyan-400">{todayLogins}</div>
+                  <span className="text-[10px] text-cyan-300">نشاط اليوم الفعلي</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Privacy & Historical Data Clarification Notice */}
+          <div className="p-4 rounded-2xl bg-[#090E17] border border-white/10 flex items-start gap-3 text-xs text-slate-300">
+            <Info className="w-5 h-5 text-[#35D6C5] shrink-0 mt-0.5" />
+            <div className="space-y-1 leading-relaxed">
+              <span className="font-bold text-white block">ملاحظة أمنية حول تسجيل البيانات:</span>
+              <p>
+                يتم تسجيل توقيت الدخول تلقائياً وبشكل آمن عند كل عملية دخول. الحسابات القديمة تظهر التواريخ المتاحة بدقة، ولا يمكن اختلاق بيانات سابقة غير متوفرة. تقتصر هذه الإحصائيات على إدارة المنصة فقط لحماية خصوصية الطلبة، ولا يتم عرض كلمات مرور أو بيانات سرية.
+              </p>
+            </div>
+          </div>
+
           {loggedInUsers.length === 0 ? (
             <div className="text-center py-16 rounded-3xl bg-[#101827] border border-white/5 space-y-3">
               <Users className="w-12 h-12 text-[#35D6C5]/40 mx-auto" />
@@ -672,8 +792,9 @@ export const AdminDashboard: React.FC = () => {
                       <th className="py-3.5 px-4">البريد الإلكتروني أو رقم الموبايل</th>
                       <th className="py-3.5 px-4">الصلاحية</th>
                       <th className="py-3.5 px-4">معرف المستخدم (UID)</th>
+                      <th className="py-3.5 px-4">تاريخ التسجيل</th>
                       <th className="py-3.5 px-4">تاريخ ووقت آخر دخول</th>
-                      <th className="py-3.5 px-4">إجراءات سريعة</th>
+                      <th className="py-3.5 px-4">الحالة</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -736,7 +857,14 @@ export const AdminDashboard: React.FC = () => {
                           <td className="py-3.5 px-4 font-mono text-[11px] text-slate-400" dir="ltr">
                             {acc.uid}
                           </td>
-                          <td className="py-3.5 px-4 text-slate-300 font-mono text-[11px]" dir="ltr">
+                          <td className="py-3.5 px-4 text-slate-400 font-mono text-[11px]" dir="ltr">
+                            {acc.createdAt
+                              ? new Date(acc.createdAt).toLocaleString('ar-IQ', {
+                                  dateStyle: 'short',
+                                })
+                              : '—'}
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-200 font-mono text-[11px]" dir="ltr">
                             {acc.lastLoginAt
                               ? new Date(acc.lastLoginAt).toLocaleString('ar-IQ', {
                                   dateStyle: 'short',
@@ -745,23 +873,346 @@ export const AdminDashboard: React.FC = () => {
                               : '—'}
                           </td>
                           <td className="py-3.5 px-4">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setNewGradName(acc.displayName || '');
-                                setNewGradEmail(acc.email || '');
-                                setNewGradPhone(acc.phoneNumber || '');
-                                setShowAddGradModal(true);
-                              }}
-                              className="px-3 py-1.5 rounded-lg bg-[#35D6C5]/15 hover:bg-[#35D6C5]/25 text-[#35D6C5] border border-[#35D6C5]/30 text-[11px] font-bold cursor-pointer"
-                            >
-                              إضافة لسجل الخريجين
-                            </button>
+                            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold">
+                              {acc.lastLoginAt ? 'دخل المنصة فعلياً' : 'حساب مسجل'}
+                            </span>
                           </td>
                         </tr>
                       ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: MODERATOR MEMBERSHIP REQUESTS & APPROVAL (طلبات عضوية المشرفين) */}
+      {activeAdminTab === 'moderator_requests' && (
+        <div className="space-y-6">
+          <div className="rounded-3xl bg-[#101827] border border-[#35D6C5]/30 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-[#35D6C5]/20 text-[#35D6C5] flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <h2 className="text-lg sm:text-xl font-black text-white">
+                  طلبات عضوية المشرفين ({moderatorRequests.length})
+                </h2>
+              </div>
+              <p className="text-xs text-[#929BAA] leading-relaxed max-w-2xl">
+                مراجعة وتدقيق طلبات الطلبة الراغبين بالانضمام إلى فريق الإشراف. الموافقة تمنح صلاحيات المشرف رسمياً في قاعدة البيانات وتحديث دور الحساب، بينما يمنع الرفض أي صلاحيات إدارية.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:w-64">
+                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchModQuery}
+                  onChange={(e) => setSearchModQuery(e.target.value)}
+                  placeholder="بحث باسم الطالب أو المعرف..."
+                  className="w-full bg-[#090E17] border border-white/15 rounded-xl py-2 pr-9 pl-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#35D6C5]"
+                />
+              </div>
+              <button
+                onClick={() => refreshModeratorRequests()}
+                className="px-3.5 py-2 rounded-xl bg-[#35D6C5]/15 hover:bg-[#35D6C5]/25 text-[#35D6C5] font-bold text-xs border border-[#35D6C5]/30 flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>تحديث</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Action Feedback Banner */}
+          {modActionFeedback && (
+            <div
+              className={`p-4 rounded-2xl flex items-center gap-2.5 text-xs font-bold ${
+                modActionFeedback.type === 'success'
+                  ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30'
+                  : 'bg-red-500/15 text-red-200 border border-red-500/30'
+              }`}
+            >
+              {modActionFeedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              )}
+              <span>{modActionFeedback.text}</span>
+            </div>
+          )}
+
+          {/* Filter Pills */}
+          <div className="flex flex-wrap gap-2">
+            {[
+              { id: 'all', label: 'كافة الطلبات', count: moderatorRequests.length },
+              {
+                id: 'pending',
+                label: 'قيد المراجعة',
+                count: moderatorRequests.filter((r) => r.status === 'pending').length,
+              },
+              {
+                id: 'accepted',
+                label: 'المقبولة (المشرفون)',
+                count: moderatorRequests.filter((r) => r.status === 'accepted').length,
+              },
+              {
+                id: 'rejected',
+                label: 'المرفوضة',
+                count: moderatorRequests.filter((r) => r.status === 'rejected').length,
+              },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setFilterModStatus(tab.id as any)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                  filterModStatus === tab.id
+                    ? 'bg-[#35D6C5] text-[#0A0D12] border-[#35D6C5] font-black'
+                    : 'bg-[#101827] text-slate-300 border-white/10 hover:border-white/20'
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Requests Grid */}
+          {moderatorRequests.length === 0 ? (
+            <div className="text-center py-16 rounded-3xl bg-[#101827] border border-white/5 space-y-3">
+              <ShieldCheck className="w-12 h-12 text-[#35D6C5]/40 mx-auto" />
+              <h3 className="text-base font-bold text-white">لا توجد طلبات إشراف حالياً</h3>
+              <p className="text-xs text-[#929BAA] max-w-md mx-auto">
+                عند قيام أي طالب بتقديم طلب انضمام لفريق الإشراف من حسابه، سيظهر هنا للتدقيق والموافقة أو الرفض.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {moderatorRequests
+                .filter((r) => {
+                  const matchStatus = filterModStatus === 'all' || r.status === filterModStatus;
+                  const matchQuery =
+                    !searchModQuery.trim() ||
+                    r.userName.toLowerCase().includes(searchModQuery.toLowerCase()) ||
+                    r.userId.toLowerCase().includes(searchModQuery.toLowerCase()) ||
+                    (r.userEmail || '').toLowerCase().includes(searchModQuery.toLowerCase()) ||
+                    (r.userPhone || '').includes(searchModQuery);
+                  return matchStatus && matchQuery;
+                })
+                .map((req) => (
+                  <div
+                    key={req.id}
+                    className="rounded-2xl bg-[#101827] border border-white/10 p-5 space-y-3.5 shadow-xl hover:border-[#35D6C5]/30 transition-all flex flex-col justify-between"
+                  >
+                    <div className="space-y-2.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-10 h-10 rounded-xl bg-[#35D6C5]/15 text-[#35D6C5] flex items-center justify-center font-black text-sm shrink-0">
+                            {req.userName.charAt(0)}
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-black text-white">{req.userName}</h3>
+                            <span className="text-[10px] font-mono text-slate-400 block" dir="ltr">
+                              UID: {req.userId}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 ${
+                            req.status === 'accepted'
+                              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                              : req.status === 'rejected'
+                              ? 'bg-red-500/15 text-red-300 border-red-500/30'
+                              : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                          }`}
+                        >
+                          {req.status === 'accepted'
+                            ? 'مقبول (مشرف معتمد)'
+                            : req.status === 'rejected'
+                            ? 'مرفوض'
+                            : 'قيد المراجعة'}
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-[#090E17] border border-white/5 space-y-1 text-xs">
+                        {req.userPhone && (
+                          <div className="flex items-center justify-between text-slate-300">
+                            <span className="text-slate-400">الهاتف:</span>
+                            <span className="font-mono text-white" dir="ltr">{req.userPhone}</span>
+                          </div>
+                        )}
+                        {req.userEmail && (
+                          <div className="flex items-center justify-between text-slate-300">
+                            <span className="text-slate-400">البريد:</span>
+                            <span className="font-mono text-white" dir="ltr">{req.userEmail}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between text-slate-300">
+                          <span className="text-slate-400">تاريخ الطلب:</span>
+                          <span className="text-white">{formatArabicDate(req.requestedAt)}</span>
+                        </div>
+                      </div>
+
+                      {req.note && (
+                        <div className="p-2.5 rounded-xl bg-white/5 text-xs text-slate-200">
+                          <span className="text-slate-400 block text-[10.5px] font-bold mb-0.5">سبب الرغبة / مجال المساهمة:</span>
+                          <p className="leading-relaxed">{req.note}</p>
+                        </div>
+                      )}
+
+                      {req.adminNote && (
+                        <div className="p-2 rounded-xl bg-red-950/20 border border-red-500/20 text-xs text-red-300">
+                          <span className="font-bold block text-[10.5px]">ملاحظة الإدارة:</span>
+                          <p>{req.adminNote}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="pt-2 border-t border-white/10 flex items-center gap-2">
+                      {req.status !== 'accepted' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedModReq(req);
+                            setModDecision('accept');
+                          }}
+                          className="flex-1 px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-[#0A0D12] font-black text-xs shadow-md shadow-emerald-500/20 hover:opacity-95 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>قبول ومنح صلاحية مشرف</span>
+                        </button>
+                      )}
+
+                      {req.status !== 'rejected' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedModReq(req);
+                            setModDecision('reject');
+                            setModRejectReason('');
+                          }}
+                          className="px-3 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>رفض</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+
+          {/* In-app Confirmation Modal for Accept/Reject */}
+          {selectedModReq && modDecision && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+              <div className="max-w-md w-full rounded-3xl bg-[#101827] border border-[#35D6C5]/40 p-6 space-y-4 shadow-2xl text-right">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                      modDecision === 'accept'
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : 'bg-red-500/20 text-red-400'
+                    }`}
+                  >
+                    {modDecision === 'accept' ? (
+                      <ShieldCheck className="w-6 h-6" />
+                    ) : (
+                      <UserX className="w-6 h-6" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-white">
+                      {modDecision === 'accept' ? 'تأكيد قبول عضوية المشرف' : 'تأكيد رفض طلب العضوية'}
+                    </h3>
+                    <p className="text-xs text-slate-400">الطالب: {selectedModReq.userName}</p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-[#090E17] border border-white/10 text-xs text-slate-300 space-y-1.5 leading-relaxed">
+                  {modDecision === 'accept' ? (
+                    <>
+                      <p className="font-bold text-emerald-400">إجراء أمني وقانوني:</p>
+                      <p>
+                        سيتم منح الطالب «{selectedModReq.userName}» صلاحية مشرف حفل رسمي وتحديث دوره في قاعدة البيانات السحابية (/admins و /user_accounts).
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-bold text-red-400">تأكيد الرفض:</p>
+                      <p>
+                        لن يتم منح الطالب أي صلاحيات إدارية، وسيبقى حسابه كطالب عادي دون وصول إلى لوحة الإدارة.
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {modDecision === 'reject' && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300">سبب الرفض (اختياري للعرض للطالب):</label>
+                    <input
+                      type="text"
+                      value={modRejectReason}
+                      onChange={(e) => setModRejectReason(e.target.value)}
+                      placeholder="مثال: اكتفاء الكادر التنظيمي، شروط غير مستوفاة..."
+                      className="w-full bg-[#090E17] border border-white/15 rounded-xl py-2 px-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#35D6C5]"
+                    />
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    disabled={isProcessingModAction}
+                    onClick={async () => {
+                      setIsProcessingModAction(true);
+                      setModActionFeedback(null);
+                      if (modDecision === 'accept') {
+                        const res = await approveModeratorRequest(selectedModReq.id);
+                        setModActionFeedback({
+                          type: res.success ? 'success' : 'error',
+                          text: res.notice,
+                        });
+                      } else {
+                        const res = await rejectModeratorRequest(selectedModReq.id, modRejectReason);
+                        setModActionFeedback({
+                          type: res.success ? 'success' : 'error',
+                          text: res.notice,
+                        });
+                      }
+                      setIsProcessingModAction(false);
+                      setSelectedModReq(null);
+                      setModDecision(null);
+                      await refreshModeratorRequests();
+                      await refreshLoggedInUsers();
+                    }}
+                    className={`flex-1 py-2.5 rounded-xl font-black text-xs text-[#0A0D12] shadow-lg transition-all cursor-pointer ${
+                      modDecision === 'accept'
+                        ? 'bg-gradient-to-r from-emerald-400 to-teal-400'
+                        : 'bg-red-400 hover:bg-red-500 text-white'
+                    }`}
+                  >
+                    {isProcessingModAction ? 'جاري المعالجة...' : 'تأكيد القرار'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedModReq(null);
+                      setModDecision(null);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs font-bold cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                </div>
               </div>
             </div>
           )}

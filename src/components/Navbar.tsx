@@ -10,7 +10,7 @@ import {
   Home,
   GraduationCap,
   CalendarDays,
-  Music,
+  Image as ImageIcon,
   LogIn,
 } from 'lucide-react';
 import { StethoscopeGradCapIllustration } from './MedicalIllustrations';
@@ -66,12 +66,12 @@ export const Navbar: React.FC = () => {
       },
     },
     {
-      key: 'music',
-      label: 'الأغاني',
-      icon: Music,
-      isActive: currentPage === 'music',
+      key: 'gallery',
+      label: 'المعرض',
+      icon: ImageIcon,
+      isActive: currentPage === 'gallery',
       onClick: () => {
-        navigateTo('music');
+        navigateTo('gallery');
         window.scrollTo({ top: 0, behavior: 'smooth' });
         setMobileMenuOpen(false);
       },
