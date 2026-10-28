@@ -58,7 +58,7 @@ interface StagedFileItem {
 
 export const AdminMusicManagementSection: React.FC = () => {
   const { songs, refreshSongs, playSong, currentSong, isPlaying, togglePlayPause } = useMusic();
-  const { firebaseUser, isAdmin, isModerator } = useApp();
+  const { firebaseUser, currentUser, isAdmin, isModerator } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -206,6 +206,8 @@ export const AdminMusicManagementSection: React.FC = () => {
           durationSeconds: item.durationSeconds,
           allowDownload: item.allowDownload,
           sortOrder: songs.length + i,
+          uploaderEmail: firebaseUser?.email || currentUser?.email,
+          uploaderName: currentUser?.fullName || firebaseUser?.displayName || 'مشرف التخرج',
           onProgress: (step, pct) => {
             setStagedFiles((prev) =>
               prev.map((s) =>

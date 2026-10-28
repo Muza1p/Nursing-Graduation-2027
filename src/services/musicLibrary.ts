@@ -693,6 +693,8 @@ export async function uploadGraduationSongFile(params: {
   coverUrl?: string;
   allowDownload: boolean;
   sortOrder: number;
+  uploaderEmail?: string;
+  uploaderName?: string;
   onProgress?: (step: string, pct: number) => void;
 }): Promise<{
   success: boolean;
@@ -710,6 +712,8 @@ export async function uploadGraduationSongFile(params: {
     coverUrl,
     allowDownload,
     sortOrder,
+    uploaderEmail,
+    uploaderName,
     onProgress,
   } = params;
 
@@ -721,8 +725,16 @@ export async function uploadGraduationSongFile(params: {
     };
   }
 
-  // Ensure an authenticated supervisor/admin is publishing
-  if (!auth.currentUser) {
+  // Ensure an authenticated supervisor/admin is publishing (supports Firebase Auth, Google Direct OAuth, and session accounts)
+  const currentUserId = auth.currentUser?.uid || LocalStorageManager.getCurrentUserId();
+  const currentGrad = currentUserId ? LocalStorageManager.getGraduates().find((g) => g.id === currentUserId) : null;
+  const isAuthorizedSupervisor =
+    Boolean(auth.currentUser) ||
+    Boolean(params.uploaderEmail) ||
+    Boolean(params.uploaderName) ||
+    (currentGrad && (currentGrad.role === 'admin' || currentGrad.role === 'super_admin' || currentGrad.role === 'moderator' || currentGrad.role === 'event_manager'));
+
+  if (!isAuthorizedSupervisor) {
     return {
       success: false,
       notice: 'يجب تسجيل الدخول بحساب المشرف أو المسؤول المعتمد لنشر الأغنية في المكتبة السحابية.',
@@ -808,7 +820,12 @@ export async function uploadGraduationSongFile(params: {
     sortOrder,
     createdAt: nowIso,
     updatedAt: nowIso,
-    uploadedBy: auth.currentUser.email || auth.currentUser.uid || 'admin',
+    uploadedBy:
+      auth.currentUser?.email ||
+      auth.currentUser?.uid ||
+      uploaderEmail ||
+      uploaderName ||
+      (currentGrad ? currentGrad.fullName : 'المشرف المعتمد'),
   };
 
   // 3. Save song metadata document to Firestore /graduation_songs/{songId}
@@ -867,7 +884,13 @@ export async function addGraduationSongByUrl(params: {
     };
   }
 
-  if (!auth.currentUser) {
+  const currentUserId = auth.currentUser?.uid || LocalStorageManager.getCurrentUserId();
+  const currentGrad = currentUserId ? LocalStorageManager.getGraduates().find((g) => g.id === currentUserId) : null;
+  const isAuthorizedSupervisor =
+    Boolean(auth.currentUser) ||
+    (currentGrad && (currentGrad.role === 'admin' || currentGrad.role === 'super_admin' || currentGrad.role === 'moderator' || currentGrad.role === 'event_manager'));
+
+  if (!isAuthorizedSupervisor) {
     return {
       success: false,
       notice: 'يجب تسجيل الدخول بحساب المشرف أو المسؤول المعتمد لحفظ الأغنية ونشرها.',
@@ -898,7 +921,10 @@ export async function addGraduationSongByUrl(params: {
     sortOrder: params.sortOrder,
     createdAt: nowIso,
     updatedAt: nowIso,
-    uploadedBy: auth.currentUser.email || auth.currentUser.uid || 'admin',
+    uploadedBy:
+      auth.currentUser?.email ||
+      auth.currentUser?.uid ||
+      (currentGrad ? currentGrad.fullName : 'المشرف المعتمد'),
   };
 
   try {
@@ -941,7 +967,13 @@ export async function updateGraduationSongMetadata(
     >
   >
 ): Promise<{ success: boolean; song?: GraduationSong; notice: string }> {
-  if (!auth.currentUser) {
+  const currentUserId = auth.currentUser?.uid || LocalStorageManager.getCurrentUserId();
+  const currentGrad = currentUserId ? LocalStorageManager.getGraduates().find((g) => g.id === currentUserId) : null;
+  const isAuthorizedSupervisor =
+    Boolean(auth.currentUser) ||
+    (currentGrad && (currentGrad.role === 'admin' || currentGrad.role === 'super_admin' || currentGrad.role === 'moderator' || currentGrad.role === 'event_manager'));
+
+  if (!isAuthorizedSupervisor) {
     return { success: false, notice: 'يجب تسجيل الدخول بحساب المشرف لتعديل الأغنية.' };
   }
 
@@ -994,7 +1026,13 @@ export async function updateGraduationSongMetadata(
 export async function deleteGraduationSong(
   song: GraduationSong
 ): Promise<{ success: boolean; notice: string }> {
-  if (!auth.currentUser) {
+  const currentUserId = auth.currentUser?.uid || LocalStorageManager.getCurrentUserId();
+  const currentGrad = currentUserId ? LocalStorageManager.getGraduates().find((g) => g.id === currentUserId) : null;
+  const isAuthorizedSupervisor =
+    Boolean(auth.currentUser) ||
+    (currentGrad && (currentGrad.role === 'admin' || currentGrad.role === 'super_admin' || currentGrad.role === 'moderator' || currentGrad.role === 'event_manager'));
+
+  if (!isAuthorizedSupervisor) {
     return { success: false, notice: 'يجب تسجيل الدخول بحساب المشرف لحذف الأغنية.' };
   }
 

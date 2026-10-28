@@ -134,8 +134,11 @@ export interface ModeratorRequest {
 // Permanent Scrub Party Student Record (Requirement 1, 2, 3, 4, 5, 6)
 export interface ScrubStudent {
   id: string; // Permanent internal ID (UUID / deterministic key)
-  studentNumber: number; // Visible sequential number (ت: 1..46+)
-  fullName: string; // Original Arabic name preserved
+  studentNumber: number; // Visible sequential number (ت: 1..244+)
+  section?: 'شعبة 1' | 'شعبة 2' | 'شعبة 3' | 'شعبة 4' | string;
+  sectionNumber?: number; // 1, 2, 3, 4
+  sectionStudentNumber?: number; // 1..61 within the section
+  fullName: string; // Original Arabic quadruplicate name preserved
   normalizedName: string; // Normalized Arabic name for duplicate detection
   preferredTitle: 'nurse_m' | 'nurse_f'; // 'الممرض' | 'الممرضة'
   phone?: string;
