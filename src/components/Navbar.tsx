@@ -136,14 +136,14 @@ export const Navbar: React.FC = () => {
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <span className="font-extrabold text-sm sm:text-lg tracking-tight text-white group-hover:text-[#35D6C5] transition-colors truncate">
-                  معهد التمريض — دفعة 2027
+                  {eventConfig.brandName || 'تخرج دفعة التمريض 2027'}
                 </span>
                 <span className="hidden xs:inline-block px-2 py-0.5 text-[10px] font-bold rounded-full bg-[#D7B875]/15 text-[#D7B875] border border-[#D7B875]/30 shrink-0">
                   2027
                 </span>
               </div>
               <span className="text-[11px] sm:text-xs text-[#A6F0DF] font-medium truncate">
-                بوابة خريجي التمريض • حفلة السكراب والتخرج الرسمي
+                {eventConfig.brandSubtitle || 'رحلة علم، تعب، وذكريات تجمعنا'}
               </span>
             </div>
           </div>

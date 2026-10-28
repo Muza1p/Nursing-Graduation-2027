@@ -32,8 +32,8 @@ export const EventOverview: React.FC = () => {
     },
     {
       id: 'official',
-      title: 'حفل التخرج الرسمي (التخرج 2027)',
-      subtitle: 'المراسيم الأكاديمية وارتداء وشاح التمريض الفيروزي',
+      title: 'حفل تخرج دفعة 2027',
+      subtitle: 'احتفالية التخرج وارتداء وشاح التمريض الفيروزي',
       date: eventConfig.officialGradDateDisplay || eventConfig.officialGraduationDate || 'قريباً',
       location: eventConfig.officialGradVenue || eventConfig.officialGraduationLocation || 'قريباً',
       badge: 'قريباً',
@@ -41,33 +41,33 @@ export const EventOverview: React.FC = () => {
       cardStyle:
         'bg-gradient-to-b from-[#0f2e36]/70 via-[#101B2C] to-[#0A0D12] border-[#35D6C2]/40 hover:border-[#35D6C2] glow-turquoise',
       icon: <GraduationCap className="w-5 h-5 text-[#35D6C2]" />,
-      actionLabel: 'متابعة حالة التخرج الرسمي',
+      actionLabel: 'متابعة تفاصيل حفل التخرج',
       onClick: () => navigateTo('official_grad'),
     },
     {
       id: 'reg',
-      title: 'بوابة تسجيل واعتماد الطلبة',
-      subtitle: 'توثيق حساب الطالب وربط وصولات الكاش والبطاقة الرقمية',
-      date: 'متاح الآن لطلبة دفعة 2027',
-      location: 'مراجعة واعتماد اللجنة المنظمة',
+      title: 'بوابة حسابات الطلاب والمشاركين',
+      subtitle: 'تسجيل حساب الطالب وربط وصولات الدفع والبطاقة الرقمية للدفعة',
+      date: 'متاح الآن لطلاب دفعة 2027',
+      location: 'تنسيق ومتابعة فريق تنظيم الدفعة',
       badge: 'التسجيل مفتوح',
       badgeColor: 'bg-[#D7B875]/20 text-[#D7B875] border-[#D7B875]/40',
       cardStyle: 'bg-[#101B2C]/90 hover:bg-[#101B2C] border-white/10 hover:border-[#D7B875]/40',
       icon: <UserCheck className="w-5 h-5 text-[#D7B875]" />,
-      actionLabel: 'تسجيل طالب / خريج جديد',
+      actionLabel: 'تسجيل حساب طالب في المنصة',
       onClick: () => navigateTo('register'),
     },
     {
       id: 'announcements',
-      title: 'التبليغات والإعلانات الرسمية',
-      subtitle: 'تنبيهات اللجنة التحضيرية للمواعيد والتجهيزات الطبية',
+      title: 'إعلانات وتنبيهات الدفعة',
+      subtitle: 'تنبيهات فريق تنظيم دفعة 2027 للمواعيد وترتيبات الحفل',
       date: 'تحديث مستمر ومباشر',
-      location: 'المنصة الرسمية وحساب @uofaon.1',
+      location: 'منصة تنظيم شؤون الدفعة وحساب @uofaon.1',
       badge: 'تحديثات حية',
       badgeColor: 'bg-[#35D6C2]/15 text-[#35D6C2] border-[#35D6C2]/30',
       cardStyle: 'bg-[#101B2C]/90 hover:bg-[#101B2C] border-white/10 hover:border-[#35D6C2]/35',
       icon: <Bell className="w-5 h-5 text-[#35D6C2]" />,
-      actionLabel: 'استعراض التبليغات',
+      actionLabel: 'استعراض إعلانات الدفعة',
       onClick: () => navigateTo('announcements'),
     },
   ];
@@ -79,14 +79,14 @@ export const EventOverview: React.FC = () => {
           <div>
             <div className="inline-flex items-center gap-1.5 text-xs text-[#35D6C2] font-bold mb-1.5">
               <span className="w-2 h-2 rounded-full bg-[#35D6C2]" />
-              <span>محطات المسيرة الأكاديمية والاحتفالية</span>
+              <span>منصة تنظيم شؤون الدفعة • تخرج طلاب معهد التمريض</span>
             </div>
             <h2 className="text-xl sm:text-3xl font-black text-[#F4F8FC] leading-snug">
-              فعاليات معهد التمريض (دفعة 2027)
+              فعاليات تخرج دفعة 2027
             </h2>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 max-w-md leading-relaxed">
-            فصل واضح في الهوية والتنظيم والمالية بين حفلة السكراب الصباحية وحفل التخرج الأكاديمي الرسمي.
+            تنظيم واضح ومرتب لفعاليات الدفعة وشؤون المساهمات بين حفلة السكراب الصباحية وحفل تخرج دفعة 2027.
           </p>
         </div>
 

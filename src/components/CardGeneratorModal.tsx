@@ -92,11 +92,11 @@ export const CardGeneratorModal: React.FC<CardGeneratorModalProps> = ({
     ctx.textAlign = 'center';
     ctx.fillStyle = '#D6B779';
     ctx.font = 'bold 22px "Cairo", sans-serif';
-    ctx.fillText('معهد التمريض — دفعة 2027', 600, 110);
+    ctx.fillText('تخرج دفعة التمريض 2027', 600, 110);
 
     ctx.fillStyle = accentColor;
     ctx.font = 'bold 18px "Cairo", sans-serif';
-    ctx.fillText('حفلة السكراب وحفل التخرج الرسمي • دفعة الإنسانية والعطاء', 600, 145);
+    ctx.fillText('رحلة علم، تعب، وذكريات تجمعنا • تخرج طلاب معهد التمريض', 600, 145);
 
     // Subtle divider line
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
@@ -109,7 +109,7 @@ export const CardGeneratorModal: React.FC<CardGeneratorModalProps> = ({
     // Central Greeting
     ctx.fillStyle = 'rgba(245, 247, 250, 0.75)';
     ctx.font = '500 22px "Cairo", sans-serif';
-    ctx.fillText('تتشرف دفعة معهد التمريض بتهنئة الزميل(ة)', 600, 235);
+    ctx.fillText('تتشرف دفعة التمريض 2027 بتهنئة الزميل(ة)', 600, 235);
 
     // Official Title & Name
     const fullDisplay = graduate.displayTitle || (graduate.preferredTitle === 'nurse_f' ? `الممرضة ${graduate.fullName}` : `الممرض ${graduate.fullName}`);
@@ -131,7 +131,7 @@ export const CardGeneratorModal: React.FC<CardGeneratorModalProps> = ({
     // Student ID / Code & Verification
     ctx.fillStyle = '#929BAA';
     ctx.font = '16px "Cairo", sans-serif';
-    ctx.fillText(`رقم القيد: ${graduate.studentId || 'NUR-2027'}  •  دفعة 2027  •  الحالة: معتمد رسمي`, 600, 475);
+    ctx.fillText(`الرمز التعريفي: ${graduate.studentId || 'NUR-2027'}  •  تخرج طلاب معهد التمريض  •  دفعة 2027`, 600, 475);
 
     // Poetic Quote
     ctx.fillStyle = 'rgba(245, 247, 250, 0.9)';
@@ -147,11 +147,11 @@ export const CardGeneratorModal: React.FC<CardGeneratorModalProps> = ({
 
     ctx.fillStyle = '#D6B779';
     ctx.font = 'bold 16px "Cairo", sans-serif';
-    ctx.fillText('حفلة السكراب: 12/12/2026 (مسرح تفاحة المصور)  |  حفل التخرج الرسمي: 2027', 600, 625);
+    ctx.fillText('حفلة السكراب: 12/12/2026 (مسرح تفاحة المصور)  |  حفل تخرج دفعة 2027', 600, 625);
 
     ctx.fillStyle = '#929BAA';
     ctx.font = '14px "Cairo", sans-serif';
-    ctx.fillText('اللجنة المنظمة لمعهد التمريض: مصطفى علي حسون • مصطفى أركان ساجت | @uofaon.1', 600, 660);
+    ctx.fillText('فريق تنظيم دفعة 2027: مصطفى علي حسون • مصطفى أركان ساجت • علي أكبر حسين عبيد | @uofaon.1', 600, 660);
   };
 
   useEffect(() => {
@@ -197,13 +197,13 @@ export const CardGeneratorModal: React.FC<CardGeneratorModalProps> = ({
         <div className="mb-4">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-bold mb-2">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>بطاقة التخرج الرقمية الرسمية</span>
+            <span>بطاقة التخرج التذكارية للدفعة</span>
           </div>
           <h3 className="text-xl font-black text-white">
-            بطاقة تهنئة خريج معهد التمريض (دفعة 2027)
+            بطاقة تهنئة تخرج طلاب معهد التمريض (دفعة 2027)
           </h3>
           <p className="text-xs text-[#929BAA]">
-            خصص الألوان والمسمى الوظيفي ثم نزل البطاقة التذكارية بدقة عالية إلى هاتفك مباشرة.
+            خصص الألوان والمسمى ثم نزل البطاقة التذكارية بدقة عالية إلى هاتفك مباشرة.
           </p>
         </div>
 

@@ -39,8 +39,8 @@ export const OfficialGraduationPoster: React.FC = () => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'بوستر التخرج الرسمي — معهد التمريض 2027',
-          text: 'احفظ التاريخ! موعد حفل تخرج دفعة ملائكة الرحمة معهد التمريض 2027.',
+          title: 'بوستر تخرج دفعة التمريض 2027',
+          text: 'احفظ التاريخ! موعد حفلة تخرج طلاب معهد التمريض — دفعة 2027.',
           url: window.location.href,
         });
         return;
@@ -70,16 +70,16 @@ export const OfficialGraduationPoster: React.FC = () => {
           <div className="space-y-1">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#35D6C5]/10 border border-[#35D6C5]/30 text-[#35D6C5] text-[11px] sm:text-xs font-bold">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>الإعلان الرسمي المعتمد</span>
+              <span>فعاليات تخرج دفعة 2027</span>
             </div>
             <h2 id="official-poster-title" className="text-xl sm:text-2xl lg:text-3xl font-black text-white flex items-center gap-2.5">
-              <span>بوستر التخرج الرسمي</span>
+              <span>بوستر تخرج دفعة التمريض 2027</span>
               <span className="text-xs sm:text-sm font-bold text-[#D6B777] bg-[#D6B777]/10 px-2.5 py-0.5 rounded-lg border border-[#D6B777]/30">
                 12 • 12 • 2026
               </span>
             </h2>
             <p className="text-xs sm:text-sm text-slate-300">
-              البوستر الرسمي المعتمد لحفل تخرج معهد التمريض — دفعة 2027 (احفظ التاريخ: 12 / 12 / 2026).
+              بوستر حفلة تخرج طلاب معهد التمريض — دفعة 2027 (احفظ التاريخ: 12 / 12 / 2026).
             </p>
           </div>
 

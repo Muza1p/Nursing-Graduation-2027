@@ -219,13 +219,13 @@ export const AuthPage: React.FC<{ initialMode?: 'login' | 'register' | 'otp' }> 
         </div>
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#35D6C5]/15 border border-[#35D6C5]/35 text-[#35D6C5] text-xs font-bold">
           <Stethoscope className="w-3.5 h-3.5" />
-          <span>البوابة الأكاديمية الموحدة • معهد التمريض</span>
+          <span>منصة تنظيم شؤون الدفعة • تخرج طلاب معهد التمريض</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-black text-[#F4F8FC]">
-          الدخول وإنشاء الحساب — دفعة 2027
+          الدخول وإنشاء الحساب — تخرج دفعة التمريض 2027
         </h1>
         <p className="text-xs sm:text-sm text-[#5CE1E6] font-extrabold">
-          معهد التمريض • Graduation 2027
+          رحلة علم، تعب، وذكريات تجمعنا
         </p>
         <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
           سجّل دخولك عبر حساب Google أو عبر البريد الإلكتروني وكلمة المرور مع دعم استعادة كلمة المرور.
@@ -278,9 +278,9 @@ export const AuthPage: React.FC<{ initialMode?: 'login' | 'register' | 'otp' }> 
                     }`}
                   >
                     {isAdmin
-                      ? 'حساب مدير النظام المعتمد'
+                      ? 'حساب مشرف ومنظم المنصة'
                       : isModerator
-                      ? 'حساب مشرف معتمد'
+                      ? 'حساب مشرف في فريق تنظيم الدفعة'
                       : 'تم تسجيل الدخول بنجاح'}
                   </span>
                 </div>

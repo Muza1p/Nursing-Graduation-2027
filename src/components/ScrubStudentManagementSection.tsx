@@ -16,7 +16,9 @@ import {
   normalizeArabicName,
   getNextSequentialStudentNumber,
   exportScrubStudentsCSV,
+  exportScrubStudentsExcelXLS,
   exportScrubFullBackupJSON,
+  getUnifiedPaymentStatusArabic,
   ImportReport,
 } from '../services/studentManagement';
 import {
@@ -50,10 +52,12 @@ import {
   UserCheck,
   Lock,
   Info,
+  Printer,
 } from 'lucide-react';
 
 export const ScrubStudentManagementSection: React.FC = () => {
   const {
+    eventConfig,
     scrubStudents,
     studentPayments,
     graduates,
@@ -69,11 +73,14 @@ export const ScrubStudentManagementSection: React.FC = () => {
     deleteEntireStudentListSuperAdmin,
     restoreEntireStudentListSuperAdmin,
     addStudentPayment,
+    editStudentPayment,
     verifyStudentPayment,
     voidStudentPayment,
     linkStudentToAccount,
     unlinkStudentFromAccount,
     resolveStudentReviewFlag,
+    confirmStudentReviewDeposit,
+    changeStudentPaymentStatusManual,
     openReceipt,
   } = useApp();
 
@@ -82,13 +89,16 @@ export const ScrubStudentManagementSection: React.FC = () => {
 
   // Search, Filter, Sort & Pagination State
   const [searchQuery, setSearchQuery] = useState('');
+  const [sectionFilter, setSectionFilter] = useState<
+    'all' | 'شعبة 1' | 'شعبة 2' | 'شعبة 3' | 'شعبة 4'
+  >('all');
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'deposit' | 'partial' | 'completed' | 'unpaid' | 'needs_review' | 'linked'
   >('all');
   const [sortBy, setSortBy] = useState<
     'number_asc' | 'number_desc' | 'name_asc' | 'paid_desc' | 'remaining_desc'
   >('number_asc');
-  const [pageSize, setPageSize] = useState<number>(50);
+  const [pageSize, setPageSize] = useState<number>(250);
   const [currentPageIndex, setCurrentPageIndex] = useState<number>(1);
 
   // Action Banner Feedback
@@ -116,14 +126,18 @@ export const ScrubStudentManagementSection: React.FC = () => {
   const [editPhone, setEditPhone] = useState('');
   const [editInstId, setEditInstId] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [editPaymentStatusManual, setEditPaymentStatusManual] = useState<PaymentStatus>('unpaid');
 
   // 3. Single Student Archive Confirmation Modal
   const [archivingStudent, setArchivingStudent] = useState<ScrubStudent | null>(null);
   const [archiveReason, setArchiveReason] = useState('');
 
-  // 4. Student Payment History & Record Payment Modal
+  // 4. Student Payment History & Record/Edit Payment Modal
   const [paymentModalStudentId, setPaymentModalStudentId] = useState<string | null>(null);
   const [payAmountInput, setPayAmountInput] = useState<number>(5000);
+  const [payDateInput, setPayDateInput] = useState<string>(
+    () => new Date().toISOString().split('T')[0]
+  );
   const [payMethodInput, setPayMethodInput] = useState<PaymentMethod>('cash');
   const [payReceiptInput, setPayReceiptInput] = useState('');
   const [payNotesInput, setPayNotesInput] = useState('');
@@ -134,6 +148,17 @@ export const ScrubStudentManagementSection: React.FC = () => {
   } | null>(null);
   const [voidingPaymentId, setVoidingPaymentId] = useState<string | null>(null);
   const [voidReasonInput, setVoidReasonInput] = useState('');
+
+  // Inline Edit Payment State inside Modal 4
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [editPayAmount, setEditPayAmount] = useState<number>(2000);
+  const [editPayDate, setEditPayDate] = useState<string>('');
+  const [editPayMethod, setEditPayMethod] = useState<PaymentMethod>('cash');
+  const [editPayReceipt, setEditPayReceipt] = useState<string>('');
+  const [editPayNotes, setEditPayNotes] = useState<string>('');
+
+  // 8. Printable Report Modal ('all' | 'remaining' | null)
+  const [printModalMode, setPrintModalMode] = useState<'all' | 'remaining' | null>(null);
 
   // 5. Verified Account Linking Modal
   const [linkingStudent, setLinkingStudent] = useState<ScrubStudent | null>(null);
@@ -192,11 +217,18 @@ export const ScrubStudentManagementSection: React.FC = () => {
     const completedCount = activeStudents.filter(
       (s) => s.paymentStatus === 'completed'
     ).length;
+    const reviewCount = activeStudents.filter(
+      (s) => s.needsReview || s.paymentStatus === 'needs_review'
+    ).length;
     const unpaidCount = activeStudents.filter(
-      (s) => s.paymentStatus === 'unpaid'
+      (s) => s.paymentStatus === 'unpaid' && !s.needsReview
     ).length;
     const linkedCount = activeStudents.filter((s) => s.isLinkedToAccount).length;
-    const reviewCount = activeStudents.filter((s) => s.needsReview).length;
+
+    const section1Count = activeStudents.filter((s) => s.section === 'شعبة 1' || s.sectionNumber === 1).length;
+    const section2Count = activeStudents.filter((s) => s.section === 'شعبة 2' || s.sectionNumber === 2).length;
+    const section3Count = activeStudents.filter((s) => s.section === 'شعبة 3' || s.sectionNumber === 3).length;
+    const section4Count = activeStudents.filter((s) => s.section === 'شعبة 4' || s.sectionNumber === 4).length;
 
     return {
       totalStudents,
@@ -210,6 +242,10 @@ export const ScrubStudentManagementSection: React.FC = () => {
       unpaidCount,
       linkedCount,
       reviewCount,
+      section1Count,
+      section2Count,
+      section3Count,
+      section4Count,
     };
   }, [activeStudents]);
 
@@ -220,16 +256,30 @@ export const ScrubStudentManagementSection: React.FC = () => {
     const normQuery = normalizeArabicName(cleanQuery);
 
     const filtered = baseList.filter((stu) => {
+      // Filter by section
+      if (sectionFilter !== 'all') {
+        const expectedNum = Number(sectionFilter.replace(/[^0-9]/g, ''));
+        const stuSec =
+          stu.section ||
+          (stu.sectionNumber ? `شعبة ${stu.sectionNumber}` : '');
+        if (stuSec !== sectionFilter && stu.sectionNumber !== expectedNum) {
+          return false;
+        }
+      }
+
       // Search by Arabic name (exact or normalized) or studentNumber or ID or phone
       let matchesSearch = true;
       if (cleanQuery) {
-        const numMatch = String(stu.studentNumber) === cleanQuery;
+        const numMatch =
+          String(stu.studentNumber) === cleanQuery ||
+          String(stu.sectionStudentNumber || '') === cleanQuery;
         const nameMatch =
           stu.fullName.includes(cleanQuery) ||
           stu.normalizedName.includes(normQuery);
         const phoneMatch = stu.phone ? stu.phone.includes(cleanQuery) : false;
         const idMatch = stu.id.toLowerCase().includes(cleanQuery.toLowerCase());
-        matchesSearch = numMatch || nameMatch || phoneMatch || idMatch;
+        const secMatch = stu.section ? stu.section.includes(cleanQuery) : false;
+        matchesSearch = numMatch || nameMatch || phoneMatch || idMatch || secMatch;
       }
 
       // Filter by status
@@ -237,13 +287,14 @@ export const ScrubStudentManagementSection: React.FC = () => {
       if (statusFilter === 'deposit') {
         matchesStatus = stu.paymentStatus === 'deposit';
       } else if (statusFilter === 'partial') {
-        matchesStatus = stu.paymentStatus === 'partial';
+        matchesStatus =
+          stu.paymentStatus === 'partial' || stu.paymentStatus === 'deposit';
       } else if (statusFilter === 'completed') {
         matchesStatus = stu.paymentStatus === 'completed';
       } else if (statusFilter === 'unpaid') {
-        matchesStatus = stu.paymentStatus === 'unpaid';
+        matchesStatus = stu.paymentStatus === 'unpaid' && !stu.needsReview;
       } else if (statusFilter === 'needs_review') {
-        matchesStatus = Boolean(stu.needsReview);
+        matchesStatus = Boolean(stu.needsReview || stu.paymentStatus === 'needs_review');
       } else if (statusFilter === 'linked') {
         matchesStatus = Boolean(stu.isLinkedToAccount);
       }
@@ -272,6 +323,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
     activeStudents,
     archivedStudents,
     searchQuery,
+    sectionFilter,
     statusFilter,
     sortBy,
   ]);
@@ -311,12 +363,24 @@ export const ScrubStudentManagementSection: React.FC = () => {
 
   // Export CSV helper
   const handleDownloadCSV = (includeArchived = false) => {
-    const csv = exportScrubStudentsCSV(scrubStudents, includeArchived);
+    const csv = exportScrubStudentsCSV(scrubStudents, studentPayments, includeArchived);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Scrub_Party_Students_2026_Grad_2027_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `Nursing_Graduation_Students_2027_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Export Excel (.xls) helper
+  const handleDownloadExcelXLS = (includeArchived = false) => {
+    const xls = exportScrubStudentsExcelXLS(scrubStudents, studentPayments, includeArchived);
+    const blob = new Blob([xls], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Nursing_Graduation_Students_2027_${new Date().toISOString().split('T')[0]}.xls`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -379,6 +443,18 @@ export const ScrubStudentManagementSection: React.FC = () => {
       notes: editNotes,
     });
 
+    const currentStatusKey: PaymentStatus = editingStudent.needsReview
+      ? 'needs_review'
+      : editingStudent.paymentStatus;
+
+    if (editPaymentStatusManual !== currentStatusKey) {
+      await changeStudentPaymentStatusManual(
+        editingStudent.id,
+        editPaymentStatusManual,
+        editNotes || undefined
+      );
+    }
+
     if (res.success) {
       setFeedbackBanner({ type: 'success', text: res.message });
       setEditingStudent(null);
@@ -396,6 +472,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
     const res = await addStudentPayment({
       studentId: activePaymentStudent.id,
       amountIQD: payAmountInput,
+      date: payDateInput,
       paymentMethod: payMethodInput,
       receiptNumber: payReceiptInput.trim() || undefined,
       notes: payNotesInput.trim() || undefined,
@@ -413,6 +490,29 @@ export const ScrubStudentManagementSection: React.FC = () => {
           (payVerifiedInput ? payAmountInput : 0)
       );
       setPayAmountInput(newRem > 0 ? Math.min(5000, newRem) : 0);
+    } else {
+      setPayModalFeedback({ type: 'error', text: res.message });
+    }
+  };
+
+  // Handle Edit Existing Payment Submit
+  const handleEditPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPaymentId) return;
+    setPayModalFeedback(null);
+
+    const res = await editStudentPayment({
+      paymentId: editingPaymentId,
+      amountIQD: editPayAmount,
+      date: editPayDate,
+      paymentMethod: editPayMethod,
+      receiptNumber: editPayReceipt,
+      notes: editPayNotes,
+    });
+
+    if (res.success) {
+      setPayModalFeedback({ type: 'success', text: res.message });
+      setEditingPaymentId(null);
     } else {
       setPayModalFeedback({ type: 'error', text: res.message });
     }
@@ -448,21 +548,37 @@ export const ScrubStudentManagementSection: React.FC = () => {
       {/* Header Card */}
       <div className="rounded-3xl bg-gradient-to-br from-[#101B2C] via-[#17253B] to-[#0A0D12] border border-[#35D6C2]/30 p-6 sm:p-8 shadow-2xl space-y-6">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-white/10 pb-5">
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-[#35D6C2]/15 border border-[#35D6C2]/30 text-[#35D6C2] text-xs font-extrabold">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>نظام إدارة طلبة حفلة السكراب • معهد التمريض (دفعة 2026 | التخرج 2027)</span>
+              <span>
+                {eventConfig.collegeName || 'تخرج طلاب معهد التمريض'} •{' '}
+                {eventConfig.departmentName || 'دفعة 2027'} •{' '}
+                {eventConfig.stageName || 'المرحلة الثانية'} ({eventConfig.studyType || 'صباحي'}) •{' '}
+                {eventConfig.academicYear || '2026–2027'}
+              </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-[#F4F8FC]">
-              سجل طلبة حفلة السكراب والحسابات المالية الموثقة
+              قائمة الطلاب والمشاركين وسجل الدفعات — تخرج دفعة التمريض 2027 (244 طالب/طالبة)
             </h2>
-            <p className="text-xs text-[#E8EEF2]/80 leading-relaxed max-w-3xl">
-              إدارة شاملة لقائمة الطلاب بالتسلسل التلقائي (<span className="text-[#35D6C5] font-bold">ت: 1 – {activeStudents.length}</span>)، تتبع المبلغ المدفوع، المبلغ المتبقي، حالة الدفعة، والربط الآمن بحسابات الطلاب.
-            </p>
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#E8EEF2]/90 pt-0.5">
+              <span className="px-2.5 py-1 rounded-lg bg-[#0A0D12]/80 border border-white/10">
+                مكان الحفلة: <strong className="text-[#35D6C5]">{eventConfig.scrubVenue || 'مسرح تفاحة المصور'}</strong>
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-[#0A0D12]/80 border border-white/10">
+                المصور: <strong className="text-[#D7B875]">{eventConfig.scrubPhotographer || 'باقر حسن'}</strong>
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-[#0A0D12]/80 border border-white/10">
+                التاريخ المقترح: <strong className="text-white font-mono">{eventConfig.scrubPartyDateDisplay || '12/12/2026'}</strong>
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-[#0A0D12]/80 border border-[#35D6C2]/30">
+                مبلغ الحفلة الكامل لكل طالب: <strong className="text-[#35D6C5] font-mono">35,000 د.ع</strong>
+              </span>
+            </div>
           </div>
 
           {/* Primary Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
             {canManageFinances && (
               <>
                 <button
@@ -470,10 +586,10 @@ export const ScrubStudentManagementSection: React.FC = () => {
                     setFeedbackBanner(null);
                     setShowAddModal(true);
                   }}
-                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#35D6C2] to-[#22b8a5] hover:opacity-95 text-[#0A0D12] font-extrabold text-xs shadow-lg shadow-[#35D6C2]/20 flex items-center gap-1.5"
+                  className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-[#35D6C2] to-[#22b8a5] hover:opacity-95 text-[#0A0D12] font-extrabold text-xs shadow-lg shadow-[#35D6C2]/20 flex items-center gap-1.5"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>إضافة طالب جديد (ت: {nextAutoNumber})</span>
+                  <span>إضافة طالب (ت: {nextAutoNumber})</span>
                 </button>
 
                 <button
@@ -481,23 +597,47 @@ export const ScrubStudentManagementSection: React.FC = () => {
                     setLastImportReport(null);
                     setShowImportModal(true);
                   }}
-                  className="px-4 py-2.5 rounded-xl bg-[#342A78] hover:bg-[#3f3391] text-[#F4F8FC] font-bold text-xs border border-indigo-400/40 flex items-center gap-1.5 shadow-md"
+                  className="px-3.5 py-2.5 rounded-xl bg-[#342A78] hover:bg-[#3f3391] text-[#F4F8FC] font-bold text-xs border border-indigo-400/40 flex items-center gap-1.5 shadow-md"
                 >
                   <Upload className="w-4 h-4 text-[#35D6C2]" />
-                  <span>استيراد / فحص القائمة (46 طالب)</span>
+                  <span>فحص/دمج القائمة الرسمية (244)</span>
                 </button>
               </>
             )}
+
+            <button
+              onClick={() => handleDownloadExcelXLS(false)}
+              className="px-3.5 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 font-extrabold text-xs border border-emerald-500/35 flex items-center gap-1.5"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              <span>تصدير Excel (.xls)</span>
+            </button>
 
             <button
               onClick={() => handleDownloadCSV(false)}
               className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-[#F4F8FC] font-bold text-xs border border-white/10 flex items-center gap-1.5"
             >
               <Download className="w-3.5 h-3.5 text-[#D7B875]" />
-              <span>تصدير إكسل (CSV)</span>
+              <span>تصدير CSV</span>
             </button>
 
-            {/* Super-Admin-Only Delete Entire Student List Button (Requirement 8) */}
+            <button
+              onClick={() => setPrintModalMode('all')}
+              className="px-3.5 py-2.5 rounded-xl bg-[#35D6C2]/15 hover:bg-[#35D6C2]/25 text-[#35D6C2] font-bold text-xs border border-[#35D6C2]/35 flex items-center gap-1.5"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>طباعة قائمة الطلاب</span>
+            </button>
+
+            <button
+              onClick={() => setPrintModalMode('remaining')}
+              className="px-3.5 py-2.5 rounded-xl bg-[#D7B875]/15 hover:bg-[#D7B875]/25 text-[#D7B875] font-bold text-xs border border-[#D7B875]/35 flex items-center gap-1.5"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>طباعة قائمة المتبقيات</span>
+            </button>
+
+            {/* Super-Admin-Only Delete Entire Student List Button */}
             {isSuperAdmin ? (
               <button
                 onClick={() => {
@@ -508,30 +648,30 @@ export const ScrubStudentManagementSection: React.FC = () => {
                   setShowDeleteAllModal(true);
                 }}
                 disabled={activeStudents.length === 0}
-                className="px-4 py-2.5 rounded-xl bg-[#E85D65]/15 hover:bg-[#E85D65]/25 disabled:opacity-40 text-[#E85D65] font-extrabold text-xs border border-[#E85D65]/40 flex items-center gap-1.5 transition-all"
+                className="px-3.5 py-2.5 rounded-xl bg-[#E85D65]/15 hover:bg-[#E85D65]/25 disabled:opacity-40 text-[#E85D65] font-extrabold text-xs border border-[#E85D65]/40 flex items-center gap-1.5 transition-all"
                 title="صلاحية حصرية للمدير الأعلى للنظام (Super Admin)"
               >
                 <Trash2 className="w-4 h-4" />
-                <span>حذف قائمة الطلاب بالكامل</span>
+                <span>حذف القائمة بالكامل</span>
               </button>
             ) : (
               <div
-                className="px-3.5 py-2 rounded-xl bg-white/5 text-slate-400 text-[11px] border border-white/10 flex items-center gap-1.5"
+                className="px-3 py-2 rounded-xl bg-white/5 text-slate-400 text-[11px] border border-white/10 flex items-center gap-1.5"
                 title="حذف قائمة الطلاب بالكامل متاح فقط للمدير الأعلى (Super Admin)"
               >
                 <Lock className="w-3.5 h-3.5 text-[#D6B777]" />
-                <span>حذف قائمة الطلاب بالكامل (Super Admin)</span>
+                <span>حذف القائمة (Super Admin)</span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Summary Financial Cards Grid (Requirement 3 & 5) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Summary Financial Cards Grid (Live Database Statistics) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
           <div className="p-4 rounded-2xl bg-[#0A0D12]/90 border border-[#35D6C2]/30 space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-[#35D6C2]">
-                إجمالي طلبة السكراب النشطين
+                عدد الطلاب الكلي (القائمة الرسمية)
               </span>
               <Users className="w-4 h-4 text-[#35D6C2]" />
             </div>
@@ -539,30 +679,46 @@ export const ScrubStudentManagementSection: React.FC = () => {
               {summaryStats.totalStudents} طالب/طالبة
             </div>
             <div className="text-[11px] text-slate-400 flex items-center justify-between">
-              <span>مرتبط بحساب: {summaryStats.linkedCount}</span>
-              <span>في الأرشيف: {archivedStudents.length}</span>
+              <span>4 شعب صباحي (61 لكل شعبة)</span>
+              <span>مرتبط: {summaryStats.linkedCount}</span>
             </div>
           </div>
 
           <div className="p-4 rounded-2xl bg-[#10151C]/90 border border-[#35D6C5]/30 space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-[#A6F0DF]">
-                توزيع حالات الدفعة للطلاب
+                عدد الذين دفعوا عربوناً / مكتمل
               </span>
               <FileSpreadsheet className="w-4 h-4 text-[#35D6C5]" />
             </div>
-            <div className="text-lg font-black text-white font-mono">
-              عربون: {summaryStats.depositCount} • جزئي: {summaryStats.partialCount}
+            <div className="text-xl font-black text-white font-mono">
+              دفع عربون: {summaryStats.depositCount + summaryStats.partialCount}
             </div>
-            <div className="text-[11px] text-[#A6F0DF]">
-              مكتمل: {summaryStats.completedCount} • غير مدفوع: {summaryStats.unpaidCount}
+            <div className="text-[11px] text-[#A6F0DF] flex items-center justify-between">
+              <span>مكتمل الدفع: {summaryStats.completedCount}</span>
+              <span>لم يدفع: {summaryStats.unpaidCount}</span>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#10151C]/90 border border-amber-500/35 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-amber-300">
+                سجلات تحتاج إلى مراجعة يدوية
+              </span>
+              <AlertTriangle className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-xl font-black text-amber-300 font-mono">
+              {summaryStats.reviewCount} طالب مرشح
+            </div>
+            <div className="text-[11px] text-amber-200/80">
+              مرتبطة بـ 7 دفعات قديمة غير محسومة تلقائياً
             </div>
           </div>
 
           <div className="p-4 rounded-2xl bg-[#10151C]/90 border border-emerald-500/30 space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-emerald-400">
-                إجمالي المبلغ المدفوع الموثق
+                إجمالي المبالغ المستلمة المؤكدة
               </span>
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             </div>
@@ -570,15 +726,15 @@ export const ScrubStudentManagementSection: React.FC = () => {
               {formatIQD(summaryStats.totalVerifiedPaidIQD)}
             </div>
             <div className="text-[11px] text-[#E8EEF2]/70 flex items-center justify-between">
-              <span>دافع عربون: {summaryStats.depositCount}</span>
-              <span>مكتمل: {summaryStats.completedCount}</span>
+              <span>من {summaryStats.depositCount + summaryStats.partialCount + summaryStats.completedCount} طالب مؤكد</span>
+              <span>أرقام صحيحة</span>
             </div>
           </div>
 
           <div className="p-4 rounded-2xl bg-[#10151C]/90 border border-[#D6B777]/35 space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-[#D6B777]">
-                إجمالي المبلغ المتبقي بذمة الطلاب
+                إجمالي المبالغ المتبقية
               </span>
               <Banknote className="w-4 h-4 text-[#D6B777]" />
             </div>
@@ -586,7 +742,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
               {formatIQD(summaryStats.totalRemainingIQD)}
             </div>
             <div className="text-[11px] text-[#E8EEF2]/70">
-              45 طالب (المتبقي 33,000 د.ع) • عباس محمد شيال (المتبقي 34,000 د.ع)
+              من أصل الكلي ({summaryStats.totalStudents} × 35,000): {formatIQD(summaryStats.totalFeeIQD)}
             </div>
           </div>
         </div>
@@ -694,7 +850,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
                 setSearchQuery(e.target.value);
                 setCurrentPageIndex(1);
               }}
-              placeholder="ابحث بالاسم العربي (مثال: عباس محمد شيال) أو رقم الطالب (ت: 1 - 46)..."
+              placeholder="ابحث بالاسم الرباعي أو الشعبة أو رقم الطالب (ت: 1 - 244)..."
               className="w-full px-4 py-2.5 rounded-xl bg-[#0A0D12] border border-white/10 text-xs text-[#F4F8FC] pl-9 focus:outline-none focus:border-[#35D6C2]"
             />
             <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
@@ -715,17 +871,17 @@ export const ScrubStudentManagementSection: React.FC = () => {
                 <option value="all" className="bg-[#0A0D12]">
                   كل حالات الدفع ({viewMode === 'active' ? activeStudents.length : archivedStudents.length})
                 </option>
-                <option value="deposit" className="bg-[#0A0D12]">
-                  دافع عربون ({summaryStats.depositCount})
+                <option value="unpaid" className="bg-[#0A0D12]">
+                  غير مدفوع ({summaryStats.unpaidCount})
                 </option>
                 <option value="partial" className="bg-[#0A0D12]">
-                  مدفوع جزئياً ({summaryStats.partialCount})
+                  مدفوع جزئياً / عربون ({summaryStats.depositCount + summaryStats.partialCount})
+                </option>
+                <option value="deposit" className="bg-[#0A0D12]">
+                  دافع عربون فقط ({summaryStats.depositCount})
                 </option>
                 <option value="completed" className="bg-[#0A0D12]">
                   مكتمل الدفع ({summaryStats.completedCount})
-                </option>
-                <option value="unpaid" className="bg-[#0A0D12]">
-                  غير مدفوع ({summaryStats.unpaidCount})
                 </option>
                 <option value="linked" className="bg-[#0A0D12]">
                   مرتبط بحساب مستخدم ({summaryStats.linkedCount})
@@ -744,10 +900,10 @@ export const ScrubStudentManagementSection: React.FC = () => {
                 className="bg-transparent text-xs text-[#F4F8FC] font-bold focus:outline-none"
               >
                 <option value="number_asc" className="bg-[#0A0D12]">
-                  الترتيب: رقم الطالب (1 ← 46)
+                  الترتيب: رقم الطالب (1 ← {activeStudents.length || 244})
                 </option>
                 <option value="number_desc" className="bg-[#0A0D12]">
-                  الترتيب: رقم الطالب (46 ← 1)
+                  الترتيب: رقم الطالب ({activeStudents.length || 244} ← 1)
                 </option>
                 <option value="name_asc" className="bg-[#0A0D12]">
                   الترتيب: الاسم الأبجدي (أ ← ي)
@@ -771,20 +927,59 @@ export const ScrubStudentManagementSection: React.FC = () => {
                 }}
                 className="bg-transparent text-xs text-[#F4F8FC] font-bold focus:outline-none"
               >
-                <option value={15} className="bg-[#0A0D12]">
-                  15 طالب
+                <option value={30} className="bg-[#0A0D12]">
+                  30 طالب
                 </option>
-                <option value={25} className="bg-[#0A0D12]">
-                  25 طالب
+                <option value={65} className="bg-[#0A0D12]">
+                  65 طالب (شعبة كاملة)
                 </option>
-                <option value={50} className="bg-[#0A0D12]">
-                  50 طالب (الكل)
+                <option value={125} className="bg-[#0A0D12]">
+                  125 طالب
                 </option>
-                <option value={100} className="bg-[#0A0D12]">
-                  100 طالب
+                <option value={250} className="bg-[#0A0D12]">
+                  250 طالب (الكل)
                 </option>
               </select>
             </div>
+          </div>
+        </div>
+
+        {/* Section Filter Pills Bar (الشعب الدراسية الـ 4 - المرحلة الثانية صباحي) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-white/10">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-bold text-slate-400 ml-1">
+              تصفية حسب الشعبة الدراسية:
+            </span>
+            {[
+              { id: 'all', label: 'كل الشعب (المرحلة الثانية صباحي)', count: activeStudents.length },
+              { id: 'شعبة 1', label: 'شعبة 1', count: summaryStats.section1Count },
+              { id: 'شعبة 2', label: 'شعبة 2', count: summaryStats.section2Count },
+              { id: 'شعبة 3', label: 'شعبة 3', count: summaryStats.section3Count },
+              { id: 'شعبة 4', label: 'شعبة 4', count: summaryStats.section4Count },
+            ].map((sec) => (
+              <button
+                key={sec.id}
+                type="button"
+                onClick={() => {
+                  setSectionFilter(sec.id as any);
+                  setCurrentPageIndex(1);
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                  sectionFilter === sec.id
+                    ? 'bg-[#35D6C2] text-[#0A0D12] border-[#35D6C2] shadow-md'
+                    : 'bg-[#0A0D12] text-slate-300 border-white/10 hover:border-[#35D6C2]/40'
+                }`}
+              >
+                <span>{sec.label}</span>
+                <span className="px-1.5 py-0.2 rounded-md text-[10px] font-mono bg-black/20">
+                  {sec.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="text-[11px] text-slate-400 font-mono">
+            المعروض حالياً: <strong className="text-[#35D6C2]">{filteredAndSortedStudents.length}</strong> طالب
           </div>
         </div>
 
@@ -866,101 +1061,123 @@ export const ScrubStudentManagementSection: React.FC = () => {
         </div>
       ) : (
         <>
-          {/* DESKTOP TABLE VIEW */}
+          {/* DESKTOP TABLE VIEW (6 Official Columns + Account & Actions) */}
           <div className="hidden md:block rounded-3xl bg-[#101B2C] border border-white/10 overflow-hidden shadow-2xl">
             <div className="overflow-x-auto">
               <table className="w-full text-right text-xs">
                 <thead className="bg-[#10151C] text-[#E8EEF2] border-b border-white/10">
                   <tr>
                     <th className="p-3.5 w-16 text-center font-black text-[#35D6C5]">
-                      ت (No.)
+                      1. التسلسل
                     </th>
-                    <th className="p-3.5">الاسم الكامل واللقب</th>
-                    <th className="p-3.5">المبلغ المدفوع</th>
-                    <th className="p-3.5">المبلغ المتبقي</th>
-                    <th className="p-3.5">حالة الدفعة</th>
-                    <th className="p-3.5">ربط الحساب والخصوصية</th>
+                    <th className="p-3.5">
+                      2. الاسم الكامل كما ورد في القائمة الرسمية
+                    </th>
+                    <th className="p-3.5">
+                      3. المبلغ المدفوع
+                    </th>
+                    <th className="p-3.5">
+                      4. المبلغ المتبقي
+                    </th>
+                    <th className="p-3.5">
+                      5. حالة الدفع
+                    </th>
+                    <th className="p-3.5">
+                      6. ملاحظات المطابقة أو الدفع
+                    </th>
                     <th className="p-3.5 text-center">الإجراءات المالية والإدارية</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 text-[#F4F8FC]">
                   {paginatedStudents.map((stu) => {
-                    const stuPaysCount = studentPayments.filter(
-                      (p) =>
-                        p.studentId === stu.id &&
-                        p.verificationStatus !== 'voided'
-                    ).length;
+                    const stuValidPayments = studentPayments
+                      .filter(
+                        (p) =>
+                          p.studentId === stu.id &&
+                          p.verificationStatus !== 'voided'
+                      )
+                      .sort(
+                        (a, b) =>
+                          new Date(b.createdAt).getTime() -
+                          new Date(a.createdAt).getTime()
+                      );
+                    const stuPaysCount = stuValidPayments.length;
+                    const lastPaymentRecord = stuValidPayments[0] || null;
+                    const unifiedStatusArabic = getUnifiedPaymentStatusArabic(stu);
+                    const badgeStatusKey: PaymentStatus = stu.needsReview
+                      ? 'needs_review'
+                      : stu.paymentStatus;
+
+                    const displayNotes = [
+                      stu.reviewNote,
+                      stu.notes,
+                      lastPaymentRecord?.notes && lastPaymentRecord.notes !== stu.notes
+                        ? lastPaymentRecord.notes
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' • ');
 
                     return (
                       <tr
                         key={stu.id}
                         className={`hover:bg-white/[0.04] transition-colors ${
-                          stu.needsReview ? 'bg-amber-500/[0.04]' : ''
+                          stu.needsReview ? 'bg-amber-500/[0.05]' : ''
                         }`}
                       >
-                        {/* Automatic Sequential Number (ت) */}
+                        {/* 1. التسلسل */}
                         <td className="p-3.5 text-center">
                           <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-[#342A78]/60 border border-[#35D6C2]/30 text-[#35D6C2] font-mono font-black text-xs shadow-sm">
                             {stu.studentNumber}
                           </span>
                         </td>
 
-                        {/* Arabic Full Name & Permanent ID */}
+                        {/* 2. الاسم الكامل كما ورد في القائمة الرسمية */}
                         <td className="p-3.5">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-black text-sm text-[#F4F8FC]">
                               {stu.fullName}
                             </span>
+                            {stu.section && (
+                              <span className="px-2 py-0.5 rounded-md bg-[#35D6C2]/15 text-[#35D6C2] border border-[#35D6C2]/30 text-[10px] font-bold">
+                                {stu.section}
+                                {stu.sectionStudentNumber
+                                  ? ` (${stu.sectionStudentNumber})`
+                                  : ''}
+                              </span>
+                            )}
                             <span className="px-2 py-0.5 rounded-md bg-white/5 text-[10px] text-slate-300 border border-white/10">
                               {stu.preferredTitle === 'nurse_f'
                                 ? 'الممرضة'
                                 : 'الممرض'}
                             </span>
-                            {stu.needsReview && (
+                            {stu.isLinkedToAccount && (
                               <span
-                                className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1"
-                                title={stu.reviewNote}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold"
+                                title={
+                                  isSuperAdmin
+                                    ? stu.linkedUserEmail || stu.linkedUserId
+                                    : stu.linkedUserId
+                                }
                               >
-                                <AlertTriangle className="w-3 h-3" />
-                                <span>مراجعة تشابه</span>
+                                <UserCheck className="w-3 h-3" />
+                                <span>حساب مرتبط</span>
                               </span>
                             )}
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono mt-0.5 flex items-center gap-2">
-                            <span>ID: {stu.id}</span>
+                            <span>المبلغ الكامل: {formatIQD(stu.totalFeeIQD || 35000)}</span>
                             {stu.phone && <span>• هاتف: {stu.phone}</span>}
                           </div>
-                          {stu.needsReview && stu.reviewNote && (
-                            <div className="mt-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-200 flex items-center justify-between gap-2">
-                              <span>{stu.reviewNote}</span>
-                              {canManageFinances && (
-                                <button
-                                  onClick={async () => {
-                                    const res = await resolveStudentReviewFlag(
-                                      stu.id,
-                                      'تم تدقيق الاسم وتأكيد استقلالية السجل'
-                                    );
-                                    setFeedbackBanner({
-                                      type: res.success ? 'success' : 'error',
-                                      text: res.message,
-                                    });
-                                  }}
-                                  className="px-2 py-0.5 rounded bg-amber-400 text-[#0A0D12] font-bold shrink-0"
-                                >
-                                  تأكيد السجل
-                                </button>
-                              )}
-                            </div>
-                          )}
                         </td>
 
-                        {/* Verified Deposit / Paid */}
+                        {/* 3. المبلغ المدفوع */}
                         <td className="p-3.5">
                           <div className="font-mono font-black text-emerald-400 text-sm">
                             {formatIQD(stu.verifiedPaidIQD)}
                           </div>
                           <div className="text-[10px] text-slate-400">
-                            {stuPaysCount} سند موثق
+                            {stuPaysCount > 0 ? `${stuPaysCount} دفعة مسجلة` : '0 د.ع'}
                             {stu.pendingPaidIQD > 0 && (
                               <span className="text-amber-300 mr-1">
                                 (+{formatIQD(stu.pendingPaidIQD)} قيد التدقيق)
@@ -969,7 +1186,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
                           </div>
                         </td>
 
-                        {/* Remaining Balance */}
+                        {/* 4. المبلغ المتبقي */}
                         <td className="p-3.5">
                           <div
                             className={`font-mono font-black text-sm ${
@@ -981,43 +1198,77 @@ export const ScrubStudentManagementSection: React.FC = () => {
                             {formatIQD(stu.remainingBalanceIQD)}
                           </div>
                           <div className="text-[10px] text-slate-400">
-                            {stu.remainingBalanceIQD === 0
-                              ? 'مسدد بالكامل'
-                              : 'متبقي بذمة الطالب'}
+                            35,000 − {stu.verifiedPaidIQD.toLocaleString()} د.ع
                           </div>
                         </td>
 
-                        {/* Payment Status Badge */}
+                        {/* 5. حالة الدفع */}
                         <td className="p-3.5">
                           <span
                             className={`inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold ${getPaymentStatusBadgeClass(
-                              stu.paymentStatus
+                              badgeStatusKey
                             )}`}
                           >
-                            {stu.paymentStatus === 'deposit'
-                              ? 'دافع عربون'
-                              : getPaymentStatusArabic(stu.paymentStatus)}
+                            {unifiedStatusArabic}
                           </span>
+                          <div className="text-[10px] text-slate-400 mt-1 font-mono">
+                            {lastPaymentRecord
+                              ? `آخر دفعة: ${lastPaymentRecord.date}`
+                              : 'لا توجد دفعات'}
+                          </div>
                         </td>
 
-                        {/* Account Link Status */}
-                        <td className="p-3.5">
-                          {stu.isLinkedToAccount ? (
-                            <div className="space-y-1">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
-                                <UserCheck className="w-3 h-3" />
-                                <span>مرتبط موثق</span>
-                              </span>
-                              <div
-                                className="text-[10px] text-slate-300 font-mono truncate max-w-[140px]"
-                                title={stu.linkedUserEmail || stu.linkedUserId}
-                              >
-                                {stu.linkedUserEmail || stu.linkedUserId}
+                        {/* 6. ملاحظات المطابقة أو الدفع */}
+                        <td className="p-3.5 max-w-xs">
+                          {stu.needsReview ? (
+                            <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/35 space-y-2 text-[11px] text-amber-100">
+                              <div className="flex items-start gap-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                                <span className="leading-relaxed">
+                                  {stu.reviewNote || 'تحتاج إلى مراجعة مطابقة الاسم مع ملف الدفعات القديم'}
+                                </span>
                               </div>
+                              {canManageFinances && (
+                                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                  <button
+                                    onClick={async () => {
+                                      const res = await confirmStudentReviewDeposit(stu.id);
+                                      setFeedbackBanner({
+                                        type: res.success ? 'success' : 'error',
+                                        text: res.message,
+                                      });
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-[#0A0D12] font-extrabold text-[10px]"
+                                  >
+                                    اعتماد العربون ({(stu.pendingReviewAmountIQD || 2000).toLocaleString()} د.ع)
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      const res = await resolveStudentReviewFlag(
+                                        stu.id,
+                                        'تمت المراجعة: الطالب لم يدفع عربوناً'
+                                      );
+                                      setFeedbackBanner({
+                                        type: res.success ? 'success' : 'error',
+                                        text: res.message,
+                                      });
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-amber-200 font-bold text-[10px]"
+                                  >
+                                    لم يدفع (إلغاء الاشتباه)
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ) : displayNotes ? (
+                            <div className="text-[11px] text-slate-300 leading-relaxed">
+                              {displayNotes}
                             </div>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/5 text-slate-400 border border-white/10 text-[10px]">
-                              <span>غير مرتبط بحساب</span>
+                            <span className="text-[10px] text-slate-500">
+                              {stu.verifiedPaidIQD > 0
+                                ? 'مطابقة مؤكدة مع القائمة الرسمية'
+                                : 'لا توجد ملاحظات دفع'}
                             </span>
                           )}
                         </td>
@@ -1028,15 +1279,17 @@ export const ScrubStudentManagementSection: React.FC = () => {
                             <button
                               onClick={() => {
                                 setPaymentModalStudentId(stu.id);
+                                setEditingPaymentId(null);
                                 setPayAmountInput(
                                   stu.remainingBalanceIQD > 0
                                     ? Math.min(5000, stu.remainingBalanceIQD)
                                     : 0
                                 );
+                                setPayDateInput(new Date().toISOString().split('T')[0]);
                                 setPayModalFeedback(null);
                               }}
                               className="px-2.5 py-1.5 rounded-xl bg-[#35D6C2]/15 hover:bg-[#35D6C2]/25 text-[#35D6C2] border border-[#35D6C2]/30 font-bold text-[11px] flex items-center gap-1"
-                              title="عرض سجل الدفعات أو إضافة دفعة جديدة"
+                              title="إضافة دفعة جديدة أو تعديل الدفعات السابقة"
                             >
                               <CreditCard className="w-3.5 h-3.5" />
                               <span>الدفعات ({stuPaysCount})</span>
@@ -1055,9 +1308,12 @@ export const ScrubStudentManagementSection: React.FC = () => {
                                       stu.institutionalStudentId || ''
                                     );
                                     setEditNotes(stu.notes || '');
+                                    setEditPaymentStatusManual(
+                                      stu.needsReview ? 'needs_review' : stu.paymentStatus
+                                    );
                                   }}
                                   className="p-1.5 rounded-xl bg-white/5 hover:bg-white/15 text-slate-200 border border-white/10"
-                                  title="تعديل بيانات الطالب"
+                                  title="تعديل بيانات الطالب أو تغيير حالة الدفع"
                                 >
                                   <Edit2 className="w-3.5 h-3.5" />
                                 </button>
@@ -1084,7 +1340,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
                                     setArchiveReason('');
                                   }}
                                   className="p-1.5 rounded-xl bg-[#E85D65]/10 hover:bg-[#E85D65]/20 text-[#E85D65] border border-[#E85D65]/30"
-                                  title="أرشفة / حذف سجل الطالب"
+                                  title="أرشفة سجل الطالب"
                                 >
                                   <Archive className="w-3.5 h-3.5" />
                                 </button>
@@ -1121,10 +1377,22 @@ export const ScrubStudentManagementSection: React.FC = () => {
           {/* MOBILE CARDS VIEW (Touch-Friendly Responsive RTL) */}
           <div className="md:hidden space-y-3">
             {paginatedStudents.map((stu) => {
-              const stuPaysCount = studentPayments.filter(
-                (p) =>
-                  p.studentId === stu.id && p.verificationStatus !== 'voided'
-              ).length;
+              const stuValidPays = studentPayments
+                .filter(
+                  (p) =>
+                    p.studentId === stu.id && p.verificationStatus !== 'voided'
+                )
+                .sort(
+                  (a, b) =>
+                    new Date(b.createdAt).getTime() -
+                    new Date(a.createdAt).getTime()
+                );
+              const stuPaysCount = stuValidPays.length;
+              const lastPay = stuValidPays[0] || null;
+              const unifiedStatusArabic = getUnifiedPaymentStatusArabic(stu);
+              const badgeStatusKey: PaymentStatus = stu.needsReview
+                ? 'needs_review'
+                : stu.paymentStatus;
 
               return (
                 <div
@@ -1140,24 +1408,44 @@ export const ScrubStudentManagementSection: React.FC = () => {
                         <h4 className="font-black text-sm text-[#F4F8FC]">
                           {stu.fullName}
                         </h4>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          ID: {stu.id}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                          {stu.section && (
+                            <span className="px-1.5 py-0.2 rounded bg-[#35D6C2]/15 text-[#35D6C2] text-[10px] font-bold">
+                              {stu.section}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            ID: {stu.id}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    <span
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${getPaymentStatusBadgeClass(
-                        stu.paymentStatus
-                      )}`}
-                    >
-                      {stu.paymentStatus === 'deposit'
-                        ? 'دافع عربون'
-                        : getPaymentStatusArabic(stu.paymentStatus)}
-                    </span>
+                    <div className="text-left">
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-bold ${getPaymentStatusBadgeClass(
+                          badgeStatusKey
+                        )}`}
+                      >
+                        {unifiedStatusArabic}
+                      </span>
+                      {lastPay && (
+                        <span className="block text-[9px] text-slate-400 font-mono mt-0.5">
+                          آخر دفعة: {lastPay.date}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-center bg-[#10151C] p-2.5 rounded-xl border border-white/10 text-xs">
+                  <div className="grid grid-cols-3 gap-2 text-center bg-[#10151C] p-2.5 rounded-xl border border-white/10 text-xs">
+                    <div>
+                      <span className="text-[10px] text-[#E8EEF2]/70 block">
+                        المبلغ الكامل
+                      </span>
+                      <span className="font-mono font-bold text-slate-200">
+                        {formatIQD(stu.totalFeeIQD || 35000)}
+                      </span>
+                    </div>
                     <div>
                       <span className="text-[10px] text-[#E8EEF2]/70 block">
                         المبلغ المدفوع
@@ -1176,13 +1464,50 @@ export const ScrubStudentManagementSection: React.FC = () => {
                     </div>
                   </div>
 
-                  {stu.needsReview && stu.reviewNote && (
-                    <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200 space-y-1.5">
+                  {(stu.needsReview || stu.reviewNote || stu.notes) && (
+                    <div
+                      className={`p-2.5 rounded-xl border text-[11px] space-y-2 ${
+                        stu.needsReview
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
+                          : 'bg-white/5 border-white/10 text-slate-300'
+                      }`}
+                    >
                       <div className="font-bold flex items-center gap-1">
                         <AlertTriangle className="w-3.5 h-3.5" />
-                        <span>مراجعة تشابه الاسم:</span>
+                        <span>ملاحظات المطابقة أو الدفع:</span>
                       </div>
-                      <p>{stu.reviewNote}</p>
+                      <p>{stu.reviewNote || stu.notes}</p>
+                      {stu.needsReview && canManageFinances && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          <button
+                            onClick={async () => {
+                              const res = await confirmStudentReviewDeposit(stu.id);
+                              setFeedbackBanner({
+                                type: res.success ? 'success' : 'error',
+                                text: res.message,
+                              });
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-500 text-[#0A0D12] font-extrabold text-[10px]"
+                          >
+                            اعتماد العربون ({(stu.pendingReviewAmountIQD || 2000).toLocaleString()} د.ع)
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const res = await resolveStudentReviewFlag(
+                                stu.id,
+                                'تمت المراجعة: الطالب لم يدفع عربوناً'
+                              );
+                              setFeedbackBanner({
+                                type: res.success ? 'success' : 'error',
+                                text: res.message,
+                              });
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-white/10 text-amber-200 font-bold text-[10px]"
+                          >
+                            لم يدفع (إلغاء الاشتباه)
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1190,17 +1515,19 @@ export const ScrubStudentManagementSection: React.FC = () => {
                     <button
                       onClick={() => {
                         setPaymentModalStudentId(stu.id);
+                        setEditingPaymentId(null);
                         setPayAmountInput(
                           stu.remainingBalanceIQD > 0
                             ? Math.min(5000, stu.remainingBalanceIQD)
                             : 0
                         );
+                        setPayDateInput(new Date().toISOString().split('T')[0]);
                         setPayModalFeedback(null);
                       }}
                       className="flex-1 py-2 px-3 rounded-xl bg-[#35D6C2]/15 text-[#35D6C2] border border-[#35D6C2]/30 font-bold text-xs flex items-center justify-center gap-1.5"
                     >
                       <CreditCard className="w-3.5 h-3.5" />
-                      <span>سجل الدفعات ({stuPaysCount})</span>
+                      <span>الدفعات ({stuPaysCount})</span>
                     </button>
 
                     {viewMode === 'active' && canManageFinances && (
@@ -1214,6 +1541,9 @@ export const ScrubStudentManagementSection: React.FC = () => {
                             setEditPhone(stu.phone || '');
                             setEditInstId(stu.institutionalStudentId || '');
                             setEditNotes(stu.notes || '');
+                            setEditPaymentStatusManual(
+                              stu.needsReview ? 'needs_review' : stu.paymentStatus
+                            );
                           }}
                           className="p-2 rounded-xl bg-white/5 text-white border border-white/10"
                         >
@@ -1478,20 +1808,40 @@ export const ScrubStudentManagementSection: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-white font-bold mb-1">
-                  اللقب المهني:
-                </label>
-                <select
-                  value={editTitle}
-                  onChange={(e) =>
-                    setEditTitle(e.target.value as 'nurse_m' | 'nurse_f')
-                  }
-                  className="w-full px-3 py-2.5 rounded-xl bg-[#10151C] border border-white/10 text-white"
-                >
-                  <option value="nurse_m">الممرض</option>
-                  <option value="nurse_f">الممرضة</option>
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-white font-bold mb-1">
+                    اللقب المهني:
+                  </label>
+                  <select
+                    value={editTitle}
+                    onChange={(e) =>
+                      setEditTitle(e.target.value as 'nurse_m' | 'nurse_f')
+                    }
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#10151C] border border-white/10 text-white"
+                  >
+                    <option value="nurse_m">الممرض</option>
+                    <option value="nurse_f">الممرضة</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[#35D6C2] font-bold mb-1">
+                    تغيير حالة الدفع عند الحاجة:
+                  </label>
+                  <select
+                    value={editPaymentStatusManual}
+                    onChange={(e) =>
+                      setEditPaymentStatusManual(e.target.value as PaymentStatus)
+                    }
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#10151C] border border-[#35D6C2]/40 text-white font-bold"
+                  >
+                    <option value="unpaid">لم يدفع (0 د.ع)</option>
+                    <option value="deposit">دفع عربون</option>
+                    <option value="completed">مكتمل (35,000 د.ع)</option>
+                    <option value="needs_review">تحتاج إلى مراجعة</option>
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1522,7 +1872,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
 
               <div>
                 <label className="block text-white font-bold mb-1">
-                  ملاحظات إدارية:
+                  ملاحظات المطابقة أو الدفع:
                 </label>
                 <input
                   type="text"
@@ -1684,20 +2034,33 @@ export const ScrubStudentManagementSection: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-slate-300 font-bold mb-1">
                       المبلغ المقبوض (د.ع): *
                     </label>
                     <input
                       type="number"
-                      step={500}
+                      step={250}
                       min={250}
                       max={activePaymentStudent.remainingBalanceIQD}
                       required
                       value={payAmountInput}
                       onChange={(e) => setPayAmountInput(Number(e.target.value))}
                       className="w-full px-3 py-2 rounded-xl bg-[#101B2C] border border-white/10 text-white font-mono font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">
+                      تاريخ الدفعة: *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={payDateInput}
+                      onChange={(e) => setPayDateInput(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-[#101B2C] border border-white/10 text-white font-mono"
                     />
                   </div>
 
@@ -1719,7 +2082,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
 
                   <div>
                     <label className="block text-slate-300 font-bold mb-1">
-                      رقم الوصل (تلقائي إن تُرك فارغاً):
+                      رقم الوصل (تلقائي):
                     </label>
                     <input
                       type="text"
@@ -1758,6 +2121,96 @@ export const ScrubStudentManagementSection: React.FC = () => {
                   >
                     إصدار الوصل وتثبيت الدفعة
                   </button>
+                </div>
+              </form>
+            )}
+
+            {/* Inline Edit Existing Payment Form (with Audit Log recording) */}
+            {editingPaymentId && canManageFinances && (
+              <form
+                onSubmit={handleEditPaymentSubmit}
+                className="p-4 rounded-2xl bg-[#10151C] border-2 border-[#D7B875]/50 space-y-3 text-xs"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-[#D7B875] flex items-center gap-1.5">
+                    <Edit2 className="w-4 h-4" />
+                    <span>تعديل بيانات الدفعة المسجلة (يُوثق في سجل التعديلات Audit Log)</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEditingPaymentId(null)}
+                    className="text-slate-400 hover:text-white text-[11px]"
+                  >
+                    إلغاء التعديل
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">
+                      المبلغ المعدل (د.ع): *
+                    </label>
+                    <input
+                      type="number"
+                      step={250}
+                      min={250}
+                      max={35000}
+                      required
+                      value={editPayAmount}
+                      onChange={(e) => setEditPayAmount(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl bg-[#0A0D12] border border-white/10 text-[#35D6C5] font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">
+                      تاريخ الدفعة: *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={editPayDate}
+                      onChange={(e) => setEditPayDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-[#0A0D12] border border-white/10 text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">
+                      طريقة الدفع:
+                    </label>
+                    <select
+                      value={editPayMethod}
+                      onChange={(e) => setEditPayMethod(e.target.value as PaymentMethod)}
+                      className="w-full px-3 py-2 rounded-xl bg-[#0A0D12] border border-white/10 text-white"
+                    >
+                      <option value="cash">نقدي (كاش)</option>
+                      <option value="bank_transfer">تحويل مالي</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    value={editPayNotes}
+                    onChange={(e) => setEditPayNotes(e.target.value)}
+                    placeholder="تحديث ملاحظة الدفعة..."
+                    className="w-full px-3 py-2 rounded-xl bg-[#0A0D12] border border-white/10 text-white"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingPaymentId(null)}
+                      className="px-3.5 py-2 rounded-xl bg-white/10 text-white font-bold"
+                    >
+                      تراجع
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-xl bg-[#D7B875] text-[#0A0D12] font-extrabold"
+                    >
+                      حفظ التعديل وتحديث الرصيد
+                    </button>
+                  </div>
                 </div>
               </form>
             )}
@@ -1821,7 +2274,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 self-end sm:self-center">
+                      <div className="flex items-center gap-1.5 self-end sm:self-center flex-wrap">
                         <span className="text-base font-black text-[#35D6C2] font-mono ml-2">
                           {formatIQD(pay.amountIQD)}
                         </span>
@@ -1838,6 +2291,22 @@ export const ScrubStudentManagementSection: React.FC = () => {
 
                             {canManageFinances && (
                               <>
+                                <button
+                                  onClick={() => {
+                                    setEditingPaymentId(pay.id);
+                                    setEditPayAmount(pay.amountIQD);
+                                    setEditPayDate(pay.date);
+                                    setEditPayMethod(pay.paymentMethod);
+                                    setEditPayReceipt(pay.receiptNumber);
+                                    setEditPayNotes(pay.notes || '');
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-lg bg-[#D7B875]/15 hover:bg-[#D7B875]/25 text-[#D7B875] border border-[#D7B875]/30 font-bold text-[11px] flex items-center gap-1"
+                                  title="تعديل مبلغ أو تاريخ أو ملاحظة الدفعة"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                  <span>تعديل</span>
+                                </button>
+
                                 <button
                                   onClick={async () => {
                                     const res = await verifyStudentPayment(
@@ -2114,18 +2583,18 @@ export const ScrubStudentManagementSection: React.FC = () => {
               </button>
             </div>
 
-            {/* Option A: Re-verify / Import Official 46 Students */}
+            {/* Option A: Re-verify / Import Official 244 Students */}
             <div className="p-4 rounded-2xl bg-[#0A0D12] border border-[#35D6C2]/30 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-extrabold text-[#35D6C2]">
-                  1. القائمة الرسمية المعتمدة (46 طالب/طالبة — دفعة 2026)
+                  1. القائمة الرسمية المعتمدة (244 طالب/طالبة — 4 شعب صباحي)
                 </span>
                 <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
-                  آمن لإعادة المحاولة بدون تكرار
+                  آمن لإعادة المحاولة بدون تكرار (Idempotent)
                 </span>
               </div>
               <p className="text-[11px] text-slate-300 leading-relaxed">
-                يتحقق من وجود الـ 46 طالباً الرسميين (بما فيهم إدراج "عباس خضير" مرة واحدة فقط، وعربون "عباس محمد شيال" بقيمة 1,000 د.ع والمتبقي 34,000 د.ع، وبقية الـ 45 طالباً بعربون 2,000 د.ع والمتبقي 33,000 د.ع).
+                يستورد ويدمج قائمة الـ 244 طالباً الرسمية بالأسماء الرباعية الكاملة (شعبة 1، شعبة 2، شعبة 3، شعبة 4 — 61 طالباً لكل شعبة) مع الحفاظ التام على جميع الدفعات الموثقة السابقة وربط الحسابات دون أي حذف أو تكرار.
               </p>
               <button
                 disabled={isImporting}
@@ -2139,7 +2608,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
               >
                 {isImporting
                   ? 'جاري الفحص والاستيراد...'
-                  : 'فحص واستيراد قائمة الـ 46 طالباً الرسمية الآن'}
+                  : 'فحص واستيراد قائمة الـ 244 طالباً الرسمية الآن'}
               </button>
             </div>
 
@@ -2210,30 +2679,42 @@ export const ScrubStudentManagementSection: React.FC = () => {
               <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2 text-xs">
                 <div className="font-black text-emerald-300 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>نتيجة عملية الفحص والاستيراد:</span>
+                  <span>تقرير الاستيراد والتدقيق الرسمي:</span>
                 </div>
                 <ul className="space-y-1 text-slate-200">
                   <li>
+                    • إجمالي الأسماء في الملف الرسمي:{' '}
+                    <strong className="text-white font-mono">
+                      {lastImportReport.sourceTotalCount ?? 244}
+                    </strong>
+                  </li>
+                  <li>
                     • سجلات جديدة تمت إضافتها:{' '}
-                    <strong className="text-emerald-400">
+                    <strong className="text-emerald-400 font-mono">
                       {lastImportReport.importedCount}
                     </strong>
                   </li>
                   <li>
+                    • سجلات مطابقة لحسابات/دفعات موجودة مسبقاً:{' '}
+                    <strong className="text-[#35D6C2] font-mono">
+                      {lastImportReport.matchedExistingCount ?? 0}
+                    </strong>
+                  </li>
+                  <li>
                     • سجلات مكررة تم تخطيها بأمان:{' '}
-                    <strong className="text-[#D7B875]">
+                    <strong className="text-[#D7B875] font-mono">
                       {lastImportReport.skippedDuplicatesCount}
                     </strong>
                   </li>
                   <li>
-                    • سجلات مشابهة وُضعت تحت المراجعة:{' '}
-                    <strong className="text-amber-300">
+                    • سجلات تحتاج مراجعة يدوية:{' '}
+                    <strong className="text-amber-300 font-mono">
                       {lastImportReport.flaggedForReviewCount}
                     </strong>
                   </li>
                   <li>
                     • إجمالي الطلبة النشطين في القائمة الآن:{' '}
-                    <strong className="text-[#35D6C2]">
+                    <strong className="text-[#35D6C2] font-mono">
                       {lastImportReport.totalActiveStudents}
                     </strong>
                   </li>
@@ -2453,6 +2934,163 @@ export const ScrubStudentManagementSection: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* MODAL 8: PRINTABLE FULL STUDENT LIST / REMAINING BALANCES LIST      */}
+      {/* =================================================================== */}
+      {printModalMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-5xl rounded-3xl bg-white text-slate-900 p-5 sm:p-8 shadow-2xl space-y-4 text-right max-h-[94vh] overflow-y-auto">
+            {/* Non-printed top toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4 print:hidden">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900">
+                  {printModalMode === 'all'
+                    ? `طباعة القائمة الرسمية الكاملة للطلاب (${activeStudents.length} طالب)`
+                    : `طباعة قائمة المتبقيات المالية بذمة الطلاب (${
+                        activeStudents.filter((s) => s.remainingBalanceIQD > 0).length
+                      } طالب)`}
+                </h3>
+                <p className="text-xs text-slate-600">
+                  معاينة جاهزة للطباعة المباشرة أو الحفظ كملف PDF عبر المتصفح
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPrintModalMode(
+                      printModalMode === 'all' ? 'remaining' : 'all'
+                    )
+                  }
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs"
+                >
+                  {printModalMode === 'all'
+                    ? 'التبديل إلى قائمة المتبقيات فقط'
+                    : 'التبديل إلى القائمة الكاملة (244)'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs flex items-center gap-1.5"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>طباعة الآن / حفظ PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintModalMode(null)}
+                  className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Header */}
+            <div className="text-center border-b-2 border-slate-800 pb-4 space-y-1">
+              <div className="text-sm font-black text-slate-700">
+                {eventConfig.collegeName || 'تخرج طلاب معهد التمريض'} —{' '}
+                {eventConfig.departmentName || 'دفعة 2027'} —{' '}
+                {eventConfig.stageName || 'المرحلة الثانية'} ({eventConfig.studyType || 'صباحي'}) — العام الدراسي{' '}
+                {eventConfig.academicYear || '2026–2027'}
+              </div>
+              <h2 className="text-lg font-black text-slate-900">
+                {printModalMode === 'all'
+                  ? 'قائمة الطلاب والمشاركين وسجل الدفعات — تخرج دفعة التمريض 2027'
+                  : 'كشف المتبقيات المالية للطلاب — تخرج دفعة التمريض 2027'}
+              </h2>
+              <div className="text-xs text-slate-600">
+                مكان الحفلة: {eventConfig.scrubVenue || 'مسرح تفاحة المصور'} • المصور:{' '}
+                {eventConfig.scrubPhotographer || 'باقر حسن'} • التاريخ المقترح:{' '}
+                {eventConfig.scrubPartyDateDisplay || '12/12/2026'} • مبلغ الحفلة الكامل للطالب: 35,000 د.ع
+              </div>
+            </div>
+
+            {/* Printable Summary Strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs bg-slate-100 p-3 rounded-xl border border-slate-300">
+              <div>
+                <span className="text-slate-600 block">عدد الطلاب الكلي</span>
+                <strong className="font-mono text-sm text-slate-900">
+                  {summaryStats.totalStudents} طالب
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-600 block">دفع عربون / مكتمل</span>
+                <strong className="font-mono text-sm text-emerald-700">
+                  {summaryStats.depositCount + summaryStats.partialCount} عربون | {summaryStats.completedCount} مكتمل
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-600 block">إجمالي المستلم المؤكد</span>
+                <strong className="font-mono text-sm text-emerald-700">
+                  {formatIQD(summaryStats.totalVerifiedPaidIQD)}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-600 block">إجمالي المتبقي الكلي</span>
+                <strong className="font-mono text-sm text-amber-800">
+                  {formatIQD(summaryStats.totalRemainingIQD)}
+                </strong>
+              </div>
+            </div>
+
+            {/* Printable Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs border-collapse border border-slate-400">
+                <thead>
+                  <tr className="bg-slate-800 text-white">
+                    <th className="p-2 border border-slate-400 text-center w-12">التسلسل</th>
+                    <th className="p-2 border border-slate-400">الاسم الكامل كما ورد في القائمة الرسمية</th>
+                    <th className="p-2 border border-slate-400 text-center">الشعبة</th>
+                    <th className="p-2 border border-slate-400 text-center">المبلغ المدفوع</th>
+                    <th className="p-2 border border-slate-400 text-center">المبلغ المتبقي</th>
+                    <th className="p-2 border border-slate-400 text-center">حالة الدفع</th>
+                    <th className="p-2 border border-slate-400">ملاحظات المطابقة أو الدفع</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeStudents
+                    .filter((s) =>
+                      printModalMode === 'remaining'
+                        ? s.remainingBalanceIQD > 0
+                        : true
+                    )
+                    .sort((a, b) => a.studentNumber - b.studentNumber)
+                    .map((s) => {
+                      const stText = getUnifiedPaymentStatusArabic(s);
+                      return (
+                        <tr key={s.id} className="border-b border-slate-300">
+                          <td className="p-1.5 border border-slate-300 text-center font-mono font-bold">
+                            {s.studentNumber}
+                          </td>
+                          <td className="p-1.5 border border-slate-300 font-bold">
+                            {s.fullName}
+                          </td>
+                          <td className="p-1.5 border border-slate-300 text-center">
+                            {s.section || '-'}
+                          </td>
+                          <td className="p-1.5 border border-slate-300 text-center font-mono font-bold text-emerald-700">
+                            {s.verifiedPaidIQD.toLocaleString()} د.ع
+                          </td>
+                          <td className="p-1.5 border border-slate-300 text-center font-mono font-bold text-amber-800">
+                            {s.remainingBalanceIQD.toLocaleString()} د.ع
+                          </td>
+                          <td className="p-1.5 border border-slate-300 text-center font-bold">
+                            {stText}
+                          </td>
+                          <td className="p-1.5 border border-slate-300 text-[11px]">
+                            {s.reviewNote || s.notes || '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

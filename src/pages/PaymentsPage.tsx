@@ -147,13 +147,13 @@ export const PaymentsPage: React.FC = () => {
       <div className="text-center max-w-2xl mx-auto space-y-2.5">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#142638] border border-[#35D6C5]/35 text-xs font-bold text-white">
           <GraduationCap className="w-3.5 h-3.5 text-[#35D6C5]" />
-          <span>الدفعات — معهد التمريض دفعة 2027</span>
+          <span>قائمة الطلاب والدفعات — تخرج دفعة التمريض 2027</span>
         </div>
         <h1 className="text-2xl sm:text-4xl font-black text-white">
           الاستعلام المباشر عن دفعات التخرج
         </h1>
         <p className="text-xs sm:text-sm text-[#E8EEF2]/80">
-          اكتب اسمك في حقل البحث واضغط على «بحث» لعرض تفاصيل دفعات حفلة السكراب وحفل التخرج الرسمي مباشرة دون الحاجة لتسجيل الدخول.
+          اكتب اسمك في حقل البحث واضغط على «بحث» لعرض تفاصيل دفعات حفلة السكراب وحفل تخرج دفعة 2027 مباشرة دون الحاجة لتسجيل الدخول.
         </p>
         <AnimatedEcgWaveform color="#35D6C5" opacity="opacity-20" className="w-full h-8 pt-1" />
       </div>
@@ -307,7 +307,7 @@ export const PaymentsPage: React.FC = () => {
 
                   <div className="space-y-3 text-xs sm:text-sm">
                     <div className="p-3.5 rounded-2xl bg-[#101B2C]/90 border border-white/10 flex items-center justify-between gap-2">
-                      <span className="text-[#E8EEF2]/80 font-bold">السعر الرسمي:</span>
+                      <span className="text-[#E8EEF2]/80 font-bold">مبلغ المساهمة المحدد:</span>
                       <span className="font-black text-white text-sm sm:text-base">
                         {officialScrubPriceIQD.toLocaleString('en-US')} دينار عراقي
                       </span>
@@ -344,7 +344,7 @@ export const PaymentsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* CARD 2: حفلة التخرج الرسمي */}
+                {/* CARD 2: حفل تخرج دفعة 2027 */}
                 <div className="rounded-3xl bg-[#0D1726]/85 backdrop-blur-2xl border border-[#D6B777]/35 p-5 sm:p-6 shadow-2xl space-y-4">
                   <div className="flex items-center justify-between border-b border-white/10 pb-3.5">
                     <div className="flex items-center gap-2.5">
@@ -353,7 +353,7 @@ export const PaymentsPage: React.FC = () => {
                       </div>
                       <div>
                         <h3 className="text-base sm:text-lg font-black text-white">
-                          حفلة التخرج الرسمي
+                          حفل تخرج دفعة 2027
                         </h3>
                         <span className="text-[11px] text-[#D6B777] font-semibold">
                           الوشاح التركوازي — دفعة 2027
@@ -380,7 +380,7 @@ export const PaymentsPage: React.FC = () => {
 
                   <div className="space-y-3 text-xs sm:text-sm">
                     <div className="p-3.5 rounded-2xl bg-[#101B2C]/90 border border-white/10 flex items-center justify-between gap-2">
-                      <span className="text-[#E8EEF2]/80 font-bold">السعر الرسمي:</span>
+                      <span className="text-[#E8EEF2]/80 font-bold">مبلغ المساهمة المحدد:</span>
                       <span className="font-black text-[#D6B777] text-xs sm:text-sm">
                         {isOfficialGradPriceConfirmed
                           ? `${officialGradPriceIQD.toLocaleString('en-US')} دينار عراقي`

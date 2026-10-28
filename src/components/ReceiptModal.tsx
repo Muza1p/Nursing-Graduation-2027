@@ -42,10 +42,10 @@ export const ReceiptModal: React.FC = () => {
           <div className="text-center border-b border-white/15 pb-5 space-y-1">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#D6B777]/15 border border-[#D6B777]/30 text-[#D6B777] text-[11px] font-bold mb-1">
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>وصل استلام مالي رسمي من اللجنة المنظمة</span>
+              <span>وصل استلام مساهمة — فريق تنظيم دفعة 2027</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-white tracking-wider">
-              معهد التمريض — دفعة 2027
+              تخرج دفعة التمريض 2027
             </h2>
             <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
               {activeReceipt.eventTarget === 'scrub_night' ? (
@@ -54,7 +54,7 @@ export const ReceiptModal: React.FC = () => {
                 </span>
               ) : (
                 <span className="px-3 py-1 rounded-full bg-[#35D6C5]/20 text-[#35D6C5] border border-[#35D6C5]/30 text-xs font-bold">
-                  سند قبض: حفل التخرج الرسمي (وشاح التمريض)
+                  سند قبض: حفل تخرج دفعة 2027 (وشاح التمريض)
                 </span>
               )}
 
@@ -76,7 +76,7 @@ export const ReceiptModal: React.FC = () => {
               )}
             </div>
             <p className="text-[10px] text-[#E8EEF2]/70 mt-1">
-              سند قبض تنظيمي صادر عن اللجنة التحضيرية لمعهد التمريض (دفعة 2027)
+              سند قبض تنظيمي صادر عن فريق تنظيم شؤون تخرج طلاب معهد التمريض — دفعة 2027
             </p>
           </div>
 

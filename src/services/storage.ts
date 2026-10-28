@@ -21,14 +21,23 @@ const STORAGE_KEYS = {
   CURRENT_USER_ID: 'nursing_grad_current_user_v2',
 };
 
+export const DEFAULT_ABOUT_SITE_TEXT =
+  'منصة خاصة بطلاب دفعة التمريض 2027، مخصصة لتنظيم شؤون الدفعة وفعاليات التخرج وتوثيق الذكريات وتنسيق المعلومات بين الطلاب وفريق التنظيم. الموقع مستقل عن الإدارة الرسمية للمؤسسة التعليمية';
+
 // Initial default configuration strictly as required by the user's updated brief
 export const DEFAULT_CONFIG: EventConfig = {
-  brandName: 'معهد التمريض — دفعة 2027',
-  brandSubtitle: 'حفلة السكراب وحفل التخرج الرسمي',
-  eventType: 'حفلة تخرج الممرضين',
+  brandName: 'تخرج دفعة التمريض 2027',
+  brandSubtitle: 'رحلة علم، تعب، وذكريات تجمعنا',
+  aboutSiteText: DEFAULT_ABOUT_SITE_TEXT,
+  eventType: 'حفلة تخرج طلاب معهد التمريض',
   cohortYear: 'دفعة 2027',
   graduationYear: '2027',
-  institutionName: 'معهد التمريض',
+  institutionName: 'تخرج طلاب معهد التمريض — دفعة 2027',
+  collegeName: 'معهد التمريض — دفعة 2027',
+  departmentName: 'قسم التمريض',
+  stageName: 'المرحلة الثانية',
+  studyType: 'صباحي',
+  academicYear: '2026–2027',
   
   // Scrub Night Config
   scrubEventName: 'حفلة السكراب',
@@ -37,18 +46,18 @@ export const DEFAULT_CONFIG: EventConfig = {
   scrubVenue: 'مسرح تفاحة المصور',
   scrubPhotographer: 'باقر حسن',
   scrubTime: '09:00 صباحاً',
-  scrubPartyDressCode: 'السكراب الطبي المعتمد لحفلة تخرج الممرضين',
+  scrubPartyDressCode: 'السكراب الطبي الموحد لطلاب دفعة التمريض 2027',
   scrubCountdownEnabled: true,
   scrubFeeIQD: 35000, // 35,000 IQD required per student
   
   // Official Graduation 2027 Config
-  officialGraduationTitle: 'حفل التخرج الرسمي',
+  officialGraduationTitle: 'حفل تخرج دفعة 2027',
   officialGraduationYear: '2027',
   officialGraduationStatus: 'coming_soon',
   officialGraduationDate: 'قريباً',
   officialGraduationLocation: 'قريباً',
   officialGraduationSashColor: 'تركوازي (وشاح التمريض)',
-  officialGraduationSchedule: 'سيتم إعلان الموعد والقاعة والجدول فور اعتمادها',
+  officialGraduationSchedule: 'سيتم إعلان الموعد والقاعة والجدول الزمني من قِبل فريق تنظيم الدفعة فور تحديدها',
   officialGradCountdownEnabled: false, // Do NOT run countdown until configured
   officialGradFeeIQD: 50000,
 
@@ -81,16 +90,23 @@ export const DEFAULT_CONFIG: EventConfig = {
     {
       id: 'org-1',
       name: 'مصطفى علي حسون',
-      role: 'معهد التمريض — دفعة 2027',
+      role: 'فريق تنظيم دفعة 2027',
       bio: '',
       instagram: 'https://www.instagram.com/mustafaa.hassoun',
     },
     {
       id: 'org-2',
       name: 'مصطفى أركان ساجت',
-      role: 'معهد التمريض — دفعة 2027',
+      role: 'فريق تنظيم دفعة 2027',
       bio: '',
       instagram: 'https://www.instagram.com/t__suf',
+    },
+    {
+      id: 'org-4',
+      name: 'علي أكبر حسين عبيد',
+      role: 'فريق تنظيم دفعة 2027',
+      bio: '',
+      instagram: 'https://www.instagram.com/4hll0_/',
     },
   ],
 };
@@ -99,7 +115,7 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
   {
     id: 'ann-1',
     title: 'تفاصيل حفلة السكراب (مسرح تفاحة المصور — 12/12/2026)',
-    description: 'تقرر مبدئياً إقامة حفلة السكراب في مسرح تفاحة المصور بتاريخ 12/12/2026 بعدسة المصور باقر حسن. الوقت صباحي وسيُعلن التوقيت الدقيق فور تثبيته رسمياً.',
+    description: 'تقرر إقامة حفلة السكراب لطلاب معهد التمريض — دفعة 2027 في مسرح تفاحة المصور بتاريخ 12/12/2026 بعدسة المصور باقر حسن، ومبلغ المساهمة الكامل لكل طالب 35,000 د.ع.',
     publishedAt: '2026-10-20',
     status: 'published',
     displayOrder: 1,
@@ -107,8 +123,8 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
   },
   {
     id: 'ann-2',
-    title: 'تنويه: الحفل صباحي (الوقت يُعلن لاحقاً)',
-    description: 'نود إعلام جميع الزملاء في معهد التمريض (دفعة 2027) بأن الحفل صباحي، وستحدد اللجنة المنظمة موعد الانطلاق (بين الساعة 8:00 صباحاً و 9:00 صباحاً) قريباً.',
+    title: 'تنويه: الحفل صباحي (الساعة 09:00 صباحاً)',
+    description: 'نود إعلام جميع الزملاء في دفعة التمريض 2027 بأن حفلة السكراب ستقام صباحاً في تمام الساعة 09:00 صباحاً في مسرح تفاحة المصور.',
     publishedAt: '2026-10-22',
     status: 'published',
     displayOrder: 2,
@@ -116,8 +132,8 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
   },
   {
     id: 'ann-3',
-    title: 'حفل التخرج الرسمي 2027 (قريباً)',
-    description: 'بخصوص حفل التخرج الرسمي لدفعة 2027 ووشاح التمريض باللون التركوازي، فإن الموعد والقاعة قيد الإعداد وسيتم نشر التفاصيل فور ورودها.',
+    title: 'حفل تخرج دفعة 2027 (قريباً)',
+    description: 'بخصوص حفل التخرج لدفعة 2027 ووشاح التمريض باللون التركوازي، فإن الموعد والقاعة قيد الترتيب من قِبل فريق تنظيم الدفعة وسيتم نشر التفاصيل فور تحديدها.',
     publishedAt: '2026-10-24',
     status: 'published',
     displayOrder: 3,
@@ -125,8 +141,8 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
   },
   {
     id: 'ann-4',
-    title: 'الحساب الرسمي لمتابعة كافة المستجدات',
-    description: 'يرجى متابعة حساب الإنستغرام المعتمد (@uofaon.1) لتلقي كافة التوجيهات الرسمية الصادرة من منظمي الحفل.',
+    title: 'حساب دفعة التمريض 2027 لمتابعة كافة المستجدات',
+    description: 'يرجى متابعة حساب الدفعة على الإنستغرام (@uofaon.1) لتلقي كافة التنبيهات والمستجدات الخاصة بفعاليات التخرج من فريق تنظيم الدفعة.',
     publishedAt: '2026-10-25',
     status: 'published',
     displayOrder: 4,
@@ -176,46 +192,38 @@ export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
     id: 'log-1',
     action: 'تهيئة النظام الأولي',
     performedBy: 'النظام الآلي',
-    details: 'تم تأسيس منصة معهد التمريض (دفعة 2027) وتحديد حفلة السكراب في مسرح تفاحة المصور بعدسة باقر حسن بقيمة 35,000 د.ع.',
+    details: 'تم تأسيس منصة تنظيم شؤون الدفعة — تخرج طلاب معهد التمريض (دفعة 2027) وتحديد حفلة السكراب في مسرح تفاحة المصور بعدسة باقر حسن بقيمة 35,000 د.ع.',
     timestamp: '2026-10-20 10:00',
     entityType: 'config',
   },
 ];
 
 // Helper to determine payment status
-export function calculatePaymentStatus(paid: number, due: number): PaymentStatus {
-  if (paid <= 0) return 'unpaid';
-  if (paid >= due) return 'completed';
-  if (paid < due && paid <= 25000) return 'deposit'; // عربون
-  return 'partial'; // مدفوع جزئياً
+export function calculatePaymentStatus(paid: number, due: number, needsReview?: boolean): PaymentStatus {
+  if (paid >= due && due > 0) return 'completed';
+  if (paid > 0 && paid < due) return 'deposit'; // دفع عربون
+  if (needsReview) return 'needs_review'; // تحتاج إلى مراجعة
+  return 'unpaid'; // لم يدفع
 }
 
-export function getPaymentStatusArabic(status?: PaymentStatus): string {
-  switch (status) {
-    case 'deposit':
-      return 'عربون';
-    case 'partial':
-      return 'مدفوع جزئياً';
-    case 'completed':
-      return 'مكتمل';
-    case 'unpaid':
-    default:
-      return 'غير مدفوع';
-  }
+export function getPaymentStatusArabic(status?: PaymentStatus, needsReview?: boolean): string {
+  if (status === 'completed') return 'مكتمل';
+  if (status === 'deposit' || status === 'partial') return 'دفع عربون';
+  if (status === 'needs_review' || needsReview) return 'تحتاج إلى مراجعة';
+  return 'لم يدفع';
 }
 
-export function getPaymentStatusBadgeClass(status?: PaymentStatus): string {
-  switch (status) {
-    case 'completed':
-      return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
-    case 'partial':
-      return 'bg-amber-500/20 text-amber-400 border border-amber-500/30';
-    case 'deposit':
-      return 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30';
-    case 'unpaid':
-    default:
-      return 'bg-red-500/20 text-red-400 border border-red-500/30';
+export function getPaymentStatusBadgeClass(status?: PaymentStatus, needsReview?: boolean): string {
+  if (status === 'completed') {
+    return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
   }
+  if (status === 'deposit' || status === 'partial') {
+    return 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30';
+  }
+  if (status === 'needs_review' || needsReview) {
+    return 'bg-amber-500/20 text-amber-300 border border-amber-500/40';
+  }
+  return 'bg-red-500/20 text-red-400 border border-red-500/30';
 }
 
 // Helper methods to read/write from localStorage safely
@@ -228,25 +236,45 @@ export class LocalStorageManager {
         return DEFAULT_CONFIG;
       }
       const parsed: EventConfig = JSON.parse(data);
+      const isOldBrandName =
+        !parsed.brandName ||
+        parsed.brandName === 'معهد التمريض — دفعة 2027' ||
+        parsed.brandName.includes('الكلية البوليتكنك');
+      const isOldBrandSubtitle =
+        !parsed.brandSubtitle ||
+        parsed.brandSubtitle.includes('الكلية البوليتكنك') ||
+        parsed.brandSubtitle.includes('قسم تقنيات التمريض');
+
       const merged: EventConfig = {
         ...DEFAULT_CONFIG,
         ...parsed,
         supportPhone: '07800088386',
         organizers: DEFAULT_CONFIG.organizers,
         scrubFeeIQD: 35000,
+        brandName: isOldBrandName ? DEFAULT_CONFIG.brandName : parsed.brandName,
+        brandSubtitle: isOldBrandSubtitle ? DEFAULT_CONFIG.brandSubtitle : parsed.brandSubtitle,
+        aboutSiteText: parsed.aboutSiteText?.trim() || DEFAULT_ABOUT_SITE_TEXT,
+        collegeName: 'معهد التمريض — دفعة 2027',
+        departmentName: 'قسم التمريض',
+        stageName: parsed.stageName || 'المرحلة الثانية',
+        studyType: parsed.studyType || 'صباحي',
+        academicYear: parsed.academicYear || '2026–2027',
         scrubVenue: parsed.scrubVenue || 'مسرح تفاحة المصور',
         scrubPhotographer: parsed.scrubPhotographer || 'باقر حسن',
         scrubTime:
           !parsed.scrubTime || parsed.scrubTime === 'الوقت يُعلن لاحقاً'
             ? '09:00 صباحاً'
             : parsed.scrubTime,
-        scrubPartyDate: '2026-12-12T09:00:00+03:00',
+        scrubPartyDate: parsed.scrubPartyDate || '2026-12-12T09:00:00+03:00',
         scrubPartyDateDisplay: parsed.scrubPartyDateDisplay || '12/12/2026',
         scrubCountdownEnabled: true,
-        brandName: 'معهد التمريض — دفعة 2027',
-        institutionName: 'معهد التمريض',
+        institutionName: 'تخرج طلاب معهد التمريض — دفعة 2027',
         cohortYear: 'دفعة 2027',
         graduationYear: '2027',
+        officialGraduationTitle:
+          !parsed.officialGraduationTitle || parsed.officialGraduationTitle === 'حفل التخرج الرسمي'
+            ? 'حفل تخرج دفعة 2027'
+            : parsed.officialGraduationTitle,
         countdownTitle: parsed.countdownTitle
           ? parsed.countdownTitle.replace(/دفعة 2026/g, 'دفعة 2027')
           : DEFAULT_CONFIG.countdownTitle,
@@ -442,7 +470,20 @@ export class LocalStorageManager {
         this.saveAnnouncements(INITIAL_ANNOUNCEMENTS);
         return INITIAL_ANNOUNCEMENTS;
       }
-      return JSON.parse(data);
+      const parsed: Announcement[] = JSON.parse(data);
+      const updated = parsed.map((ann) => {
+        const defaultReplacement = INITIAL_ANNOUNCEMENTS.find((d) => d.id === ann.id);
+        if (
+          defaultReplacement &&
+          (ann.description.includes('الكلية البوليتكنك') ||
+            ann.description.includes('التوجيهات الرسمية') ||
+            ann.title.includes('الحساب الرسمي'))
+        ) {
+          return defaultReplacement;
+        }
+        return ann;
+      });
+      return updated;
     } catch {
       return INITIAL_ANNOUNCEMENTS;
     }

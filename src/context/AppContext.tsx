@@ -61,6 +61,7 @@ import {
   getAllModeratorRequests,
   approveModeratorRequest as fbApproveModeratorRequest,
   rejectModeratorRequest as fbRejectModeratorRequest,
+  fbPromoteUserToModerator,
   fbRevokeModeratorRole,
   getAllSupervisors,
   SupervisorRecord,
@@ -192,6 +193,7 @@ interface AppContextType {
     amountIQD: number;
     paymentMethod: PaymentMethod;
     paymentType?: 'initial_deposit' | 'installment' | 'final_settlement';
+    date?: string;
     receiptNumber?: string;
     notes?: string;
     isVerified?: boolean;
@@ -199,6 +201,17 @@ interface AppContextType {
     success: boolean;
     message: string;
     payment?: StudentPayment;
+  }>;
+  editStudentPayment: (params: {
+    paymentId: string;
+    amountIQD: number;
+    date: string;
+    paymentMethod: PaymentMethod;
+    receiptNumber?: string;
+    notes?: string;
+  }) => Promise<{
+    success: boolean;
+    message: string;
   }>;
   verifyStudentPayment: (
     paymentId: string,
@@ -223,6 +236,14 @@ interface AppContextType {
   resolveStudentReviewFlag: (
     studentId: string,
     resolutionNote?: string
+  ) => Promise<{ success: boolean; message: string }>;
+  confirmStudentReviewDeposit: (
+    studentId: string
+  ) => Promise<{ success: boolean; message: string }>;
+  changeStudentPaymentStatusManual: (
+    studentId: string,
+    targetStatus: PaymentStatus,
+    note?: string
   ) => Promise<{ success: boolean; message: string }>;
 
   // Firebase Auth & Workflow
@@ -280,6 +301,11 @@ interface AppContextType {
     requestId: string,
     reason?: string
   ) => Promise<{ success: boolean; notice: string }>;
+  promoteUserToModerator: (targetUser: {
+    uid: string;
+    displayName: string;
+    email?: string;
+  }) => Promise<{ success: boolean; notice: string }>;
   revokeModeratorRole: (
     targetUserId: string
   ) => Promise<{ success: boolean; notice: string }>;
@@ -492,12 +518,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (adminRole !== null || isUserAdmin(user)) {
           setCurrentUserId(user.uid);
           LocalStorageManager.setCurrentUserId(user.uid);
+          const viewerIsSuper =
+            isUserAdmin(user) || adminRole === 'super_admin';
 
           try {
-            const allUsers = await getAllLoggedInUserAccounts();
+            const allUsers = await getAllLoggedInUserAccounts(viewerIsSuper);
             setLoggedInUsers(allUsers);
           } catch (e) {
             console.warn('Error fetching logged-in user accounts:', e);
+          }
+
+          try {
+            const allModReqs = await getAllModeratorRequests(viewerIsSuper);
+            setModeratorRequests(allModReqs);
+            const allSups = await getAllSupervisors(viewerIsSuper);
+            setSupervisors(allSups);
+          } catch (e) {
+            console.warn('Error fetching moderator requests/supervisors:', e);
           }
 
           try {
@@ -618,13 +655,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     []
   );
 
-  // Automatic Initial Import of the 46 Unique Scrub Party Students & Public Cloud Sync
+  // Automatic Initial Import of the 244 Official Nursing Stage 2 Morning Students & Public Cloud Sync
   useEffect(() => {
     const existingList = ScrubStudentStorage.getStudents();
     const existingPays = ScrubStudentStorage.getStudentPayments();
 
     const initializeRoster = async () => {
-      // 1. Try syncing latest admin-saved student records & payments from Firestore (no login required)
+      // 1. Try syncing latest admin-saved student records & payments from Firestore (automatically merges 244 if < 244)
       const cloudSynced = await syncScrubRosterFromFirestore();
       if (cloudSynced && cloudSynced.students.length > 0) {
         setScrubStudents(cloudSynced.students);
@@ -632,13 +669,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return;
       }
 
-      // 2. Otherwise ensure the 46 official student records are initialized locally
-      if (!ScrubStudentStorage.isInitialImportDone() || existingList.length === 0) {
+      // 2. Otherwise ensure all 244 official student records are initialized locally and merged with existing records
+      const activeCount = existingList.filter((s) => s.status === 'active').length;
+      if (
+        !ScrubStudentStorage.isInitialImportDone() ||
+        existingList.length === 0 ||
+        activeCount < 244
+      ) {
         const report = await importOfficial46ScrubStudents({
           existingStudents: existingList,
           existingPayments: existingPays,
           existingGraduates: LocalStorageManager.getGraduates(),
-          actorName: 'النظام الآلي — استيراد الدفعة المعتمد',
+          actorName: 'النظام الآلي — استيراد الدفعة المعتمد (244 طالباً)',
         });
         setScrubStudents(report.students);
         setStudentPayments(report.studentPayments);
@@ -656,16 +698,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .then((snap) => {
         if (snap.exists()) {
           const cloudCfg = snap.data() as Partial<EventConfig>;
+          const isOldCloudBrandName =
+            !cloudCfg.brandName ||
+            cloudCfg.brandName === 'معهد التمريض — دفعة 2027' ||
+            cloudCfg.brandName.includes('الكلية البوليتكنك');
+          const isOldCloudSubtitle =
+            !cloudCfg.brandSubtitle ||
+            cloudCfg.brandSubtitle.includes('الكلية البوليتكنك') ||
+            cloudCfg.brandSubtitle.includes('قسم تقنيات التمريض');
+
           setEventConfig((prev) => ({
             ...prev,
             ...cloudCfg,
-            organizers: prev.organizers.filter(
-              (o) =>
-                o.id !== 'org-3' &&
-                !o.name.includes('حسين عبدالله جاسم') &&
-                !o.name.includes('حسين عبد الله جاسم') &&
-                !(o.instagram && o.instagram.includes('922r_h'))
-            ),
+            brandName: isOldCloudBrandName ? DEFAULT_CONFIG.brandName : cloudCfg.brandName!,
+            brandSubtitle: isOldCloudSubtitle ? DEFAULT_CONFIG.brandSubtitle : cloudCfg.brandSubtitle!,
+            aboutSiteText: cloudCfg.aboutSiteText?.trim() || prev.aboutSiteText || DEFAULT_CONFIG.aboutSiteText,
+            organizers: DEFAULT_CONFIG.organizers,
             countdownEnabled: cloudCfg.countdownEnabled ?? true,
             countdownPublished: cloudCfg.countdownPublished ?? true,
             countdownDate: cloudCfg.countdownDate || '2026-12-12',
@@ -867,6 +915,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     firebaseUser &&
       (isSuperAdmin ||
         resolvedAdminRole === 'admin' ||
+        resolvedAdminRole === 'moderator' ||
         resolvedAdminRole === 'finance_manager' ||
         resolvedAdminRole === 'event_manager')
   );
@@ -881,6 +930,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     firebaseUser &&
       (isSuperAdmin ||
         resolvedAdminRole === 'super_admin' ||
+        resolvedAdminRole === 'moderator' ||
         resolvedAdminRole === 'finance_manager' ||
         resolvedAdminRole === 'admin')
   );
@@ -1745,6 +1795,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     amountIQD: number;
     paymentMethod: PaymentMethod;
     paymentType?: 'initial_deposit' | 'installment' | 'final_settlement';
+    date?: string;
     receiptNumber?: string;
     notes?: string;
     isVerified?: boolean;
@@ -1816,7 +1867,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const nowIso = new Date().toISOString();
-    const todayDate = nowIso.split('T')[0];
+    const todayDate = params.date?.trim() || nowIso.split('T')[0];
     const nowTime = new Date().toTimeString().substring(0, 5);
     const isVerified = params.isVerified !== false;
 
@@ -1849,8 +1900,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       notes:
         params.notes?.trim() ||
         (paymentType === 'final_settlement'
-          ? 'تسديد الرصيد المتبقي بالكامل لحفلة السكراب'
-          : 'دفعة نقدية لحفلة السكراب'),
+          ? 'تسديد الرصيد المتبقي بالكامل لحفلة التخرج'
+          : 'دفعة نقدية لحفلة التخرج'),
       isVerified,
       verificationStatus: isVerified ? 'verified' : 'pending',
       recordedBy: actorDisplayName,
@@ -1862,7 +1913,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const updatedPayments = [newPayment, ...studentPayments];
     const updatedStudent = recalculateStudentFinancials(
-      { ...student, updatedAt: nowIso },
+      {
+        ...student,
+        needsReview: false,
+        matchStatus: 'confirmed',
+        updatedAt: nowIso,
+      },
       updatedPayments
     );
 
@@ -2247,15 +2303,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const nowIso = new Date().toISOString();
-    const updated: ScrubStudent = {
+    const baseUpdated: ScrubStudent = {
       ...student,
       needsReview: false,
+      matchStatus: student.verifiedPaidIQD > 0 ? 'confirmed' : 'unmatched',
+      pendingReviewAmountIQD: undefined,
       reviewNote: undefined,
       notes: resolutionNote
         ? `${student.notes ? student.notes + ' • ' : ''}${resolutionNote}`
         : student.notes,
       updatedAt: nowIso,
     };
+    const updated = recalculateStudentFinancials(baseUpdated, studentPayments);
 
     setScrubStudents((prev) =>
       prev.map((s) => (s.id === studentId ? updated : s))
@@ -2273,9 +2332,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     await recordSystemAuditLog({
-      action: 'اعتماد مراجعة تطابق اسم طالب',
+      action: 'مراجعة حالة مطابقة طالب',
       performedBy: actorDisplayName,
-      details: `تمت مراجعة وتأكيد استقلالية سجل الطالب رقم (${student.studentNumber}) "${student.fullName}".`,
+      details: `تمت مراجعة سجل الطالب رقم (${student.studentNumber}) "${student.fullName}" وإزالة تنبيه المراجعة (${resolutionNote || 'تأكيد إداري'}).`,
       affectedCount: 1,
       entityType: 'scrub_student',
     });
@@ -2283,7 +2342,402 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return {
       success: true,
-      message: `تم تأكيد صحة سجل الطالب "${student.fullName}" وإزالة تنبيه المراجعة.`,
+      message: `تم تحديث حالة المراجعة للطالب "${student.fullName}" بنجاح.`,
+    };
+  };
+
+  const editStudentPayment = async (params: {
+    paymentId: string;
+    amountIQD: number;
+    date: string;
+    paymentMethod: PaymentMethod;
+    receiptNumber?: string;
+    notes?: string;
+  }) => {
+    if (!canManageFinances) {
+      return {
+        success: false,
+        message: 'غير مصرح لك بتعديل الدفعات المالية.',
+      };
+    }
+
+    const targetPay = studentPayments.find((p) => p.id === params.paymentId);
+    if (!targetPay) {
+      return { success: false, message: 'سجل الدفعة غير موجود.' };
+    }
+
+    const student = scrubStudents.find((s) => s.id === targetPay.studentId);
+    if (!student) {
+      return { success: false, message: 'سجل الطالب المرتبط غير موجود.' };
+    }
+
+    const newAmount = Math.floor(Number(params.amountIQD) || 0);
+    if (newAmount <= 0) {
+      return {
+        success: false,
+        message: 'يجب أن يكون مبلغ الدفعة أكبر من صفر دينار عراقي.',
+      };
+    }
+
+    const otherVerifiedSum = studentPayments
+      .filter(
+        (p) =>
+          p.studentId === student.id &&
+          p.id !== targetPay.id &&
+          p.isVerified &&
+          p.verificationStatus !== 'voided'
+      )
+      .reduce((sum, p) => sum + (Number(p.amountIQD) || 0), 0);
+
+    const totalFee = student.totalFeeIQD > 0 ? student.totalFeeIQD : 35000;
+    if (otherVerifiedSum + newAmount > totalFee) {
+      const maxAllowed = Math.max(0, totalFee - otherVerifiedSum);
+      return {
+        success: false,
+        message: `لا يمكن تعديل الدفعة إلى (${newAmount.toLocaleString()} د.ع) لأن إجمالي المدفوع سيتجاوز مبلغ الحفلة الكامل (${totalFee.toLocaleString()} د.ع). الحد الأقصى المسموح لهذه الدفعة هو ${maxAllowed.toLocaleString()} د.ع.`,
+      };
+    }
+
+    const nowIso = new Date().toISOString();
+    const oldAmount = targetPay.amountIQD;
+    const oldDate = targetPay.date;
+    const oldNotes = targetPay.notes || '';
+
+    const updatedPay: StudentPayment = {
+      ...targetPay,
+      amountIQD: newAmount,
+      date: params.date.trim() || targetPay.date,
+      paymentMethod: params.paymentMethod,
+      receiptNumber: params.receiptNumber?.trim() || targetPay.receiptNumber,
+      notes: params.notes !== undefined ? params.notes.trim() : targetPay.notes,
+      updatedAt: nowIso,
+    };
+
+    const updatedPayments = studentPayments.map((p) =>
+      p.id === targetPay.id ? updatedPay : p
+    );
+    const updatedStudent = recalculateStudentFinancials(
+      { ...student, updatedAt: nowIso },
+      updatedPayments
+    );
+
+    setStudentPayments(updatedPayments);
+    setScrubStudents((prev) =>
+      prev.map((s) => (s.id === student.id ? updatedStudent : s))
+    );
+    syncLinkedGraduateBalance(updatedStudent);
+
+    if (auth.currentUser) {
+      try {
+        const cleanPay = Object.fromEntries(
+          Object.entries(updatedPay).filter(([_, v]) => v !== undefined)
+        );
+        const cleanStu = Object.fromEntries(
+          Object.entries(updatedStudent).filter(([_, v]) => v !== undefined)
+        );
+        await setDoc(doc(db, 'student_payments', updatedPay.id), cleanPay, {
+          merge: true,
+        });
+        await setDoc(doc(db, 'scrub_students', updatedStudent.id), cleanStu, {
+          merge: true,
+        });
+      } catch (e) {
+        console.warn('Firestore editStudentPayment sync notice:', e);
+      }
+    }
+
+    await recordSystemAuditLog({
+      action: 'تعديل دفعة مالية لطالب (سجل التعديلات)',
+      performedBy: actorDisplayName,
+      details: `تم تعديل الوصل (${updatedPay.receiptNumber}) للطالب رقم (${student.studentNumber}) "${student.fullName}": المبلغ من ${oldAmount.toLocaleString()} د.ع إلى ${newAmount.toLocaleString()} د.ع | التاريخ من (${oldDate}) إلى (${updatedPay.date})${oldNotes !== (updatedPay.notes || '') ? ` | تحديث الملاحظة` : ''}. إجمالي المدفوع الآن: ${updatedStudent.verifiedPaidIQD.toLocaleString()} د.ع، المتبقي: ${updatedStudent.remainingBalanceIQD.toLocaleString()} د.ع.`,
+      affectedCount: 1,
+      entityType: 'student_payment',
+    });
+    setAuditLogs(LocalStorageManager.getAuditLogs());
+
+    return {
+      success: true,
+      message: `تم حفظ تعديل الدفعة بنجاح وتسجيل العملية في سجل التعديلات. المدفوع الآن: ${updatedStudent.verifiedPaidIQD.toLocaleString()} د.ع، المتبقي: ${updatedStudent.remainingBalanceIQD.toLocaleString()} د.ع.`,
+    };
+  };
+
+  const confirmStudentReviewDeposit = async (studentId: string) => {
+    if (!canManageFinances) {
+      return {
+        success: false,
+        message: 'غير مصرح لك باعتماد دفعات المراجعة.',
+      };
+    }
+
+    const student = scrubStudents.find((s) => s.id === studentId);
+    if (!student) {
+      return { success: false, message: 'سجل الطالب غير موجود.' };
+    }
+
+    const depositAmount = student.pendingReviewAmountIQD || 2000;
+    const nowIso = new Date().toISOString();
+    const todayDate = nowIso.split('T')[0];
+    const nowTime = new Date().toTimeString().substring(0, 5);
+    const receiptNumber = `SCRUB-REV-${String(student.studentNumber).padStart(3, '0')}-${Math.floor(100 + Math.random() * 900)}`;
+
+    const newPayment: StudentPayment = {
+      id: `scrub-pay-rev-${student.studentNumber}-${Date.now()}`,
+      studentId: student.id,
+      studentNumber: student.studentNumber,
+      studentName: student.fullName,
+      linkedUserId: student.isLinkedToAccount ? student.linkedUserId : undefined,
+      amountIQD: depositAmount,
+      paymentType: 'initial_deposit',
+      paymentMethod: 'cash',
+      receiptNumber,
+      referenceCode: `REV-CONFIRMED-${student.studentNumber}`,
+      date: todayDate,
+      time: nowTime,
+      notes: `تم التحقق واعتماد عربون ملف الدفعات القديم (${student.matchedOldPaymentName || student.fullName}: ${depositAmount.toLocaleString()} د.ع)`,
+      isVerified: true,
+      verificationStatus: 'verified',
+      recordedBy: actorDisplayName,
+      recordedByUid: auth.currentUser?.uid,
+      verifiedBy: actorDisplayName,
+      verifiedAt: nowIso,
+      createdAt: nowIso,
+    };
+
+    const updatedPayments = [newPayment, ...studentPayments];
+    const groupKey = student.ambiguousGroupKey;
+
+    const updatedStudentsList = scrubStudents.map((s) => {
+      if (s.id === student.id) {
+        return recalculateStudentFinancials(
+          {
+            ...s,
+            needsReview: false,
+            matchStatus: 'confirmed',
+            pendingReviewAmountIQD: undefined,
+            reviewNote: `تم اعتماد مطابقة العربون القديم (${s.matchedOldPaymentName || ''}: ${depositAmount.toLocaleString()} د.ع) بتاريخ ${todayDate}`,
+            updatedAt: nowIso,
+          },
+          updatedPayments
+        );
+      }
+      // If another student shared the same ambiguous old deposit record, clear their review flag automatically!
+      if (groupKey && s.ambiguousGroupKey === groupKey && s.needsReview) {
+        return recalculateStudentFinancials(
+          {
+            ...s,
+            needsReview: false,
+            matchStatus: s.verifiedPaidIQD > 0 ? 'confirmed' : 'unmatched',
+            pendingReviewAmountIQD: undefined,
+            reviewNote: `تم حسم الدفعة المشتركة (${s.matchedOldPaymentName || ''}) لصالح الطالب رقم (${student.studentNumber}) ${student.fullName}`,
+            updatedAt: nowIso,
+          },
+          updatedPayments
+        );
+      }
+      return s;
+    });
+
+    const targetUpdatedStudent = updatedStudentsList.find((s) => s.id === student.id)!;
+
+    setStudentPayments(updatedPayments);
+    setScrubStudents(updatedStudentsList);
+    syncLinkedGraduateBalance(targetUpdatedStudent);
+
+    if (auth.currentUser) {
+      try {
+        const cleanPay = Object.fromEntries(
+          Object.entries(newPayment).filter(([_, v]) => v !== undefined)
+        );
+        await setDoc(doc(db, 'student_payments', newPayment.id), cleanPay);
+
+        for (const stu of updatedStudentsList) {
+          if (stu.id === student.id || (groupKey && stu.ambiguousGroupKey === groupKey)) {
+            const cleanStu = Object.fromEntries(
+              Object.entries(stu).filter(([_, v]) => v !== undefined)
+            );
+            await setDoc(doc(db, 'scrub_students', stu.id), cleanStu, { merge: true });
+          }
+        }
+      } catch (e) {
+        console.warn('Firestore confirmStudentReviewDeposit notice:', e);
+      }
+    }
+
+    await recordSystemAuditLog({
+      action: 'اعتماد دفعة قديمة بعد المراجعة اليدوية',
+      performedBy: actorDisplayName,
+      details: `تم اعتماد عربون (${depositAmount.toLocaleString()} د.ع) للطالب رقم (${student.studentNumber}) "${student.fullName}" ومطابقته مع الاسم القديم (${student.matchedOldPaymentName || 'عربون سابق'}). المتبقي الآن: ${targetUpdatedStudent.remainingBalanceIQD.toLocaleString()} د.ع.`,
+      affectedCount: 1,
+      entityType: 'scrub_student',
+    });
+    setAuditLogs(LocalStorageManager.getAuditLogs());
+
+    return {
+      success: true,
+      message: `تم اعتماد العربون (${depositAmount.toLocaleString()} د.ع) للطالب "${student.fullName}" وتحديث حالته إلى «دفع عربون».`,
+    };
+  };
+
+  const changeStudentPaymentStatusManual = async (
+    studentId: string,
+    targetStatus: PaymentStatus,
+    note?: string
+  ) => {
+    if (!canManageFinances) {
+      return {
+        success: false,
+        message: 'غير مصرح لك بتغيير حالة الدفع.',
+      };
+    }
+
+    const student = scrubStudents.find((s) => s.id === studentId);
+    if (!student) {
+      return { success: false, message: 'سجل الطالب غير موجود.' };
+    }
+
+    const nowIso = new Date().toISOString();
+    const todayDate = nowIso.split('T')[0];
+    const nowTime = new Date().toTimeString().substring(0, 5);
+    const totalFee = student.totalFeeIQD > 0 ? student.totalFeeIQD : 35000;
+
+    let nextPayments = [...studentPayments];
+    let nextStudentBase: ScrubStudent = { ...student, updatedAt: nowIso };
+    const newlyCreatedPays: StudentPayment[] = [];
+    const modifiedPays: StudentPayment[] = [];
+
+    if (targetStatus === 'needs_review') {
+      nextStudentBase = {
+        ...nextStudentBase,
+        needsReview: true,
+        matchStatus: 'needs_review',
+        reviewNote: note?.trim() || student.reviewNote || 'تحتاج إلى مراجعة إدارية لحالة الدفع',
+      };
+    } else if (targetStatus === 'unpaid') {
+      nextPayments = nextPayments.map((p) => {
+        if (p.studentId === student.id && p.verificationStatus !== 'voided') {
+          const voided: StudentPayment = {
+            ...p,
+            isVerified: false,
+            verificationStatus: 'voided',
+            notes: `${p.notes ? p.notes + ' • ' : ''}[تحويل الحالة إلى لم يدفع: ${note?.trim() || 'تعديل إداري'}]`,
+            updatedAt: nowIso,
+          };
+          modifiedPays.push(voided);
+          return voided;
+        }
+        return p;
+      });
+      nextStudentBase = {
+        ...nextStudentBase,
+        needsReview: false,
+        matchStatus: 'unmatched',
+        reviewNote: note?.trim() || undefined,
+      };
+    } else if (targetStatus === 'deposit' || targetStatus === 'partial') {
+      if (student.verifiedPaidIQD === 0) {
+        const depAmount = student.pendingReviewAmountIQD || 2000;
+        const newPay: StudentPayment = {
+          id: `scrub-pay-status-${student.studentNumber}-${Date.now()}`,
+          studentId: student.id,
+          studentNumber: student.studentNumber,
+          studentName: student.fullName,
+          amountIQD: depAmount,
+          paymentType: 'initial_deposit',
+          paymentMethod: 'cash',
+          receiptNumber: `SCRUB-DEP-${String(student.studentNumber).padStart(3, '0')}-${Math.floor(100 + Math.random() * 900)}`,
+          referenceCode: `STATUS-DEP-${student.studentNumber}`,
+          date: todayDate,
+          time: nowTime,
+          notes: note?.trim() || 'تحديث الحالة إلى دفع عربون (2,000 د.ع)',
+          isVerified: true,
+          verificationStatus: 'verified',
+          recordedBy: actorDisplayName,
+          verifiedBy: actorDisplayName,
+          verifiedAt: nowIso,
+          createdAt: nowIso,
+        };
+        newlyCreatedPays.push(newPay);
+        nextPayments = [newPay, ...nextPayments];
+      }
+      nextStudentBase = {
+        ...nextStudentBase,
+        needsReview: false,
+        matchStatus: 'confirmed',
+        reviewNote: note?.trim() || student.reviewNote,
+      };
+    } else if (targetStatus === 'completed') {
+      const diff = Math.max(0, totalFee - student.verifiedPaidIQD);
+      if (diff > 0) {
+        const newPay: StudentPayment = {
+          id: `scrub-pay-comp-${student.studentNumber}-${Date.now()}`,
+          studentId: student.id,
+          studentNumber: student.studentNumber,
+          studentName: student.fullName,
+          amountIQD: diff,
+          paymentType: 'final_settlement',
+          paymentMethod: 'cash',
+          receiptNumber: `SCRUB-FULL-${String(student.studentNumber).padStart(3, '0')}-${Math.floor(100 + Math.random() * 900)}`,
+          referenceCode: `STATUS-FULL-${student.studentNumber}`,
+          date: todayDate,
+          time: nowTime,
+          notes: note?.trim() || 'تسديد المبلغ الكامل لحفلة التخرج (مكتمل)',
+          isVerified: true,
+          verificationStatus: 'verified',
+          recordedBy: actorDisplayName,
+          verifiedBy: actorDisplayName,
+          verifiedAt: nowIso,
+          createdAt: nowIso,
+        };
+        newlyCreatedPays.push(newPay);
+        nextPayments = [newPay, ...nextPayments];
+      }
+      nextStudentBase = {
+        ...nextStudentBase,
+        needsReview: false,
+        matchStatus: 'confirmed',
+        reviewNote: note?.trim() || student.reviewNote,
+      };
+    }
+
+    const updatedStudent = recalculateStudentFinancials(nextStudentBase, nextPayments);
+
+    setStudentPayments(nextPayments);
+    setScrubStudents((prev) =>
+      prev.map((s) => (s.id === student.id ? updatedStudent : s))
+    );
+    syncLinkedGraduateBalance(updatedStudent);
+
+    if (auth.currentUser) {
+      try {
+        for (const p of [...newlyCreatedPays, ...modifiedPays]) {
+          const cleanPay = Object.fromEntries(
+            Object.entries(p).filter(([_, v]) => v !== undefined)
+          );
+          await setDoc(doc(db, 'student_payments', p.id), cleanPay, { merge: true });
+        }
+        const cleanStu = Object.fromEntries(
+          Object.entries(updatedStudent).filter(([_, v]) => v !== undefined)
+        );
+        await setDoc(doc(db, 'scrub_students', updatedStudent.id), cleanStu, {
+          merge: true,
+        });
+      } catch (e) {
+        console.warn('Firestore changeStudentPaymentStatusManual notice:', e);
+      }
+    }
+
+    await recordSystemAuditLog({
+      action: 'تغيير حالة الدفع لطالب',
+      performedBy: actorDisplayName,
+      details: `تم تغيير حالة الدفع للطالب رقم (${student.studentNumber}) "${student.fullName}" إلى (${targetStatus}). المدفوع الآن: ${updatedStudent.verifiedPaidIQD.toLocaleString()} د.ع، المتبقي: ${updatedStudent.remainingBalanceIQD.toLocaleString()} د.ع.`,
+      affectedCount: 1,
+      entityType: 'scrub_student',
+    });
+    setAuditLogs(LocalStorageManager.getAuditLogs());
+
+    return {
+      success: true,
+      message: `تم تحديث حالة الدفع للطالب "${student.fullName}" بنجاح.`,
     };
   };
 
@@ -3062,7 +3516,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const refreshLoggedInUsers = async () => {
     try {
-      const allUsers = await getAllLoggedInUserAccounts();
+      const allUsers = await getAllLoggedInUserAccounts(isSuperAdmin);
       setLoggedInUsers(allUsers);
     } catch (e) {
       console.warn('Refresh logged-in users error:', e);
@@ -3255,7 +3709,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const refreshModeratorRequests = async () => {
     try {
-      const all = await getAllModeratorRequests();
+      const all = await getAllModeratorRequests(isSuperAdmin);
       setModeratorRequests(all);
     } catch (e) {
       console.warn('Refresh moderator requests error:', e);
@@ -3264,18 +3718,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const refreshSupervisors = useCallback(async () => {
     try {
-      const list = await getAllSupervisors();
+      const list = await getAllSupervisors(isSuperAdmin);
       setSupervisors(list);
     } catch (e) {
       console.warn('Refresh supervisors error:', e);
     }
-  }, []);
+  }, [isSuperAdmin]);
 
   useEffect(() => {
-    if (isAdmin || isSuperAdmin) {
+    if (isAdmin || isSuperAdmin || isModerator) {
       refreshSupervisors();
     }
-  }, [isAdmin, isSuperAdmin, refreshSupervisors]);
+  }, [isAdmin, isSuperAdmin, isModerator, refreshSupervisors]);
 
   const submitModeratorRequestAction = async (data: {
     userName: string;
@@ -3321,6 +3775,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await refreshSupervisors();
       const targetReq = moderatorRequests.find((r) => r.id === requestId || r.userId === requestId);
       const studentUid = targetReq?.userId || requestId;
+      LocalStorageManager.addAuditLog({
+        action: 'قبول طلب إشراف وترقية مستخدم',
+        performedBy: actorDisplayName,
+        details: `تمت الموافقة على طلب الإشراف للطالب (${targetReq?.userName || studentUid}) ومنحه صلاحيات مشرف معتمد.`,
+        entityType: 'graduate',
+      });
+      setAuditLogs(LocalStorageManager.getAuditLogs());
       await sendAppNotification({
         title: 'تهانينا! تمت ترقيتك إلى مشرف معتمد 🎉',
         message: 'وافقت الإدارة على طلبك للانضمام إلى كادر الإشراف. يمكنك الآن الدخول للوحة الإشراف والمساهمة في تنظيم فعاليات الدفعة.',
@@ -3358,6 +3819,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return res;
   };
 
+  const promoteUserToModeratorAction = async (targetUser: {
+    uid: string;
+    displayName: string;
+    email?: string;
+  }): Promise<{ success: boolean; notice: string }> => {
+    if (!isSuperAdmin) {
+      return {
+        success: false,
+        notice: 'عذراً، صلاحية ترقية المستخدمين إلى مشرفين محصورة بالمشرف العام الرئيسي فقط.',
+      };
+    }
+    const adminUid = firebaseUser?.uid || 'super_admin';
+    const adminName =
+      currentUser?.fullName || firebaseUser?.displayName || 'المشرف العام';
+    const res = await fbPromoteUserToModerator(targetUser, adminUid, adminName);
+    if (res.success) {
+      await refreshSupervisors();
+      await refreshModeratorRequests();
+      await refreshLoggedInUsers();
+      LocalStorageManager.addAuditLog({
+        action: 'ترقية مستخدم إلى مشرف (RBAC)',
+        performedBy: actorDisplayName,
+        details: `قام المشرف العام بترقية المستخدم (${targetUser.displayName} — UID: ${targetUser.uid}) إلى رتبة مشرف معتمد.`,
+        entityType: 'graduate',
+      });
+      setAuditLogs(LocalStorageManager.getAuditLogs());
+      await sendAppNotification({
+        title: 'تمت ترقية حسابك إلى مشرف معتمد 🎉',
+        message:
+          'قام المشرف العام بترقية حسابك إلى مشرف معتمد في موقع تخرج قسم تقنيات التمريض — دفعة 2027. يمكنك الآن الوصول الكامل للوحة الإشراف.',
+        type: 'moderator_approval',
+        targetAudience: 'user',
+        targetUserId: targetUser.uid,
+        linkRoute: 'admin_dashboard',
+      });
+    }
+    return res;
+  };
+
   const revokeModeratorRoleAction = async (
     targetUserId: string
   ): Promise<{ success: boolean; notice: string }> => {
@@ -3371,6 +3871,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await refreshSupervisors();
       await refreshModeratorRequests();
       await refreshLoggedInUsers();
+      LocalStorageManager.addAuditLog({
+        action: 'إلغاء صلاحيات مشرف (RBAC)',
+        performedBy: actorDisplayName,
+        details: `قام المشرف العام بإلغاء صلاحيات الإشراف للحساب (UID: ${targetUserId}) وإعادته إلى رتبة طالب.`,
+        entityType: 'graduate',
+      });
+      setAuditLogs(LocalStorageManager.getAuditLogs());
       await sendAppNotification({
         title: 'إشعار إداري بخصوص صلاحية الإشراف',
         message: 'تم إلغاء صلاحية الإشراف وإعادة الحساب إلى رتبة طالب من قبل المشرف العام.',
@@ -3422,11 +3929,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteEntireStudentListSuperAdmin,
         restoreEntireStudentListSuperAdmin,
         addStudentPayment,
+        editStudentPayment,
         verifyStudentPayment,
         voidStudentPayment,
         linkStudentToAccount,
         unlinkStudentFromAccount,
         resolveStudentReviewFlag,
+        confirmStudentReviewDeposit,
+        changeStudentPaymentStatusManual,
         isFirebaseConfigured,
         firebaseUser,
         firebaseAuthLoading,
@@ -3452,6 +3962,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submitModeratorRequest: submitModeratorRequestAction,
         approveModeratorRequest: approveModeratorRequestAction,
         rejectModeratorRequest: rejectModeratorRequestAction,
+        promoteUserToModerator: promoteUserToModeratorAction,
         revokeModeratorRole: revokeModeratorRoleAction,
         supervisors,
         refreshSupervisors,

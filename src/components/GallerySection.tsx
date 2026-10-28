@@ -88,9 +88,9 @@ export const GallerySection: React.FC<{ limit?: number }> = ({ limit }) => {
   const categories = [
     { id: 'all', label: 'كافة الأقسام' },
     { id: 'scrub_night', label: 'حفلة السكراب (12/12/2026)' },
-    { id: 'official_grad', label: 'حفل التخرج الرسمي 2027' },
+    { id: 'official_grad', label: 'حفل تخرج دفعة 2027' },
     { id: 'posters', label: 'الهوية والبوسترات' },
-    { id: 'memories', label: 'ذكريات المعهد' },
+    { id: 'memories', label: 'ذكريات دفعة التمريض' },
   ];
 
   // Handle upload for Public Gallery
@@ -169,13 +169,13 @@ export const GallerySection: React.FC<{ limit?: number }> = ({ limit }) => {
           <div>
             <div className="inline-flex items-center gap-1.5 text-xs text-[#35D6C2] font-bold mb-1.5">
               <Camera className="w-3.5 h-3.5 text-[#35D6C2]" />
-              <span>أرشيف التخرج والذكريات السريرية</span>
+              <span>ذكريات دفعة التمريض • أرشيف صور التخرج</span>
             </div>
             <h2 className="text-xl sm:text-3xl font-black text-[#F4F8FC] leading-snug">
-              معرض صور معهد التمريض (دفعة 2027)
+              ذكريات ومعرض صور دفعة التمريض 2027
             </h2>
             <p className="text-xs text-slate-300 mt-1">
-              توثيق حفلة السكراب في مسرح تفاحة المصور بعدسة باقر حسن، وذكريات التدريب والدفعة، ومستودع الصور الخاص بكل خريج.
+              توثيق حفلة السكراب في مسرح تفاحة المصور بعدسة باقر حسن، وذكريات طلاب معهد التمريض — دفعة 2027، والخزانة الخاصة بكل طالب.
             </p>
           </div>
 

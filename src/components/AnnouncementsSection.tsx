@@ -21,9 +21,9 @@ export const AnnouncementsSection: React.FC<{ limit?: number }> = ({ limit }) =>
   const displayList = limit ? filtered.slice(0, limit) : filtered;
 
   const categories = [
-    { id: 'all', label: 'جميع الأخبار والترندات' },
+    { id: 'all', label: 'جميع إعلانات الدفعة' },
     { id: 'scrub_night', label: 'حفلة السكراب (12/12/2026)' },
-    { id: 'official_grad', label: 'التخرج الرسمي 2027' },
+    { id: 'official_grad', label: 'حفل تخرج 2027' },
     { id: 'urgent', label: 'تنبيهات هامة وعاجلة' },
   ];
 
@@ -34,13 +34,13 @@ export const AnnouncementsSection: React.FC<{ limit?: number }> = ({ limit }) =>
           <div>
             <div className="inline-flex items-center gap-1.5 text-xs text-[#D7B875] font-bold mb-1.5">
               <Sparkles className="w-3.5 h-3.5 text-[#D7B875]" />
-              <span>المنصة الإعلامية والتبليغات الطبية — معهد التمريض</span>
+              <span>منصة تنظيم شؤون الدفعة — تخرج دفعة التمريض 2027</span>
             </div>
             <h2 className="text-xl sm:text-3xl font-black text-[#F4F8FC]">
-              التبليغات الرسمية وآخر الأخبار
+              إعلانات وتنبيهات الدفعة وآخر المستجدات
             </h2>
             <p className="text-xs text-slate-300 mt-1">
-              متابعة مباشرة لتوجيهات اللجنة التحضيرية، مواعيد التجهيز، وتحديثات دفعة 2027.
+              متابعة مباشرة لتنبيهات فريق تنظيم دفعة 2027، مواعيد التجهيز، وتحديثات فعاليات التخرج.
             </p>
           </div>
 
@@ -66,7 +66,7 @@ export const AnnouncementsSection: React.FC<{ limit?: number }> = ({ limit }) =>
           <div className="text-center py-12 rounded-2xl bg-[#101B2C]/60 border border-white/10">
             <Bell className="w-10 h-10 text-slate-400 mx-auto mb-3 opacity-50" />
             <h4 className="text-base font-bold text-[#F4F8FC] mb-1">لا توجد بيانات حالياً</h4>
-            <p className="text-xs text-slate-400">سيتم نشر التحديثات فور اعتمادها من قبل اللجنة المنظمة.</p>
+            <p className="text-xs text-slate-400">سيتم نشر التحديثات فور إضافتها من قِبل فريق تنظيم الدفعة.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -124,7 +124,7 @@ export const AnnouncementsSection: React.FC<{ limit?: number }> = ({ limit }) =>
                         {ann.category === 'scrub_night'
                           ? 'حفلة السكراب'
                           : ann.category === 'official_grad'
-                          ? 'التخرج الرسمي 2027'
+                          ? 'حفل تخرج 2027'
                           : ann.category === 'urgent'
                           ? 'تنبيه عاجل'
                           : 'إعلان عام'}
@@ -168,7 +168,7 @@ export const AnnouncementsSection: React.FC<{ limit?: number }> = ({ limit }) =>
 
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#21D4C2]/10 border border-[#21D4C2]/30 text-[#21D4C2] text-xs font-bold mb-3">
                 <Bell className="w-3.5 h-3.5" />
-                <span>بيان معتمد من لجنة معهد التمريض</span>
+                <span>إعلان من فريق تنظيم دفعة 2027</span>
               </div>
 
               {activeModalAnn.imageUrl && (
@@ -188,7 +188,7 @@ export const AnnouncementsSection: React.FC<{ limit?: number }> = ({ limit }) =>
               <div className="flex items-center gap-2 text-xs text-[#929BAA] mb-4 pb-3 border-b border-white/10">
                 <Calendar className="w-3.5 h-3.5 text-[#21D4C2]" />
                 <span>تاريخ النشر: {formatArabicDate(activeModalAnn.publishedAt)}</span>
-                <span className="text-[#D6B779]">• معهد التمريض (دفعة 2027)</span>
+                <span className="text-[#D6B779]">• تخرج طلاب معهد التمريض (دفعة 2027)</span>
               </div>
 
               <div className="text-sm text-[#F5F7FA]/90 leading-relaxed whitespace-pre-line mb-6 bg-[#090B10]/50 p-4 rounded-xl border border-white/5">

@@ -175,9 +175,9 @@ export const ScrubNightPage: React.FC = () => {
                   1
                 </div>
                 <div>
-                  <h4 className="font-bold text-[#F4F8FC] mb-0.5">التسجيل في بوابة معهد التمريض</h4>
+                  <h4 className="font-bold text-[#F4F8FC] mb-0.5">التسجيل في منصة تنظيم شؤون الدفعة</h4>
                   <p className="text-slate-300 leading-relaxed">
-                    سجّل حسابك باسمك الرباعي ورقم هاتفك (ورقم القيد إن وجد) ليتم اعتمادك ضمن قائمة دفعة 2027.
+                    سجّل حسابك باسمك الرباعي ورقم هاتفك ليتم ربط حسابك بسجلك ضمن قائمة طلاب دفعة 2027.
                   </p>
                 </div>
               </div>
@@ -189,7 +189,7 @@ export const ScrubNightPage: React.FC = () => {
                 <div>
                   <h4 className="font-bold text-[#F4F8FC] mb-0.5">تسليم المساهمة أو العربون نقداً</h4>
                   <p className="text-slate-300 leading-relaxed">
-                    يُسلّم المبلغ نقداً (كاش) لأعضاء اللجنة المنظمة المعتمدين، مع إمكانية الدفع كعربون أولي أو تسديد كامل.
+                    يُسلّم المبلغ نقداً (كاش) لأعضاء فريق تنظيم دفعة 2027، مع إمكانية الدفع كعربون أولي أو تسديد كامل.
                   </p>
                 </div>
               </div>
@@ -201,7 +201,7 @@ export const ScrubNightPage: React.FC = () => {
                 <div>
                   <h4 className="font-bold text-[#F4F8FC] mb-0.5">استلام الوصل الإلكتروني الفوري</h4>
                   <p className="text-slate-300 leading-relaxed">
-                    يصدر وصل رسمي مرقم ومختوم إلكترونياً يظهر في صفحة دفعاتك، ويمكنك حفظه أو طباعته في أي وقت.
+                    يصدر وصل استلام مرقم إلكترونياً يظهر في صفحة دفعاتك، ويمكنك حفظه أو طباعته في أي وقت.
                   </p>
                 </div>
               </div>

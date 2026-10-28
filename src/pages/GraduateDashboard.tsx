@@ -221,7 +221,7 @@ export const GraduateDashboard: React.FC = () => {
             )}
 
             <p className="text-xs text-slate-300 flex flex-wrap items-center gap-2">
-              <span className="text-[#D7B875] font-extrabold">معهد التمريض — دفعة 2027</span>
+              <span className="text-[#D7B875] font-extrabold">تخرج طلاب معهد التمريض — دفعة 2027</span>
               <span>•</span>
               <span dir="ltr">{currentUser.phone || currentUser.email}</span>
             </p>
@@ -374,7 +374,7 @@ export const GraduateDashboard: React.FC = () => {
                     <GraduationCap className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-white">حفل التخرج الأكاديمي الرسمي</h3>
+                    <h3 className="text-sm font-bold text-white">حفل تخرج دفعة 2027</h3>
                     <p className="text-[11px] text-[#A6F0DF]">دفعة 2027 (قريباً)</p>
                   </div>
                 </div>
@@ -422,13 +422,13 @@ export const GraduateDashboard: React.FC = () => {
             <div className="space-y-2 text-right">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D6B779]/15 border border-[#D6B779]/30 text-[#D6B779] text-xs font-bold">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>بطاقتك الرسمية جاهزة</span>
+                <span>بطاقتك التذكارية جاهزة</span>
               </div>
               <h3 className="text-lg sm:text-xl font-black text-white">
                 حمل بطاقة التخرج التذكارية باسمك وصورتك
               </h3>
               <p className="text-xs text-[#929BAA] max-w-lg">
-                تم إنشاء تصميم مخصص لدفعة 2027 يحمل أختام ورسومات التمريض الرسمية، جاهز للتنزيل بنقرة واحدة لهاتفك.
+                تم إنشاء تصميم تذكاري مخصص لطلاب دفعة التمريض 2027، جاهز للتنزيل بنقرة واحدة لهاتفك.
               </p>
             </div>
 
@@ -635,20 +635,20 @@ export const GraduateDashboard: React.FC = () => {
             <div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#35D6C5]/10 border border-[#35D6C5]/30 text-[#35D6C5] text-xs font-bold mb-2">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>فريق إدارة وإشراف حفل التخرج 2027</span>
+                <span>فريق تنظيم دفعة 2027</span>
               </div>
               <h3 className="text-lg sm:text-xl font-black text-white">
-                طلب الانضمام إلى فريق الإشراف
+                طلب الانضمام إلى فريق التنظيم والإشراف
               </h3>
               <p className="text-xs text-[#929BAA] max-w-2xl mt-1">
-                تتيح هذه الاستمارة للطلبة الراغبين بالمشاركة في تنظيم وإدارة فعاليات تخرج معهد التمريض (اللجان التنظيمية، التوثيق، الاستقبال) تقديم طلب رسمي يخضع لتدقيق وموافقة الإدارة.
+                تتيح هذه الاستمارة للطلبة الراغبين بالمشاركة في تنظيم شؤون دفعة التمريض 2027 وفعاليات التخرج (التنسيق، التوثيق، الاستقبال) تقديم طلب انضمام إلى فريق تنظيم الدفعة.
               </p>
             </div>
 
             {isAdmin || isModerator ? (
               <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 shrink-0">
                 <CheckCircle2 className="w-4 h-4" />
-                <span>أنت مشرف معتمد بالفعل</span>
+                <span>أنت ضمن فريق الإشراف والتنظيم</span>
               </span>
             ) : null}
           </div>
@@ -677,7 +677,7 @@ export const GraduateDashboard: React.FC = () => {
               <ShieldCheck className="w-12 h-12 text-emerald-400 mx-auto" />
               <h4 className="text-base font-bold text-white">لديك صلاحيات إشرافية نشطة</h4>
               <p className="text-xs text-slate-300 max-w-lg mx-auto">
-                تم اعتماد حسابك ضمن الكادر الإشرافي لحفل تخرج معهد التمريض. يمكنك الوصول المباشر إلى لوحة الإدارة لإدارة الحفلات والموسيقى وقوائم الطلبة.
+                تم تفعيل حسابك ضمن فريق تنظيم وإشراف تخرج طلاب معهد التمريض — دفعة 2027. يمكنك الوصول المباشر إلى لوحة التنظيم لإدارة الفعاليات والموسيقى وقوائم الطلبة.
               </p>
               <button
                 type="button"

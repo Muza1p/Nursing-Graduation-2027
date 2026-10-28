@@ -23,15 +23,15 @@ export const OfficialGraduationPage: React.FC = () => {
     switch (status) {
       case 'coming_soon':
         return {
-          label: 'قريباً (التفاصيل قيد الاعتماد)',
+          label: 'قريباً (التفاصيل قيد الترتيب)',
           color: 'bg-[#D7B875]/20 text-[#D7B875] border-[#D7B875]/40',
-          desc: 'المراسيم الرسمية لحفل التخرج الأكاديمي لعام 2027 قيد التنسيق والاعتماد من قبل اللجنة التحضيرية وإدارة المعهد.',
+          desc: 'ترتيبات حفل تخرج طلاب معهد التمريض — دفعة 2027 قيد التنسيق والإعداد من قِبل فريق تنظيم الدفعة.',
         };
       case 'date_announced':
         return {
-          label: 'تم إعلان الموعد الرسمي',
+          label: 'تم إعلان موعد الحفل',
           color: 'bg-[#35D6C2]/20 text-[#35D6C2] border-[#35D6C2]/40',
-          desc: 'تم اعتماد الموعد الرسمي لحفل التخرج الأكاديمي لطلبة دفعة 2027.',
+          desc: 'تم تحديد موعد حفل تخرج طلاب دفعة التمريض 2027.',
         };
       case 'registration_open':
         return {
@@ -43,19 +43,19 @@ export const OfficialGraduationPage: React.FC = () => {
         return {
           label: 'كافة التفاصيل معلنة',
           color: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
-          desc: 'تم نشر البرنامج الرسمي والتعليمات الكاملة للمراسيم.',
+          desc: 'تم نشر برنامج الحفل والتعليمات الكاملة لفعاليات التخرج.',
         };
       case 'completed':
         return {
           label: 'اكتمل الحفل بنجاح',
           color: 'bg-slate-500/20 text-slate-300 border-slate-500/40',
-          desc: 'اكتملت المراسيم والتخرج الرسمي بنجاح — مبارك لجميع خريجي معهد التمريض.',
+          desc: 'اكتمل حفل التخرج بنجاح — مبارك لجميع خريجي دفعة التمريض 2027.',
         };
       default:
         return {
           label: 'قريباً',
           color: 'bg-[#D7B875]/20 text-[#D7B875] border-[#D7B875]/40',
-          desc: 'قيد التنسيق والاعتماد الرسمي.',
+          desc: 'قيد التنسيق والترتيب من فريق تنظيم الدفعة.',
         };
     }
   };
@@ -75,23 +75,23 @@ export const OfficialGraduationPage: React.FC = () => {
                 {statusInfo.label}
               </span>
               <span className="text-xs text-[#35D6C2] font-bold bg-[#35D6C2]/10 px-3 py-1 rounded-xl border border-[#35D6C2]/25">
-                معهد التمريض — دفعة 2027
+                تخرج طلاب معهد التمريض — دفعة 2027
               </span>
             </div>
 
             <h1 className="text-3xl sm:text-5xl font-black text-[#F4F8FC] tracking-tight leading-tight">
-              حفل التخرج الرسمي —{' '}
+              حفل تخرج دفعة 2027 —{' '}
               <span className="text-[#35D6C2]">وشاح التمريض الفيروزي</span>
             </h1>
 
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
-              {statusInfo.desc} حيث يتوشح خريجو وخريجات <strong className="text-white">معهد التمريض</strong> بالمعطف الطبي الأبيض ووشاح التخرج الفيروزي المذهب، مع ترديد قسم المهنة واستلام شهادات التخرج لعام 2027.
+              {statusInfo.desc} حيث يتوشح طلاب وطالبات <strong className="text-white">معهد التمريض — دفعة 2027</strong> بالمعطف الطبي الأبيض ووشاح التخرج الفيروزي المذهب، للاحتفاء بمسيرة الدراسة والذكريات التي تجمعنا.
             </p>
 
             <div className="pt-2 flex flex-wrap items-center gap-3 text-xs">
               <div className="px-4 py-2 rounded-xl bg-[#0A0D12]/80 border border-[#D7B875]/35 text-[#D7B875] font-bold flex items-center gap-2">
                 <Award className="w-4 h-4" />
-                <span>الوشاح المعتمد: التركوازي الطبي المذهب</span>
+                <span>الوشاح الموحد للدفعة: التركوازي الطبي المذهب</span>
               </div>
               <div className="px-4 py-2 rounded-xl bg-[#0A0D12]/80 border border-[#35D6C2]/30 text-[#35D6C2] font-bold flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4" />
@@ -111,7 +111,7 @@ export const OfficialGraduationPage: React.FC = () => {
             <div className="p-4 rounded-2xl bg-[#0A0D12]/75 border border-[#D7B875]/30 text-center flex flex-col items-center justify-between">
               <AnatomicalHeartMedalIllustration className="w-36 h-36 mx-auto" />
               <div className="mt-2 text-[11px] font-bold text-[#D7B875]">
-                شهادة التخرج وقسم التمريض
+                ذكريات التخرج وقسم المهنة
               </div>
             </div>
           </div>
@@ -120,20 +120,20 @@ export const OfficialGraduationPage: React.FC = () => {
 
       <AnimatedEcgWaveform color="#35D6C2" opacity="opacity-25" className="w-full h-10" />
 
-      {/* Official Status Grid (No Fake Countdown until Date is Configured) */}
+      {/* Status Grid (No Fake Countdown until Date is Configured) */}
       <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="rounded-2xl bg-[#101B2C] border border-[#35D6C2]/25 p-6 space-y-3 shadow-lg">
           <div className="w-10 h-10 rounded-xl bg-[#35D6C2]/15 border border-[#35D6C2]/30 flex items-center justify-center text-[#35D6C2]">
             <Calendar className="w-5 h-5" />
           </div>
-          <span className="text-xs font-semibold text-slate-400">التاريخ الرسمي للحفل</span>
+          <span className="text-xs font-semibold text-slate-400">تاريخ الحفل</span>
           <h3 className="text-lg font-black text-[#F4F8FC]">
             {eventConfig.officialGradDateDisplay || eventConfig.officialGraduationDate || 'قريباً'}
           </h3>
           <p className="text-xs text-slate-400 leading-relaxed">
             {eventConfig.officialGraduationStatus === 'coming_soon'
-              ? 'لم يتم تحديد تاريخ افتراضي؛ سيتم إعلانه رسمياً فور اعتماده.'
-              : 'الموعد الرسمي المعتمد من اللجنة.'}
+              ? 'لم يتم تحديد تاريخ افتراضي؛ سيتم إعلانه من فريق تنظيم الدفعة فور تحديده.'
+              : 'الموعد المحدد من فريق تنظيم الدفعة.'}
           </p>
         </div>
 
@@ -147,8 +147,8 @@ export const OfficialGraduationPage: React.FC = () => {
           </h3>
           <p className="text-xs text-slate-400 leading-relaxed">
             {eventConfig.officialGraduationStatus === 'coming_soon'
-              ? 'تُحدد القاعة الرسمية لاحقاً وتُحدث مباشرة عبر لوحة الإدارة.'
-              : 'الموقع الرسمي المعتمد.'}
+              ? 'تُحدد القاعة لاحقاً وتُحدث مباشرة عبر لوحة تنظيم الدفعة.'
+              : 'الموقع المحدد للحفل.'}
           </p>
         </div>
 
@@ -156,29 +156,29 @@ export const OfficialGraduationPage: React.FC = () => {
           <div className="w-10 h-10 rounded-xl bg-[#35D6C2]/15 border border-[#35D6C2]/30 flex items-center justify-center text-[#35D6C2]">
             <Clock className="w-5 h-5" />
           </div>
-          <span className="text-xs font-semibold text-slate-400">المنهاج والمراسيم</span>
+          <span className="text-xs font-semibold text-slate-400">فقرات الاحتفال</span>
           <h3 className="text-lg font-black text-[#F4F8FC]">
             {eventConfig.officialGraduationSchedule || 'قريباً'}
           </h3>
           <p className="text-xs text-slate-400 leading-relaxed">
-            مسيرة الخريجين، أداء القسم الطبي، وتكريم طلبة دفعة 2027.
+            دخول الخريجين، جلسات التصوير التذكارية، وتكريم طلاب دفعة 2027.
           </p>
         </div>
       </div>
 
-      {/* Official Notice Card */}
+      {/* Notice Card */}
       <div className="max-w-5xl mx-auto rounded-3xl bg-[#101B2C] border border-white/10 p-6 sm:p-8 space-y-4 shadow-xl">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-[#35D6C2]/20 text-[#35D6C2] flex items-center justify-center">
             <Info className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="text-base font-black text-[#F4F8FC]">تنويه تنظيمي لطلبة معهد التمريض</h4>
-            <p className="text-xs text-slate-400">تحديث ديناميكي مباشر من لوحة المشرفين</p>
+            <h4 className="text-base font-black text-[#F4F8FC]">تنويه تنظيمي لطلاب دفعة التمريض 2027</h4>
+            <p className="text-xs text-slate-400">تحديث مباشر من فريق تنظيم دفعة 2027</p>
           </div>
         </div>
         <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-          حرصاً على المصداقية والدقة، لا يتم عرض أي عداد تنازلي أو تاريخ غير مؤكد لحفل التخرج الرسمي 2027 حتى يصدر القرار النهائي. بمجرد اعتماد الموعد والقاعة من قِبل اللجنة، سيتم تفعيلها وإشعار كافة الطلبة المسجلين فوراً.
+          حرصاً على الدقة في تنظيم شؤون الدفعة، لا يتم عرض أي عداد تنازلي أو تاريخ غير مؤكد لحفل تخرج دفعة 2027 حتى يتم الاتفاق النهائي على القاعة والموعد. بمجرد تحديد الموعد والقاعة من قِبل فريق تنظيم الدفعة، سيتم تفعيلها وإشعار كافة الطلاب المسجلين فوراً.
         </p>
 
         <div className="pt-2 flex flex-wrap gap-3">

@@ -15,7 +15,7 @@ export type PaymentMethod = 'cash' | 'bank_transfer';
 
 export type PaymentEventTarget = 'scrub_night' | 'official_grad';
 
-export type PaymentStatus = 'deposit' | 'partial' | 'completed' | 'unpaid';
+export type PaymentStatus = 'deposit' | 'partial' | 'completed' | 'unpaid' | 'needs_review';
 
 export type ContentStatus = 'published' | 'draft' | 'archived';
 
@@ -43,7 +43,12 @@ export interface EventConfig {
   eventType: string;
   cohortYear: string; // "دفعة 2026"
   graduationYear: string; // "2027"
-  institutionName: string; // "معهد التمريض"
+  institutionName: string; // "الكلية البوليتكنك القادسية — قسم تقنيات التمريض"
+  collegeName?: string; // "الكلية البوليتكنك القادسية"
+  departmentName?: string; // "قسم تقنيات التمريض"
+  stageName?: string; // "المرحلة الثانية"
+  studyType?: string; // "صباحي"
+  academicYear?: string; // "2026–2027"
 
   // Scrub Night Config
   scrubEventName: string; // "حفلة السكراب"
@@ -100,6 +105,7 @@ export interface EventConfig {
   jobCountText?: string;
   jobRightsText?: string;
   audioUrl?: string;
+  aboutSiteText?: string;
 }
 
 export interface LoggedInUserAccount {
@@ -155,10 +161,14 @@ export interface ScrubStudent {
   linkedUserName?: string;
   linkedAt?: string;
   linkedBy?: string;
-  needsReview?: boolean; // True if similar existing record flagged for review
+  needsReview?: boolean; // True if similar existing record or ambiguous old payment flagged for review
   reviewNote?: string;
   potentialMatchId?: string;
   potentialMatchName?: string;
+  matchStatus?: 'confirmed' | 'needs_review' | 'unmatched';
+  matchedOldPaymentName?: string;
+  pendingReviewAmountIQD?: number;
+  ambiguousGroupKey?: string;
   notes?: string;
   createdAt: string;
   updatedAt?: string;

@@ -11,15 +11,18 @@ export const TeamSection: React.FC = () => {
         <div className="text-center max-w-2xl mx-auto mb-6 sm:mb-8">
           <div className="inline-flex items-center gap-1.5 text-xs text-[#D6B779] font-semibold mb-1.5">
             <GraduationCap className="w-3.5 h-3.5 text-[#D6B779]" />
-            <span>معهد التمريض — دفعة 2027</span>
+            <span>تخرج طلاب معهد التمريض — دفعة 2027</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-white">
-            إشراف دفعة 2027
+            قائمة الإشراف وفريق تنظيم دفعة 2027
           </h2>
+          <p className="text-xs sm:text-sm text-[#929BAA] mt-1.5">
+            حسابات المشرفين والمنظمين لتنسيق فعاليات التخرج وشؤون الدفعة
+          </p>
         </div>
 
-        {/* Supervisors Cards (Without Organizing Committee Titles) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 max-w-3xl mx-auto">
+        {/* Supervisors Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-4xl mx-auto">
           {eventConfig.organizers
             .filter(
               (org) =>
@@ -42,9 +45,12 @@ export const TeamSection: React.FC = () => {
                   </div>
                 </div>
 
-                <h3 className="text-base sm:text-lg font-bold text-white mb-3 group-hover:text-[#21D4C2] transition-colors">
+                <h3 className="text-base sm:text-lg font-bold text-white mb-1 group-hover:text-[#21D4C2] transition-colors">
                   {org.name}
                 </h3>
+                <span className="text-[11px] text-[#929BAA] mb-3">
+                  فريق تنظيم دفعة 2027
+                </span>
 
                 {/* Exact Instagram handle */}
                 <a
@@ -63,16 +69,16 @@ export const TeamSection: React.FC = () => {
             ))}
         </div>
 
-        {/* Official Instagram Channel Showcase */}
-        <div className="mt-8 sm:mt-10 max-w-3xl mx-auto rounded-2xl bg-gradient-to-r from-[#101827] via-[#1a1c2b] to-[#101827] border border-[#D6B779]/30 p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6 shadow-2xl">
+        {/* Cohort Instagram Channel Showcase */}
+        <div className="mt-8 sm:mt-10 max-w-4xl mx-auto rounded-2xl bg-gradient-to-r from-[#101827] via-[#1a1c2b] to-[#101827] border border-[#D6B779]/30 p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6 shadow-2xl">
           <div className="flex items-center gap-3.5 sm:gap-4 text-right">
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 flex items-center justify-center text-white shadow-lg shrink-0">
               <Instagram className="w-6 h-6 sm:w-7 sm:h-7" />
             </div>
             <div>
-              <span className="text-[11px] font-bold text-[#D6B779]">الحساب الرسمي للدفعة</span>
+              <span className="text-[11px] font-bold text-[#D6B779]">حساب الدفعة على الإنستغرام</span>
               <h4 className="text-base sm:text-lg font-black text-white leading-snug">
-                حساب دفعة معهد التمريض (دفعة 2027) على الإنستغرام
+                حساب تخرج طلاب معهد التمريض — دفعة 2027
               </h4>
             </div>
           </div>

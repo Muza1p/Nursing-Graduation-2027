@@ -32,7 +32,7 @@ export type { OfficialRosterStudent };
 
 const SCRUB_STUDENTS_STORAGE_KEY = 'nursing_grad_scrub_students_v1';
 const STUDENT_PAYMENTS_STORAGE_KEY = 'nursing_grad_student_payments_v1';
-const SCRUB_IMPORT_DONE_KEY = 'nursing_grad_scrub_244_imported_v2';
+const SCRUB_IMPORT_DONE_KEY = 'nursing_grad_scrub_244_reconciled_v4';
 
 // Normalize Arabic name strictly for duplicate detection and search (never alters stored/displayed fullName)
 export function normalizeArabicName(name: string): string {
@@ -48,8 +48,31 @@ export function normalizeArabicName(name: string): string {
     .replace(/ة/g, 'ه')
     // Normalize Alef Maksura (ى -> ي)
     .replace(/ى/g, 'ي')
+    // Normalize common PDF OCR ligature artifacts (اال -> الا, هللا -> الله)
+    .replace(/هللا/g, 'الله')
+    .replace(/هالل/g, 'هلال')
+    .replace(/االء/g, 'الاء')
+    .replace(/عالء/g, 'علاء')
+    .replace(/جالل/g, 'جلال')
+    .replace(/جالب/g, 'جلاب')
+    .replace(/روال/g, 'رولا')
+    .replace(/غيالن/g, 'غيلان')
+    .replace(/شعالن/g, 'شعلان')
+    .replace(/عالوي/g, 'علاوي')
+    .replace(/عبداالمير/g, 'عبدالامير')
+    .replace(/عبد\s+االمير/g, 'عبدالامير')
     // Normalize common compound spacing like "عبد الله" -> "عبدالله"
     .replace(/عبد\s+الله/g, 'عبدالله')
+    .replace(/عبد\s+الحسين/g, 'عبدالحسين')
+    .replace(/عبد\s+الامير/g, 'عبدالامير')
+    .replace(/عبد\s+الساده/g, 'عبدالساده')
+    .replace(/عبد\s+الزهره/g, 'عبدالزهره')
+    .replace(/عبد\s+الواحد/g, 'عبدالواحد')
+    .replace(/عبد\s+الكاظم/g, 'عبدالكاظم')
+    .replace(/عبد\s+الرضا/g, 'عبدالرضا')
+    .replace(/عبد\s+الحمزه/g, 'عبدالحمزه')
+    .replace(/عبد\s+العباس/g, 'عبدالعباس')
+    .replace(/عبد\s+الرسول/g, 'عبدالرسول')
     .toLowerCase();
 }
 
@@ -86,8 +109,7 @@ export function checkNameSimilarity(
   return { isExact: false, isSimilar: false };
 }
 
-// Official 46 Unique Scrub Party Students (Cohort 2026 | Graduation 2027)
-// Preserving exact Arabic names, Abbas Khudair included once (#27), Abbas Mohammed Shiyal (#28) with 1,000 IQD deposit
+// Official 46 Unique Scrub Party Old Deposit Records (from 47 raw lines with 1 duplicate "عباس خضير" removed)
 export interface InitialScrubStudentSeed {
   studentNumber: number;
   fullName: string;
@@ -145,7 +167,223 @@ export const OFFICIAL_46_SCRUB_STUDENTS: InitialScrubStudentSeed[] = [
   { studentNumber: 46, fullName: 'زهراء علي كريم', preferredTitle: 'nurse_f', initialDepositIQD: 2000, totalFeeIQD: 35000 },
 ];
 
-// Calculate balance and payment status strictly from verified payments (Requirement 5)
+// 39 Unambiguous 1-to-1 Confirmed Deposit Matches between the 46 old records and the 244 Official Roster
+// Total confirmed initial deposits = 38 * 2,000 + 1 * 1,000 = 77,000 IQD
+export const CONFIRMED_39_DEPOSIT_MAP = new Map<
+  number,
+  { seedNumber: number; oldPaymentName: string; depositIQD: number }
+>([
+  [12, { seedNumber: 37, oldPaymentName: 'إسراء رضا علي', depositIQD: 2000 }],
+  [21, { seedNumber: 24, oldPaymentName: 'آيات ثائر', depositIQD: 2000 }],
+  [22, { seedNumber: 44, oldPaymentName: 'آيات حاتم درسون', depositIQD: 2000 }],
+  [47, { seedNumber: 43, oldPaymentName: 'حسين سعد', depositIQD: 2000 }],
+  [52, { seedNumber: 1, oldPaymentName: 'حسين علاء كاظم', depositIQD: 2000 }],
+  [55, { seedNumber: 17, oldPaymentName: 'حسين كاظم', depositIQD: 2000 }],
+  [57, { seedNumber: 16, oldPaymentName: 'حسين مثنى', depositIQD: 2000 }],
+  [61, { seedNumber: 20, oldPaymentName: 'حوراء كاظم ظاهر', depositIQD: 2000 }],
+  [70, { seedNumber: 38, oldPaymentName: 'دعاء فوزي', depositIQD: 2000 }],
+  [80, { seedNumber: 15, oldPaymentName: 'رقية إسماعيل', depositIQD: 2000 }],
+  [95, { seedNumber: 4, oldPaymentName: 'زهراء عبدالله', depositIQD: 2000 }],
+  [97, { seedNumber: 46, oldPaymentName: 'زهراء علي كريم', depositIQD: 2000 }],
+  [101, { seedNumber: 32, oldPaymentName: 'زهراء هادي عبيس', depositIQD: 2000 }],
+  [121, { seedNumber: 33, oldPaymentName: 'سكينة قيس', depositIQD: 2000 }],
+  [123, { seedNumber: 45, oldPaymentName: 'سيف مهند', depositIQD: 2000 }],
+  [125, { seedNumber: 9, oldPaymentName: 'شهد هاشم', depositIQD: 2000 }],
+  [126, { seedNumber: 18, oldPaymentName: 'شيماء جابر', depositIQD: 2000 }],
+  [127, { seedNumber: 8, oldPaymentName: 'شيماء حيدر', depositIQD: 2000 }],
+  [129, { seedNumber: 7, oldPaymentName: 'صفا محمد', depositIQD: 2000 }],
+  [131, { seedNumber: 34, oldPaymentName: 'ضحى رياض', depositIQD: 2000 }],
+  [135, { seedNumber: 26, oldPaymentName: 'طيبة عقيل', depositIQD: 2000 }],
+  [141, { seedNumber: 27, oldPaymentName: 'عباس خضير', depositIQD: 2000 }],
+  [145, { seedNumber: 28, oldPaymentName: 'عباس محمد شيال', depositIQD: 1000 }],
+  [147, { seedNumber: 30, oldPaymentName: 'عبدالله جمال', depositIQD: 2000 }],
+  [154, { seedNumber: 13, oldPaymentName: 'علي جميل', depositIQD: 2000 }],
+  [156, { seedNumber: 39, oldPaymentName: 'علي حسين نعيم', depositIQD: 2000 }],
+  [160, { seedNumber: 6, oldPaymentName: 'علي قاسم', depositIQD: 2000 }],
+  [166, { seedNumber: 12, oldPaymentName: 'غدير مؤيد', depositIQD: 2000 }],
+  [176, { seedNumber: 29, oldPaymentName: 'كرار أحمد', depositIQD: 2000 }],
+  [177, { seedNumber: 42, oldPaymentName: 'كرار حيدر', depositIQD: 2000 }],
+  [182, { seedNumber: 5, oldPaymentName: 'محمد باقر', depositIQD: 2000 }],
+  [204, { seedNumber: 41, oldPaymentName: 'مريم سالم حمزة', depositIQD: 2000 }],
+  [205, { seedNumber: 25, oldPaymentName: 'مريم صباح', depositIQD: 2000 }],
+  [210, { seedNumber: 23, oldPaymentName: 'مصطفى أحمد موحان', depositIQD: 2000 }],
+  [218, { seedNumber: 36, oldPaymentName: 'ملاك فالح', depositIQD: 2000 }],
+  [219, { seedNumber: 21, oldPaymentName: 'منار ستار', depositIQD: 2000 }],
+  [228, { seedNumber: 35, oldPaymentName: 'نرجس مالك', depositIQD: 2000 }],
+  [235, { seedNumber: 19, oldPaymentName: 'نور مشتاق', depositIQD: 2000 }],
+  [244, { seedNumber: 22, oldPaymentName: 'يوسف أحمد', depositIQD: 2000 }],
+]);
+
+// 7 Old Payment Records that Require Admin Review (linked to 14 candidate students in the 244 official roster):
+// - 3 records with slight spelling variation (#14 زهراء حسين محلي -> #92, #31 زهراء جبار حكيم -> #88, #10 سعاد وليد -> #122)
+// - 4 records with 1-word or 2-word names shared by multiple official students (#2 علي محمد, #11 علي أكبر, #40 محمد قاسم, #3 عباس)
+export const REVIEW_14_CANDIDATES_MAP = new Map<
+  number,
+  {
+    seedNumber: number;
+    oldPaymentName: string;
+    pendingReviewAmountIQD: number;
+    ambiguousGroupKey: string;
+    reviewNote: string;
+  }
+>([
+  [
+    88,
+    {
+      seedNumber: 31,
+      oldPaymentName: 'زهراء جبار حكيم',
+      pendingReviewAmountIQD: 2000,
+      ambiguousGroupKey: 'review-seed-31',
+      reviewNote:
+        'تحتاج إلى مراجعة: توجد دفعة قديمة بمبلغ 2,000 د.ع باسم «زهراء جبار حكيم» تتشابه مع الاسم الرسمي «زهراء جبار حاكم محمد» (اختلاف إملائي: حكيم / حاكم). لم تُحتسب تلقائياً بانتظار تأكيد المشرف.',
+    },
+  ],
+  [
+    92,
+    {
+      seedNumber: 14,
+      oldPaymentName: 'زهراء حسين محلي',
+      pendingReviewAmountIQD: 2000,
+      ambiguousGroupKey: 'review-seed-14',
+      reviewNote:
+        'تحتاج إلى مراجعة: توجد دفعة قديمة بمبلغ 2,000 د.ع باسم «زهراء حسين محلي» تتشابه مع الاسم الرسمي «زهراء حسين مهلي عجيل» (اختلاف حرف: محلي / مهلي). لم تُحتسب تلقائياً بانتظار تأكيد المشرف.',
+    },
+  ],
+  [
+    122,
+    {
+      seedNumber: 10,
+      oldPaymentName: 'سعاد وليد',
+      pendingReviewAmountIQD: 2000,
+      ambiguousGroupKey: 'review-seed-10',
+      reviewNote:
+        'تحتاج إلى مراجعة: توجد دفعة قديمة بمبلغ 2,000 د.ع باسم «سعاد وليد» تتشابه في اسم الأب مع الاسم الرسمي «سؤدد وليد عبيد فرحان» (اختلاف إملائي: سعاد / سؤدد). لم تُحتسب تلقائياً بانتظار تأكيد المشرف.',
+    },
+  ],
+  [
+    152,
+    {
+      seedNumber: 11,
+      oldPaymentName: 'علي أكبر',
+      pendingReviewAmountIQD: 2000,
+      ambiguousGroupKey: 'ambig-seed-11-ali-akbar',
+      reviewNote:
+        'تحتاج إلى مراجعة: توجد دفعة قديمة واحدة بمبلغ 2,000 د.ع وردت بالاسم المركب «علي أكبر» فقط بدون اسم الأب، ويشترك فيها طالبان في شعبة 3: (ت 152: علي اكبر حسين عبيد عطيوي) و(ت 153: علي أكبر ساجد شنباره كيطان).',
+    },
+  ],
+  [
+    153,
+    {
+      seedNumber: 11,
+      oldPaymentName: 'علي أكبر',
+      pendingReviewAmountIQD: 2000,
+      ambiguousGroupKey: 'ambig-seed-11-ali-akbar',
+      reviewNote:
+        'تحتاج إلى مراجعة: توجد دفعة قديمة واحدة بمبلغ 2,000 د.ع وردت بالاسم المركب «علي أكبر» فقط بدون اسم الأب، ويشترك فيها طالبان في شعبة 3: (ت 152: علي اكبر حسين عبيد عطيوي) و(ت 153: علي أكبر ساجد شنباره كيطان).',
+    },
+  ],
+  [
+    161,
+    {
+      seedNumber: 2,
+      oldPaymentName: 'علي محمد',
+      pendingReviewAmountIQD: 2000,
+      ambiguousGroupKey: 'ambig-seed-2-ali-mohammed',
+      reviewNote:
+        'تحتاج إلى مراجعة: توجد دفعة قديمة واحدة بمبلغ 2,000 د.ع وردت بالاسم الثنائي «علي محمد» فقط، ويشترك فيها طالبان في شعبة 3: (ت 161: علي محمد كواد حسين) و(ت 162: علي محمد لفته كطش).',
+    },
+  ],
+  [
+    162,
+    {
+      seedNumber: 2,
+      oldPaymentName: 'علي محمد',
+      pendingReviewAmountIQD: 2000,
+      ambiguousGroupKey: 'ambig-seed-2-ali-mohammed',
+      reviewNote:
+        'تحتاج إلى مراجعة: توجد دفعة قديمة واحدة بمبلغ 2,000 د.ع وردت بالاسم الثنائي «علي محمد» فقط، ويشترك فيها طالبان في شعبة 3: (ت 161: علي محمد كواد حسين) و(ت 162: علي محمد لفته كطش).',
+    },
+  ],
+  [
+    190,
+    {
+      seedNumber: 40,
+      oldPaymentName: 'محمد قاسم',
+      pendingReviewAmountIQD: 2000,
+      ambiguousGroupKey: 'ambig-seed-40-mohammed-qasim',
+      reviewNote:
+        'تحتاج إلى مراجعة: توجد دفعة قديمة واحدة بمبلغ 2,000 د.ع وردت بالاسم الثنائي «محمد قاسم» فقط، ويشترك فيها طالبان في شعبة 4: (ت 190: محمد قاسم ابوالسود عطيه) و(ت 191: محمد قاسم زغير عكاب).',
+    },
+  ],
+  [
+    191,
+    {
+      seedNumber: 40,
+      oldPaymentName: 'محمد قاسم',
+      pendingReviewAmountIQD: 2000,
+      ambiguousGroupKey: 'ambig-seed-40-mohammed-qasim',
+      reviewNote:
+        'تحتاج إلى مراجعة: توجد دفعة قديمة واحدة بمبلغ 2,000 د.ع وردت بالاسم الثنائي «محمد قاسم» فقط، ويشترك فيها طالبان في شعبة 4: (ت 190: محمد قاسم ابوالسود عطيه) و(ت 191: محمد قاسم زغير عكاب).',
+    },
+  ],
+  [
+    139,
+    {
+      seedNumber: 3,
+      oldPaymentName: 'عباس',
+      pendingReviewAmountIQD: 2000,
+      ambiguousGroupKey: 'ambig-seed-3-abbas',
+      reviewNote:
+        'تحتاج إلى مراجعة: توجد دفعة قديمة واحدة بمبلغ 2,000 د.ع وردت بالاسم المفرد «عباس» فقط بدون اسم الأب، ويوجد 5 طلاب باسم «عباس» في شعبة 3 غير مسجل لهم عربون مؤكد (ت: 139، 140، 142، 143، 144).',
+    },
+  ],
+  [
+    140,
+    {
+      seedNumber: 3,
+      oldPaymentName: 'عباس',
+      pendingReviewAmountIQD: 2000,
+      ambiguousGroupKey: 'ambig-seed-3-abbas',
+      reviewNote:
+        'تحتاج إلى مراجعة: توجد دفعة قديمة واحدة بمبلغ 2,000 د.ع وردت بالاسم المفرد «عباس» فقط بدون اسم الأب، ويوجد 5 طلاب باسم «عباس» في شعبة 3 غير مسجل لهم عربون مؤكد (ت: 139، 140، 142، 143، 144).',
+    },
+  ],
+  [
+    142,
+    {
+      seedNumber: 3,
+      oldPaymentName: 'عباس',
+      pendingReviewAmountIQD: 2000,
+      ambiguousGroupKey: 'ambig-seed-3-abbas',
+      reviewNote:
+        'تحتاج إلى مراجعة: توجد دفعة قديمة واحدة بمبلغ 2,000 د.ع وردت بالاسم المفرد «عباس» فقط بدون اسم الأب، ويوجد 5 طلاب باسم «عباس» في شعبة 3 غير مسجل لهم عربون مؤكد (ت: 139، 140، 142، 143، 144).',
+    },
+  ],
+  [
+    143,
+    {
+      seedNumber: 3,
+      oldPaymentName: 'عباس',
+      pendingReviewAmountIQD: 2000,
+      ambiguousGroupKey: 'ambig-seed-3-abbas',
+      reviewNote:
+        'تحتاج إلى مراجعة: توجد دفعة قديمة واحدة بمبلغ 2,000 د.ع وردت بالاسم المفرد «عباس» فقط بدون اسم الأب، ويوجد 5 طلاب باسم «عباس» في شعبة 3 غير مسجل لهم عربون مؤكد (ت: 139، 140، 142، 143، 144).',
+    },
+  ],
+  [
+    144,
+    {
+      seedNumber: 3,
+      oldPaymentName: 'عباس',
+      pendingReviewAmountIQD: 2000,
+      ambiguousGroupKey: 'ambig-seed-3-abbas',
+      reviewNote:
+        'تحتاج إلى مراجعة: توجد دفعة قديمة واحدة بمبلغ 2,000 د.ع وردت بالاسم المفرد «عباس» فقط بدون اسم الأب، ويوجد 5 طلاب باسم «عباس» في شعبة 3 غير مسجل لهم عربون مؤكد (ت: 139، 140، 142، 143، 144).',
+    },
+  ],
+]);
+
+// Calculate balance and payment status strictly from verified payments (Requirement 3 & 5)
 export function recalculateStudentFinancials(
   student: ScrubStudent,
   allPaymentsForStudent: StudentPayment[]
@@ -156,16 +394,21 @@ export function recalculateStudentFinancials(
 
   const verifiedPaidIQD = activePayments
     .filter((p) => p.isVerified && p.verificationStatus === 'verified')
-    .reduce((sum, p) => sum + Math.max(0, Number(p.amountIQD) || 0), 0);
+    .reduce((sum, p) => sum + Math.max(0, Math.round(Number(p.amountIQD) || 0)), 0);
 
   const pendingPaidIQD = activePayments
     .filter((p) => !p.isVerified || p.verificationStatus === 'pending')
-    .reduce((sum, p) => sum + Math.max(0, Number(p.amountIQD) || 0), 0);
+    .reduce((sum, p) => sum + Math.max(0, Math.round(Number(p.amountIQD) || 0)), 0);
 
-  const totalFeeIQD = student.totalFeeIQD > 0 ? student.totalFeeIQD : 35000;
+  const totalFeeIQD = student.totalFeeIQD > 0 ? Math.round(student.totalFeeIQD) : 35000;
   // Remaining balance = Total fee - Sum of verified payments (never silent negative)
   const remainingBalanceIQD = Math.max(0, totalFeeIQD - verifiedPaidIQD);
-  const paymentStatus: PaymentStatus = calculatePaymentStatus(verifiedPaidIQD, totalFeeIQD);
+  const effectiveNeedsReview = verifiedPaidIQD > 0 ? false : Boolean(student.needsReview);
+  const paymentStatus: PaymentStatus = calculatePaymentStatus(
+    verifiedPaidIQD,
+    totalFeeIQD,
+    effectiveNeedsReview
+  );
 
   return {
     ...student,
@@ -173,7 +416,14 @@ export function recalculateStudentFinancials(
     verifiedPaidIQD,
     pendingPaidIQD,
     remainingBalanceIQD,
+    needsReview: effectiveNeedsReview,
     paymentStatus,
+    matchStatus:
+      verifiedPaidIQD > 0
+        ? 'confirmed'
+        : effectiveNeedsReview
+        ? 'needs_review'
+        : 'unmatched',
   };
 }
 
@@ -192,14 +442,14 @@ export function isSuperAdminUser(
   );
 }
 
-// Strict Financial Privacy: ONLY super_admin and finance_manager can access private financial management
+// Strict Financial Privacy: super_admin, moderator, and finance_manager can access financial management
 export function canManageFinances(
   currentUser: Graduate | null,
   firebaseUser: FirebaseUser | null
 ): boolean {
   if (isSuperAdminUser(currentUser, firebaseUser)) return true;
   if (!currentUser) return false;
-  return currentUser.role === 'finance_manager';
+  return currentUser.role === 'finance_manager' || currentUser.role === 'moderator';
 }
 
 export function canManageEvents(
@@ -227,6 +477,73 @@ export function canManageNotifications(
   if (isSuperAdminUser(currentUser, firebaseUser)) return true;
   if (!currentUser) return false;
   return currentUser.role === 'notification_manager' || currentUser.role === 'moderator';
+}
+
+// Helper to check if a payment was an erroneous v2 auto-seed on a non-confirmed student
+export function isErroneousLegacyAutoSeedPayment(pay: StudentPayment): boolean {
+  if (!pay.id.startsWith('scrub-pay-init-2027-')) return false;
+  const numFromId = Number(pay.id.replace('scrub-pay-init-2027-', ''));
+  const stuNum = numFromId || pay.studentNumber;
+  return !CONFIRMED_39_DEPOSIT_MAP.has(stuNum);
+}
+
+// Deduplicate student records by ID and official studentNumber (1..244), preserving linked account & custom fields
+export function deduplicateStudentsList(students: ScrubStudent[]): ScrubStudent[] {
+  const officialNameByNumber = new Map<number, string>(
+    OFFICIAL_244_ROSTER.map((r) => [r.globalNumber, normalizeArabicName(r.fullName)])
+  );
+
+  const byId = new Map<string, ScrubStudent>();
+
+  for (const stu of students) {
+    if (!stu || !stu.id) continue;
+
+    // For official IDs scrub-stu-2027-001..244, ensure studentNumber matches the ID suffix
+    const idMatch = stu.id.match(/^scrub-stu-2027-(\d{3})$/);
+    const canonicalNum = idMatch ? Number(idMatch[1]) : stu.studentNumber;
+    const expectedOfficialNorm = officialNameByNumber.get(canonicalNum);
+    const stuNorm = normalizeArabicName(stu.fullName);
+
+    const existing = byId.get(stu.id);
+    if (!existing) {
+      byId.set(stu.id, stu);
+      continue;
+    }
+
+    // If two records share the same ID, prefer the one whose name matches the official 244 roster for that number,
+    // while preserving any linked account or phone information from either record.
+    const existingMatchesOfficial =
+      expectedOfficialNorm && normalizeArabicName(existing.fullName) === expectedOfficialNorm;
+    const currentMatchesOfficial =
+      expectedOfficialNorm && stuNorm === expectedOfficialNorm;
+
+    const primary = currentMatchesOfficial && !existingMatchesOfficial ? stu : existing;
+    const secondary = primary === stu ? existing : stu;
+
+    byId.set(stu.id, {
+      ...primary,
+      isLinkedToAccount: primary.isLinkedToAccount || secondary.isLinkedToAccount,
+      linkedUserId: primary.linkedUserId || secondary.linkedUserId,
+      linkedUserEmail: primary.linkedUserEmail || secondary.linkedUserEmail,
+      linkedUserName: primary.linkedUserName || secondary.linkedUserName,
+      linkedAt: primary.linkedAt || secondary.linkedAt,
+      linkedBy: primary.linkedBy || secondary.linkedBy,
+      phone: primary.phone || secondary.phone,
+      institutionalStudentId:
+        primary.institutionalStudentId || secondary.institutionalStudentId,
+    });
+  }
+
+  return Array.from(byId.values()).sort((a, b) => a.studentNumber - b.studentNumber);
+}
+
+export function deduplicatePaymentsList(payments: StudentPayment[]): StudentPayment[] {
+  const byId = new Map<string, StudentPayment>();
+  for (const p of payments) {
+    if (!p || !p.id) continue;
+    byId.set(p.id, p);
+  }
+  return Array.from(byId.values());
 }
 
 // LocalStorage persistence helpers with initial seed
@@ -266,17 +583,19 @@ export class ScrubStudentStorage {
         }
         return s;
       });
-      if (modified) {
-        this.saveStudents(cleaned);
+      const deduped = deduplicateStudentsList(cleaned);
+      if (deduped.length !== parsed.length || modified) {
+        this.saveStudents(deduped);
       }
-      return cleaned;
+      return deduped;
     } catch {
       return [];
     }
   }
 
   static saveStudents(students: ScrubStudent[]): void {
-    localStorage.setItem(SCRUB_STUDENTS_STORAGE_KEY, JSON.stringify(students));
+    const deduped = deduplicateStudentsList(students);
+    localStorage.setItem(SCRUB_STUDENTS_STORAGE_KEY, JSON.stringify(deduped));
   }
 
   static getStudentPayments(): StudentPayment[] {
@@ -286,19 +605,23 @@ export class ScrubStudentStorage {
       const parsed = JSON.parse(raw) as StudentPayment[];
       const filtered = parsed.filter((p) => {
         const norm = normalizeArabicName(p.studentName);
-        return norm !== 'حسين عبدالله جاسم' && norm !== 'حسين عبد الله جاسم';
+        if (norm === 'حسين عبدالله جاسم' || norm === 'حسين عبد الله جاسم') return false;
+        if (isErroneousLegacyAutoSeedPayment(p)) return false;
+        return true;
       });
-      if (filtered.length !== parsed.length) {
-        this.saveStudentPayments(filtered);
+      const deduped = deduplicatePaymentsList(filtered);
+      if (deduped.length !== parsed.length) {
+        this.saveStudentPayments(deduped);
       }
-      return filtered;
+      return deduped;
     } catch {
       return [];
     }
   }
 
   static saveStudentPayments(payments: StudentPayment[]): void {
-    localStorage.setItem(STUDENT_PAYMENTS_STORAGE_KEY, JSON.stringify(payments));
+    const deduped = deduplicatePaymentsList(payments);
+    localStorage.setItem(STUDENT_PAYMENTS_STORAGE_KEY, JSON.stringify(deduped));
   }
 
   static isInitialImportDone(): boolean {
@@ -376,23 +699,49 @@ export async function syncScrubRosterFromFirestore(): Promise<{
       return null;
     }
 
-    const fsStudents = stuSnap.docs
-      .map((d) => ({ ...d.data(), id: d.id } as ScrubStudent))
-      .filter((s) => {
-        const norm = normalizeArabicName(s.fullName);
-        return norm !== 'حسين عبدالله جاسم' && norm !== 'حسين عبد الله جاسم';
-      });
-    const fsPayments = paySnap.docs
-      .map((d) => ({ ...d.data(), id: d.id } as StudentPayment))
-      .filter((p) => {
+    const fsStudents = deduplicateStudentsList(
+      stuSnap.docs
+        .map((d) => ({ ...d.data(), id: d.id } as ScrubStudent))
+        .filter((s) => {
+          const norm = normalizeArabicName(s.fullName);
+          return norm !== 'حسين عبدالله جاسم' && norm !== 'حسين عبد الله جاسم';
+        })
+    );
+
+    const rawFsPayments = paySnap.docs.map((d) => ({ ...d.data(), id: d.id } as StudentPayment));
+    const hasErroneousAutoSeeds = rawFsPayments.some((p) => isErroneousLegacyAutoSeedPayment(p));
+    const fsPayments = deduplicatePaymentsList(
+      rawFsPayments.filter((p) => {
         const norm = normalizeArabicName(p.studentName);
-        return norm !== 'حسين عبدالله جاسم' && norm !== 'حسين عبد الله جاسم';
-      });
+        if (norm === 'حسين عبدالله جاسم' || norm === 'حسين عبد الله جاسم') return false;
+        if (isErroneousLegacyAutoSeedPayment(p)) return false;
+        return true;
+      })
+    );
 
     // Recalculate financials for every student from verified payments
     const recalculated = fsStudents
       .map((s) => recalculateStudentFinancials(s, fsPayments))
       .sort((a, b) => a.studentNumber - b.studentNumber);
+
+    // If Firestore had fewer than 244 active students OR had un-reconciled v2 seeds, run the v3 reconciliation & merge
+    const activeCount = recalculated.filter((s) => s.status === 'active').length;
+    if (
+      activeCount < 244 ||
+      hasErroneousAutoSeeds ||
+      !ScrubStudentStorage.isInitialImportDone()
+    ) {
+      const mergedReport = await importOfficial244ScrubStudents({
+        existingStudents: recalculated,
+        existingPayments: fsPayments,
+        existingGraduates: LocalStorageManager.getGraduates(),
+        actorName: 'النظام الآلي — تدقيق ومطابقة القوائم الرسمية (244 طالب)',
+      });
+      return {
+        students: mergedReport.students,
+        studentPayments: mergedReport.studentPayments,
+      };
+    }
 
     ScrubStudentStorage.saveStudents(recalculated);
     ScrubStudentStorage.saveStudentPayments(fsPayments);
@@ -456,6 +805,13 @@ export async function fetchLinkedStudentFinancialsForUser(
 }
 
 export interface ImportReport {
+  sourceTotalCount?: number;
+  officialUniqueCount?: number;
+  oldPaymentsRawCount?: number;
+  oldPaymentsUniqueCount?: number;
+  confirmedMatchesCount?: number;
+  oldPaymentsFlaggedCount?: number;
+  matchedExistingCount?: number;
   importedCount: number;
   skippedDuplicatesCount: number;
   flaggedForReviewCount: number;
@@ -465,8 +821,8 @@ export interface ImportReport {
   flaggedDetails: Array<{ studentName: string; studentNumber: number; reason: string }>;
 }
 
-// Idempotent, Duplicate-Safe Import of the 244 Official Nursing Institute Students (Cohort 2026-2027)
-// Preserving all existing payments, balances, receipts, linked accounts, and audit history intact!
+// Idempotent, Duplicate-Safe Import & Forensic Reconciliation of the 244 Official Nursing Institute Students (Cohort 2026-2027)
+// Preserving all manual payments, balances, receipts, linked accounts, and audit history intact!
 export async function importOfficial244ScrubStudents(params: {
   existingStudents: ScrubStudent[];
   existingPayments: StudentPayment[];
@@ -475,11 +831,21 @@ export async function importOfficial244ScrubStudents(params: {
 }): Promise<ImportReport> {
   const { existingStudents, existingPayments, existingGraduates, actorName } = params;
 
-  const updatedStudents = [...existingStudents];
-  const updatedPayments = [...existingPayments];
+  const dedupedExisting = deduplicateStudentsList(existingStudents);
+  // Filter out any erroneous v2 auto-seed payments while keeping all 39 confirmed auto-seeds and all manual admin payments
+  const updatedPayments = deduplicatePaymentsList(
+    existingPayments.filter((p) => !isErroneousLegacyAutoSeedPayment(p))
+  );
   const flaggedDetails: Array<{ studentName: string; studentNumber: number; reason: string }> = [];
 
+  // Build a clean Map keyed by student ID so duplicate IDs can never occur
+  const finalStudentsMap = new Map<string, ScrubStudent>();
+  const officialNamesSet = new Set<string>(
+    OFFICIAL_244_ROSTER.map((r) => normalizeArabicName(r.fullName))
+  );
+
   let importedCount = 0;
+  let matchedExistingCount = 0;
   let skippedDuplicatesCount = 0;
   let flaggedForReviewCount = 0;
 
@@ -490,92 +856,11 @@ export async function importOfficial244ScrubStudents(params: {
     const deterministicId = `scrub-stu-2027-${String(rosterStudent.globalNumber).padStart(3, '0')}`;
     const normRosterName = normalizeArabicName(rosterStudent.fullName);
 
-    // 1. Find if student already exists in updatedStudents by deterministic ID or normalized name or matching starting tokens
-    let existingIndex = updatedStudents.findIndex(
-      (s) =>
-        s.id === deterministicId ||
-        s.normalizedName === normRosterName ||
-        (s.studentNumber === rosterStudent.globalNumber && s.section === rosterStudent.section)
-    );
+    const confirmedSeed = CONFIRMED_39_DEPOSIT_MAP.get(rosterStudent.globalNumber);
+    const reviewCandidate = REVIEW_14_CANDIDATES_MAP.get(rosterStudent.globalNumber);
 
-    // Fallback match with previous 46 students by first two tokens
-    if (existingIndex === -1) {
-      const rosterTokens = normRosterName.split(' ');
-      existingIndex = updatedStudents.findIndex((s) => {
-        const sTokens = s.normalizedName.split(' ');
-        if (sTokens.length >= 2 && rosterTokens.length >= 2) {
-          if (sTokens[0] === rosterTokens[0] && sTokens[1] === rosterTokens[1]) {
-            if (sTokens.length === 2 || sTokens[2] === rosterTokens[2]) {
-              return true;
-            }
-          }
-        }
-        return false;
-      });
-    }
-
-    if (existingIndex !== -1) {
-      // Student already exists! Enrich with official section, index, and quadruplicate name without wiping payments or linking!
-      const existing = updatedStudents[existingIndex];
-      const enriched: ScrubStudent = {
-        ...existing,
-        studentNumber: rosterStudent.globalNumber,
-        section: rosterStudent.section,
-        sectionNumber: rosterStudent.sectionNumber,
-        sectionStudentNumber: rosterStudent.sectionIndex,
-        fullName: rosterStudent.fullName,
-        normalizedName: normRosterName,
-        preferredTitle: rosterStudent.preferredTitle,
-        totalFeeIQD: 35000,
-        updatedAt: nowIso,
-      };
-      updatedStudents[existingIndex] = recalculateStudentFinancials(enriched, updatedPayments);
-      skippedDuplicatesCount++;
-      continue;
-    }
-
-    // 2. Student does not exist yet. Check if they have an initial deposit from the 46 seeds
-    let initialDepositIQD = 0;
-    const rosterTokens = normRosterName.split(' ');
-    for (const seed of OFFICIAL_46_SCRUB_STUDENTS) {
-      const seedTokens = normalizeArabicName(seed.fullName).split(' ');
-      if (seedTokens.length >= 2 && rosterTokens.length >= 2) {
-        if (seedTokens[0] === rosterTokens[0] && seedTokens[1] === rosterTokens[1]) {
-          initialDepositIQD = seed.initialDepositIQD;
-          break;
-        }
-      } else if (seedTokens[0] === rosterTokens[0] && seed.studentNumber === 3 && rosterStudent.fullName.includes('عباس حامد')) {
-        initialDepositIQD = seed.initialDepositIQD;
-        break;
-      }
-    }
-
-    // Check existing graduates collection to flag potential name review
-    let needsReview = false;
-    let reviewNote: string | undefined = undefined;
-    let potentialMatchId: string | undefined = undefined;
-    let potentialMatchName: string | undefined = undefined;
-
-    for (const grad of existingGraduates) {
-      if (grad.id === 'grad-admin' || grad.id === 'grad-mod') continue;
-      const sim = checkNameSimilarity(rosterStudent.fullName, grad.fullName);
-      if (sim.isExact || sim.isSimilar) {
-        needsReview = true;
-        potentialMatchId = grad.id;
-        potentialMatchName = grad.fullName;
-        reviewNote = `يوجد حساب مسجل باسم مشابه (${grad.fullName}).`;
-        flaggedForReviewCount++;
-        flaggedDetails.push({
-          studentName: rosterStudent.fullName,
-          studentNumber: rosterStudent.globalNumber,
-          reason: reviewNote,
-        });
-        break;
-      }
-    }
-
-    // Create initial deposit payment if applicable
-    if (initialDepositIQD > 0) {
+    // Ensure confirmed 1-to-1 initial deposit payment exists in updatedPayments
+    if (confirmedSeed) {
       const depositPaymentId = `scrub-pay-init-2027-${String(rosterStudent.globalNumber).padStart(3, '0')}`;
       const receiptNumber = `SCRUB-DEP-${String(rosterStudent.globalNumber).padStart(3, '0')}`;
       const existingDeposit = updatedPayments.find((p) => p.id === depositPaymentId);
@@ -585,7 +870,7 @@ export async function importOfficial244ScrubStudents(params: {
           studentId: deterministicId,
           studentNumber: rosterStudent.globalNumber,
           studentName: rosterStudent.fullName,
-          amountIQD: initialDepositIQD,
+          amountIQD: confirmedSeed.depositIQD,
           paymentType: 'initial_deposit',
           paymentMethod: 'cash',
           receiptNumber,
@@ -593,9 +878,9 @@ export async function importOfficial244ScrubStudents(params: {
           date: '2026-10-25',
           time: '10:00',
           notes:
-            initialDepositIQD === 1000
-              ? 'عربون أولي موثق لحفلة السكراب (1,000 د.ع - المتبقي 34,000 د.ع)'
-              : 'عربون أولي موثق لحفلة السكراب (2,000 د.ع - المتبقي 33,000 د.ع)',
+            confirmedSeed.depositIQD === 1000
+              ? `عربون أولي موثق (1,000 د.ع) — مطابق لسجل الدفعات القديم رقم (${confirmedSeed.seedNumber}: ${confirmedSeed.oldPaymentName})`
+              : `عربون أولي موثق (2,000 د.ع) — مطابق لسجل الدفعات القديم رقم (${confirmedSeed.seedNumber}: ${confirmedSeed.oldPaymentName})`,
           isVerified: true,
           verificationStatus: 'verified',
           recordedBy: actorName || 'اللجنة المالية — معهد التمريض',
@@ -605,9 +890,113 @@ export async function importOfficial244ScrubStudents(params: {
         };
         updatedPayments.push(initialPayment);
       }
+      matchedExistingCount++;
     }
 
+    // Find if student already exists in dedupedExisting by exact normalized name or deterministicId
+    const existing =
+      dedupedExisting.find((s) => normalizeArabicName(s.fullName) === normRosterName) ||
+      dedupedExisting.find((s) => s.id === deterministicId);
+
+    if (existing) {
+      const hasManualOrConfirmedPayment = updatedPayments.some(
+        (p) =>
+          p.studentId === deterministicId &&
+          p.verificationStatus !== 'voided' &&
+          p.isVerified
+      );
+
+      const shouldFlagReview = Boolean(reviewCandidate && !hasManualOrConfirmedPayment);
+      if (shouldFlagReview && reviewCandidate) {
+        flaggedForReviewCount++;
+        flaggedDetails.push({
+          studentName: rosterStudent.fullName,
+          studentNumber: rosterStudent.globalNumber,
+          reason: reviewCandidate.reviewNote,
+        });
+      }
+
+      const defaultNote = confirmedSeed
+        ? `مطابقة مؤكدة مع سجل الدفعات القديم رقم (${confirmedSeed.seedNumber}: ${confirmedSeed.oldPaymentName}) — عربون ${confirmedSeed.depositIQD.toLocaleString()} د.ع`
+        : shouldFlagReview && reviewCandidate
+        ? reviewCandidate.reviewNote
+        : `طالب رسمي — المرحلة الثانية / الدراسة الصباحية (${rosterStudent.section} - ت: ${rosterStudent.sectionIndex})`;
+
+      const enriched: ScrubStudent = {
+        ...existing,
+        id: deterministicId,
+        studentNumber: rosterStudent.globalNumber,
+        section: rosterStudent.section,
+        sectionNumber: rosterStudent.sectionNumber,
+        sectionStudentNumber: rosterStudent.sectionIndex,
+        fullName: rosterStudent.fullName,
+        normalizedName: normRosterName,
+        preferredTitle: rosterStudent.preferredTitle,
+        totalFeeIQD: 35000,
+        needsReview: shouldFlagReview,
+        reviewNote: shouldFlagReview ? reviewCandidate?.reviewNote : undefined,
+        matchStatus: hasManualOrConfirmedPayment
+          ? 'confirmed'
+          : shouldFlagReview
+          ? 'needs_review'
+          : 'unmatched',
+        matchedOldPaymentName:
+          confirmedSeed?.oldPaymentName || reviewCandidate?.oldPaymentName,
+        pendingReviewAmountIQD: shouldFlagReview
+          ? reviewCandidate?.pendingReviewAmountIQD
+          : undefined,
+        ambiguousGroupKey: shouldFlagReview
+          ? reviewCandidate?.ambiguousGroupKey
+          : undefined,
+        notes: defaultNote,
+        updatedAt: nowIso,
+      };
+      finalStudentsMap.set(
+        deterministicId,
+        recalculateStudentFinancials(enriched, updatedPayments)
+      );
+      skippedDuplicatesCount++;
+      continue;
+    }
+
+    // Student does not exist yet — create fresh official record
+    let needsReview = false;
+    let reviewNote: string | undefined = undefined;
+    let potentialMatchId: string | undefined = undefined;
+    let potentialMatchName: string | undefined = undefined;
+
+    if (reviewCandidate) {
+      needsReview = true;
+      reviewNote = reviewCandidate.reviewNote;
+      flaggedForReviewCount++;
+      flaggedDetails.push({
+        studentName: rosterStudent.fullName,
+        studentNumber: rosterStudent.globalNumber,
+        reason: reviewCandidate.reviewNote,
+      });
+    } else {
+      for (const grad of existingGraduates) {
+        if (grad.id === 'grad-admin' || grad.id === 'grad-mod') continue;
+        const sim = checkNameSimilarity(rosterStudent.fullName, grad.fullName);
+        if (sim.isExact || sim.isSimilar) {
+          needsReview = true;
+          potentialMatchId = grad.id;
+          potentialMatchName = grad.fullName;
+          reviewNote = `يوجد حساب مسجل باسم مشابه (${grad.fullName}).`;
+          flaggedForReviewCount++;
+          flaggedDetails.push({
+            studentName: rosterStudent.fullName,
+            studentNumber: rosterStudent.globalNumber,
+            reason: reviewNote,
+          });
+          break;
+        }
+      }
+    }
+
+    const initialDepositIQD = confirmedSeed ? confirmedSeed.depositIQD : 0;
     const remainingBalance = Math.max(0, 35000 - initialDepositIQD);
+
     const newStudent: ScrubStudent = {
       id: deterministicId,
       studentNumber: rosterStudent.globalNumber,
@@ -621,27 +1010,55 @@ export async function importOfficial244ScrubStudents(params: {
       verifiedPaidIQD: initialDepositIQD,
       pendingPaidIQD: 0,
       remainingBalanceIQD: remainingBalance,
-      paymentStatus: calculatePaymentStatus(initialDepositIQD, 35000),
+      paymentStatus: calculatePaymentStatus(initialDepositIQD, 35000, needsReview),
       status: 'active',
       isLinkedToAccount: false,
       needsReview,
       reviewNote,
       potentialMatchId,
       potentialMatchName,
-      notes:
-        initialDepositIQD > 0
-          ? `سجل رسمي مستورد (عربون أولي ${initialDepositIQD.toLocaleString()} د.ع | ${rosterStudent.section} - ت: ${rosterStudent.sectionIndex})`
-          : `طالب رسمي — المرحلة الثانية / الدراسة الصباحية (${rosterStudent.section} - ت: ${rosterStudent.sectionIndex})`,
+      matchStatus: confirmedSeed
+        ? 'confirmed'
+        : needsReview
+        ? 'needs_review'
+        : 'unmatched',
+      matchedOldPaymentName:
+        confirmedSeed?.oldPaymentName || reviewCandidate?.oldPaymentName,
+      pendingReviewAmountIQD: reviewCandidate?.pendingReviewAmountIQD,
+      ambiguousGroupKey: reviewCandidate?.ambiguousGroupKey,
+      notes: confirmedSeed
+        ? `مطابقة مؤكدة مع سجل الدفعات القديم رقم (${confirmedSeed.seedNumber}: ${confirmedSeed.oldPaymentName}) — عربون ${confirmedSeed.depositIQD.toLocaleString()} د.ع`
+        : reviewCandidate
+        ? reviewCandidate.reviewNote
+        : `طالب رسمي — المرحلة الثانية / الدراسة الصباحية (${rosterStudent.section} - ت: ${rosterStudent.sectionIndex})`,
       createdAt: todayDate,
       updatedAt: nowIso,
     };
 
-    updatedStudents.push(recalculateStudentFinancials(newStudent, updatedPayments));
+    finalStudentsMap.set(
+      deterministicId,
+      recalculateStudentFinancials(newStudent, updatedPayments)
+    );
     importedCount++;
   }
 
-  // Sort by studentNumber ascending
-  updatedStudents.sort((a, b) => a.studentNumber - b.studentNumber);
+  // Also preserve any custom manually-added students (studentNumber > 244 and not in official 244)
+  for (const extra of dedupedExisting) {
+    if (
+      !finalStudentsMap.has(extra.id) &&
+      extra.studentNumber > 244 &&
+      !officialNamesSet.has(normalizeArabicName(extra.fullName))
+    ) {
+      finalStudentsMap.set(
+        extra.id,
+        recalculateStudentFinancials(extra, updatedPayments)
+      );
+    }
+  }
+
+  const updatedStudents = Array.from(finalStudentsMap.values()).sort(
+    (a, b) => a.studentNumber - b.studentNumber
+  );
 
   // Save to LocalStorage
   ScrubStudentStorage.saveStudents(updatedStudents);
@@ -659,7 +1076,7 @@ export async function importOfficial244ScrubStudents(params: {
         const cleanStu = Object.fromEntries(
           Object.entries(stu).filter(([_, v]) => v !== undefined)
         );
-        batch.set(stuRef, cleanStu, { merge: true });
+        batch.set(stuRef, cleanStu);
       }
       await batch.commit();
     }
@@ -680,18 +1097,25 @@ export async function importOfficial244ScrubStudents(params: {
 
   if (importedCount > 0) {
     await recordSystemAuditLog({
-      action: 'استيراد قائمة طلبة التمريض الرسمية (244 طالب)',
+      action: 'دمج وتدقيق القائمة الرسمية (244 طالب) مع سجل الدفعات القديم (46 دفعة)',
       performedBy: actorName,
-      details: `تم استيراد واعتماد قائمة طلبة المرحلة الثانية الرسمية (244 طالب موزعين على 4 شعب) بنجاح، مع الحفاظ الكامل على كافة الأرصدة والمدفوعات السابقة.`,
-      affectedCount: importedCount,
+      details: `تم اعتماد 244 طالباً رسمياً (4 شعب)، وتوثيق 39 مطابقة مؤكدة بمبلغ 77,000 د.ع، وتحديد 7 دفعات قديمة (14 طالباً مرشحاً) في حالة «تحتاج إلى مراجعة».`,
+      affectedCount: OFFICIAL_244_ROSTER.length,
       entityType: 'scrub_student',
     });
   }
 
   return {
+    sourceTotalCount: OFFICIAL_244_ROSTER.length,
+    officialUniqueCount: OFFICIAL_244_ROSTER.length,
+    oldPaymentsRawCount: 47,
+    oldPaymentsUniqueCount: OFFICIAL_46_SCRUB_STUDENTS.length,
+    confirmedMatchesCount: CONFIRMED_39_DEPOSIT_MAP.size,
+    oldPaymentsFlaggedCount: 7,
+    matchedExistingCount,
     importedCount,
     skippedDuplicatesCount,
-    flaggedForReviewCount,
+    flaggedForReviewCount: updatedStudents.filter((s) => s.status === 'active' && s.needsReview).length,
     totalActiveStudents: updatedStudents.filter((s) => s.status === 'active').length,
     students: updatedStudents,
     studentPayments: updatedPayments,
@@ -1122,58 +1546,182 @@ export function getStudentPaymentById(
   };
 }
 
-// Export Scrub Students List to CSV (UTF-8 with BOM for Excel Arabic support) - No Total Fee column per Requirement 3
-export function exportScrubStudentsCSV(students: ScrubStudent[], includeArchived = false): string {
+// Helper for unified Arabic status label
+export function getUnifiedPaymentStatusArabic(s: ScrubStudent): string {
+  if (s.needsReview || s.paymentStatus === 'needs_review') return 'تحتاج إلى مراجعة';
+  if (s.paymentStatus === 'completed') return 'مكتمل';
+  if (s.paymentStatus === 'deposit' || s.paymentStatus === 'partial') return 'دفع عربون';
+  return 'لم يدفع';
+}
+
+// Export Scrub Students List to CSV (UTF-8 with BOM for Excel Arabic support)
+export function exportScrubStudentsCSV(
+  students: ScrubStudent[],
+  payments: StudentPayment[] = [],
+  includeArchived = false
+): string {
   const targetList = includeArchived
     ? students
     : students.filter((s) => s.status === 'active');
 
   const headers = [
-    'ت (رقم الطالب)',
-    'المعرف الدائم (ID)',
-    'الاسم الكامل',
-    'اللقب',
-    'المبلغ المدفوع الموثق (د.ع)',
-    'المبلغ قيد التدقيق (د.ع)',
+    'التسلسل',
+    'الاسم الكامل كما ورد في القائمة الرسمية',
+    'الشعبة الدراسية',
+    'المبلغ الكامل المطلوب (د.ع)',
+    'المبلغ المدفوع (د.ع)',
     'المبلغ المتبقي (د.ع)',
-    'حالة الدفعة',
-    'مرتبط بحساب مستخدم',
-    'البريد المرتبط',
-    'رقم الهاتف',
-    'رقم القيد',
-    'حالة السجل',
-    'ملاحظات المراجعة',
-    'ملاحظات إدارية',
+    'حالة الدفع',
+    'تاريخ آخر دفعة',
+    'ملاحظات المطابقة أو الدفع',
   ];
 
-  const statusLabel = (st: PaymentStatus) =>
-    st === 'completed'
-      ? 'مكتمل الدفع'
-      : st === 'partial'
-      ? 'مدفوع جزئياً'
-      : st === 'deposit'
-      ? 'دافع عربون'
-      : 'غير مدفوع';
+  const rows = targetList.map((s) => {
+    const stuPayments = payments
+      .filter((p) => p.studentId === s.id && p.verificationStatus !== 'voided' && p.isVerified)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const lastPayDate = stuPayments[0]?.date || '';
+    const combinedNotes = [
+      s.reviewNote,
+      s.notes,
+      stuPayments[0]?.notes && stuPayments[0].notes !== s.notes ? stuPayments[0].notes : '',
+    ]
+      .filter(Boolean)
+      .join(' | ')
+      .replace(/"/g, '""');
 
-  const rows = targetList.map((s) => [
-    s.studentNumber,
-    `"${s.id}"`,
-    `"${s.fullName}"`,
-    `"${s.preferredTitle === 'nurse_f' ? 'الممرضة' : 'الممرض'}"`,
-    s.verifiedPaidIQD,
-    s.pendingPaidIQD || 0,
-    s.remainingBalanceIQD,
-    `"${statusLabel(s.paymentStatus)}"`,
-    `"${s.isLinkedToAccount ? 'نعم (موثق)' : 'غير مرتبط'}"`,
-    `"${s.linkedUserEmail || ''}"`,
-    `"${s.phone || ''}"`,
-    `"${s.institutionalStudentId || ''}"`,
-    `"${s.status === 'active' ? 'نشط' : 'مؤرشف'}"`,
-    `"${s.reviewNote || ''}"`,
-    `"${s.notes || ''}"`,
-  ]);
+    const totalFee = s.totalFeeIQD > 0 ? s.totalFeeIQD : 35000;
+    const paid = Math.max(0, Math.round(s.verifiedPaidIQD || 0));
+    const remaining = Math.max(0, totalFee - paid);
+
+    return [
+      s.studentNumber,
+      `"${s.fullName.replace(/"/g, '""')}"`,
+      `"${s.section || ''}"`,
+      totalFee,
+      paid,
+      remaining,
+      `"${getUnifiedPaymentStatusArabic(s)}"`,
+      `"${lastPayDate}"`,
+      `"${combinedNotes}"`,
+    ];
+  });
 
   return '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+}
+
+// Export Scrub Students List to native Excel (.xls HTML/XML format with RTL and styling)
+export function exportScrubStudentsExcelXLS(
+  students: ScrubStudent[],
+  payments: StudentPayment[] = [],
+  includeArchived = false
+): string {
+  const targetList = includeArchived
+    ? students
+    : students.filter((s) => s.status === 'active');
+
+  const escapeHtml = (str: string) =>
+    String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+
+  let totalRequiredSum = 0;
+  let totalPaidSum = 0;
+  let totalRemainingSum = 0;
+
+  const rowsHtml = targetList
+    .map((s) => {
+      const stuPayments = payments
+        .filter((p) => p.studentId === s.id && p.verificationStatus !== 'voided' && p.isVerified)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const lastPayDate = stuPayments[0]?.date || '-';
+      const combinedNotes = [
+        s.reviewNote,
+        s.notes,
+        stuPayments[0]?.notes && stuPayments[0].notes !== s.notes ? stuPayments[0].notes : '',
+      ]
+        .filter(Boolean)
+        .join(' | ');
+
+      const totalFee = s.totalFeeIQD > 0 ? s.totalFeeIQD : 35000;
+      const paid = Math.max(0, Math.round(s.verifiedPaidIQD || 0));
+      const remaining = Math.max(0, totalFee - paid);
+      const statusText = getUnifiedPaymentStatusArabic(s);
+
+      totalRequiredSum += totalFee;
+      totalPaidSum += paid;
+      totalRemainingSum += remaining;
+
+      const bgRow =
+        statusText === 'مكتمل'
+          ? '#e6f9f5'
+          : statusText === 'دفع عربون'
+          ? '#fffbeb'
+          : statusText === 'تحتاج إلى مراجعة'
+          ? '#fef3c7'
+          : '#ffffff';
+
+      return `<tr style="background-color:${bgRow};">
+        <td style="text-align:center;font-weight:bold;border:1px solid #cbd5e1;padding:6px;">${s.studentNumber}</td>
+        <td style="text-align:right;font-weight:bold;border:1px solid #cbd5e1;padding:6px;">${escapeHtml(s.fullName)}</td>
+        <td style="text-align:center;border:1px solid #cbd5e1;padding:6px;">${escapeHtml(s.section || '-')}</td>
+        <td style="text-align:center;border:1px solid #cbd5e1;padding:6px;">${totalFee}</td>
+        <td style="text-align:center;font-weight:bold;color:#047857;border:1px solid #cbd5e1;padding:6px;">${paid}</td>
+        <td style="text-align:center;font-weight:bold;color:#b45309;border:1px solid #cbd5e1;padding:6px;">${remaining}</td>
+        <td style="text-align:center;font-weight:bold;border:1px solid #cbd5e1;padding:6px;">${statusText}</td>
+        <td style="text-align:center;border:1px solid #cbd5e1;padding:6px;">${escapeHtml(lastPayDate)}</td>
+        <td style="text-align:right;border:1px solid #cbd5e1;padding:6px;">${escapeHtml(combinedNotes)}</td>
+      </tr>`;
+    })
+    .join('\n');
+
+  return `\uFEFF<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>سجل الطلاب والمدفوعات 2027</x:Name><x:WorksheetOptions><x:DisplayRightToLeft/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+</head>
+<body dir="rtl" style="font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;">
+  <table border="1" style="border-collapse:collapse;width:100%;direction:rtl;">
+    <thead>
+      <tr>
+        <th colspan="9" style="background-color:#0f172a;color:#ffffff;font-size:16px;padding:10px;text-align:center;">
+          تخرج طلاب معهد التمريض — دفعة 2027 • المرحلة الثانية (الدراسة الصباحية) — العام الدراسي 2026–2027
+        </th>
+      </tr>
+      <tr>
+        <th colspan="9" style="background-color:#1e293b;color:#35D6C5;font-size:13px;padding:8px;text-align:center;">
+          سجل قائمة الطلاب والمدفوعات — دفعة 2027 • مكان الحفلة: مسرح تفاحة المصور • المصور: باقر حسن • مبلغ المساهمة للطالب: 35,000 دينار عراقي
+        </th>
+      </tr>
+      <tr style="background-color:#334155;color:#ffffff;font-weight:bold;">
+        <th style="padding:8px;border:1px solid #cbd5e1;">التسلسل</th>
+        <th style="padding:8px;border:1px solid #cbd5e1;">الاسم الكامل كما ورد في القائمة الرسمية</th>
+        <th style="padding:8px;border:1px solid #cbd5e1;">الشعبة</th>
+        <th style="padding:8px;border:1px solid #cbd5e1;">المبلغ الكامل (د.ع)</th>
+        <th style="padding:8px;border:1px solid #cbd5e1;">المبلغ المدفوع (د.ع)</th>
+        <th style="padding:8px;border:1px solid #cbd5e1;">المبلغ المتبقي (د.ع)</th>
+        <th style="padding:8px;border:1px solid #cbd5e1;">حالة الدفع</th>
+        <th style="padding:8px;border:1px solid #cbd5e1;">تاريخ آخر دفعة</th>
+        <th style="padding:8px;border:1px solid #cbd5e1;">ملاحظات المطابقة أو الدفع</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml}
+    </tbody>
+    <tfoot>
+      <tr style="background-color:#0f172a;color:#ffffff;font-weight:bold;">
+        <td colspan="3" style="padding:8px;text-align:center;border:1px solid #cbd5e1;">المجموع الكلي (${targetList.length} طالب)</td>
+        <td style="padding:8px;text-align:center;border:1px solid #cbd5e1;">${totalRequiredSum}</td>
+        <td style="padding:8px;text-align:center;color:#35D6C5;border:1px solid #cbd5e1;">${totalPaidSum}</td>
+        <td style="padding:8px;text-align:center;color:#D7B875;border:1px solid #cbd5e1;">${totalRemainingSum}</td>
+        <td colspan="3" style="padding:8px;text-align:right;border:1px solid #cbd5e1;">تاريخ التصدير: ${new Date().toLocaleDateString('ar-IQ')}</td>
+      </tr>
+    </tfoot>
+  </table>
+</body>
+</html>`;
 }
 
 // Export Full Scrub Students & Payments Backup JSON (Used before Super Admin Delete Entire List)
@@ -1184,8 +1732,8 @@ export function exportScrubFullBackupJSON(
   return JSON.stringify(
     {
       exportedAt: new Date().toISOString(),
-      institution: 'معهد التمريض — دفعة 2027',
-      event: 'حفلة السكراب (مسرح تفاحة المصور)',
+      cohort: 'تخرج طلاب معهد التمريض — دفعة 2027 (المرحلة الثانية صباحي 2026–2027)',
+      event: 'فعاليات تخرج دفعة 2027 (مسرح تفاحة المصور - المصور باقر حسن)',
       activeStudentsCount: students.filter((s) => s.status === 'active').length,
       archivedStudentsCount: students.filter((s) => s.status === 'archived').length,
       totalPaymentsCount: payments.length,

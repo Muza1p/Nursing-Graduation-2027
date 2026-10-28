@@ -39,13 +39,13 @@ export const EventsPage: React.FC = () => {
       <div className="text-center max-w-3xl mx-auto space-y-3">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#101B2C] border border-white/10 text-xs font-bold text-[#F4F8FC]">
           <Calendar className="w-3.5 h-3.5 text-[#35D6C2]" />
-          <span>معهد التمريض — دفعة 2027</span>
+          <span>تخرج طلاب معهد التمريض — دفعة 2027</span>
         </div>
         <h1 className="text-2xl sm:text-4xl font-black text-[#F4F8FC]">
-          الحفلات والمناسبات الرسمية للدفعة
+          فعاليات تخرج دفعة 2027
         </h1>
         <p className="text-xs sm:text-sm text-slate-300">
-          اختر الفعالية لاستعراض الهوية البصرية، المواعيد، القاعات، والرسوم المقررة لكل مناسبة.
+          اختر الفعالية لاستعراض التفاصيل، المواعيد، القاعات، ومبالغ المساهمة المحددة لكل مناسبة.
         </p>
 
         {/* Segmented Event Switcher */}
@@ -71,7 +71,7 @@ export const EventsPage: React.FC = () => {
             }`}
           >
             <GraduationCap className="w-4 h-4" />
-            <span>حفل التخرج الرسمي (قريباً)</span>
+            <span>حفل تخرج دفعة 2027 (قريباً)</span>
           </button>
         </div>
       </div>
@@ -89,10 +89,10 @@ export const EventsPage: React.FC = () => {
                   <span>حفل صباحي — {eventConfig.scrubEventName || 'حفلة السكراب'}</span>
                 </div>
                 <h2 className="text-2xl sm:text-4xl font-black text-[#F4F8FC]">
-                  حفلة السكراب لمعهد التمريض
+                  حفلة السكراب — دفعة التمريض 2027
                 </h2>
                 <p className="text-xs sm:text-sm text-indigo-100/85 max-w-xl leading-relaxed">
-                  الاحتفالية الصباحية لطلبة معهد التمريض (دفعة 2027) بالزي الطبي والسكراب السريري الموحد، في مسرح تفاحة المصور وبإشراف المصور باقر حسن.
+                  الاحتفالية الصباحية لطلاب معهد التمريض — دفعة 2027 بالزي الطبي والسكراب الموحد، في مسرح تفاحة المصور وبعدسة المصور باقر حسن.
                 </p>
 
                 <div className="flex flex-wrap items-center gap-2.5 pt-2 text-xs">
@@ -121,12 +121,12 @@ export const EventsPage: React.FC = () => {
               {/* Curated Scrub Illustration Card */}
               <div className="shrink-0 p-5 rounded-2xl bg-[#0A0D12]/80 border border-indigo-400/35 text-center min-w-[220px] space-y-2">
                 <ScrubUniformCoatIllustration variant="scrub" className="w-36 h-36 mx-auto" />
-                <div className="text-xs text-[#35D6C2] font-bold">الزي الطبي المعتمد</div>
+                <div className="text-xs text-[#35D6C2] font-bold">الزي الطبي للدفعة</div>
                 <div className="text-sm font-black text-white">السكراب الطبي + السماعة</div>
                 <div className="pt-2 border-t border-white/10 text-xs">
                   <span className="text-slate-400 block text-[11px]">التوقيت الصباحي:</span>
                   <span className="font-bold text-[#D7B875]">
-                    {eventConfig.scrubTime || 'الوقت يُعلن لاحقاً'}
+                    {eventConfig.scrubTime || '09:00 صباحاً'}
                   </span>
                 </div>
               </div>
@@ -144,9 +144,9 @@ export const EventsPage: React.FC = () => {
               <div className="w-9 h-9 rounded-xl bg-[#342A78] text-indigo-200 flex items-center justify-center">
                 <MapPin className="w-4 h-4" />
               </div>
-              <h4 className="text-sm font-bold text-[#F4F8FC]">قاعة الحفل المعتمدة</h4>
+              <h4 className="text-sm font-bold text-[#F4F8FC]">قاعة الحفل</h4>
               <p className="text-xs text-slate-300 leading-relaxed">
-                {eventConfig.scrubVenue || 'مسرح تفاحة المصور'} — مجهز بالكامل لاستقبال خريجي معهد التمريض دفعة 2027.
+                {eventConfig.scrubVenue || 'مسرح تفاحة المصور'} — مجهز لاستقبال طلاب معهد التمريض دفعة 2027.
               </p>
             </div>
 
@@ -166,7 +166,7 @@ export const EventsPage: React.FC = () => {
               </div>
               <h4 className="text-sm font-bold text-white">توثيق الدفعات وإيصال القبض</h4>
               <p className="text-xs text-[#E8EEF2]/80 leading-relaxed">
-                يتم توثيق العربون والدفعات عبر اللجنة المالية مع إصدار وصل فوري وإمكانية الاستعلام الخاص عن المبلغ المدفوع والمتبقي.
+                يتم توثيق العربون والدفعات عبر فريق تنظيم الدفعة مع إصدار وصل فوري وإمكانية الاستعلام عن المبلغ المدفوع والمتبقي.
               </p>
             </div>
           </div>
@@ -206,7 +206,7 @@ export const EventsPage: React.FC = () => {
         </div>
       )}
 
-      {/* 2. OFFICIAL GRADUATION CONTENT (#35D6C2 Medical Turquoise & White Coat + Sash) */}
+      {/* 2. GRADUATION 2027 CONTENT (#35D6C2 Medical Turquoise & White Coat + Sash) */}
       {selectedEvent === 'grad' && (
         <div className="space-y-8 animate-in fade-in duration-300">
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0d2a32] via-[#101B2C] to-[#0A0D12] border-2 border-[#35D6C2]/35 p-6 sm:p-10 shadow-2xl clinical-grid-bg">
@@ -216,13 +216,13 @@ export const EventsPage: React.FC = () => {
               <div className="space-y-3 flex-1">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-[#35D6C2]/15 text-[#35D6C2] border border-[#35D6C2]/35 text-xs font-bold">
                   <GraduationCap className="w-3.5 h-3.5" />
-                  <span>المراسيم الأكاديمية الرسمية • قريباً</span>
+                  <span>فعاليات تخرج دفعة 2027 • قريباً</span>
                 </div>
                 <h2 className="text-2xl sm:text-4xl font-black text-[#F4F8FC]">
-                  حفل التخرج الرسمي لمعهد التمريض
+                  حفل تخرج طلاب معهد التمريض — دفعة 2027
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
-                  مراسيم تخرج طلبة معهد التمريض (دفعة 2027)، ارتداء روب التخرج والمعطف الأبيض ووشاح التمريض الفيروزي المذهب، وترديد القسم الطبي الرسمي.
+                  احتفالية تخرج طلاب معهد التمريض — دفعة 2027، ارتداء روب التخرج والمعطف الأبيض ووشاح التمريض الفيروزي المذهب، وتوثيق ذكريات الدفعة.
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 pt-2 text-xs">
@@ -232,7 +232,7 @@ export const EventsPage: React.FC = () => {
                   </span>
                   <span className="flex items-center gap-1.5 text-[#35D6C5] bg-[#10151C]/80 px-3 py-1.5 rounded-xl border border-[#35D6C5]/35 font-bold">
                     <CreditCard className="w-3.5 h-3.5" />
-                    <span>وشاح التمريض التركوازي وروب التخرج الرسمي</span>
+                    <span>وشاح التمريض التركوازي وروب التخرج</span>
                   </span>
                 </div>
               </div>
@@ -240,14 +240,14 @@ export const EventsPage: React.FC = () => {
               {/* White Coat + Turquoise Sash Illustration Card */}
               <div className="shrink-0 p-5 rounded-2xl bg-[#0A0D12]/80 border border-[#35D6C2]/35 text-center min-w-[220px] space-y-2">
                 <ScrubUniformCoatIllustration variant="coat" className="w-36 h-36 mx-auto" />
-                <div className="text-xs text-[#35D6C2] font-bold">وشاح التمريض المعتمد</div>
+                <div className="text-xs text-[#35D6C2] font-bold">وشاح التمريض للدفعة</div>
                 <div className="text-sm font-black text-[#D7B875]">التركوازي الفيروزي المذهب</div>
                 <div className="text-[11px] text-slate-400">دفعة 2027</div>
               </div>
             </div>
           </div>
 
-          {/* Official Graduation Countdown Notice */}
+          {/* Graduation Countdown Notice */}
           {eventConfig.officialGradCountdownEnabled && eventConfig.officialGradCountdownDate ? (
             <div className="max-w-4xl mx-auto">
               <CountdownTimer />
@@ -255,9 +255,9 @@ export const EventsPage: React.FC = () => {
           ) : (
             <div className="p-6 rounded-2xl bg-[#101B2C] border border-[#35D6C2]/25 text-center space-y-2">
               <AlertCircle className="w-7 h-7 text-[#D7B875] mx-auto opacity-85" />
-              <h4 className="text-sm font-bold text-[#F4F8FC]">موعد وقاعة حفل التخرج الرسمي: قريباً</h4>
+              <h4 className="text-sm font-bold text-[#F4F8FC]">موعد وقاعة حفل تخرج دفعة 2027: قريباً</h4>
               <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
-                لم يتم تحديد الموعد النهائي والقاعة حتى الآن. ستقوم اللجنة بتثبيت الموعد وتفعيل العداد التنازلي فور اعتماده رسمياً.
+                لم يتم تحديد الموعد النهائي والقاعة حتى الآن. سيقوم فريق تنظيم الدفعة بتثبيت الموعد وتفعيل العداد التنازلي فور تحديده.
               </p>
             </div>
           )}
@@ -277,9 +277,9 @@ export const EventsPage: React.FC = () => {
               <div className="w-9 h-9 rounded-xl bg-[#35D6C2]/15 text-[#35D6C2] flex items-center justify-center">
                 <Building className="w-4 h-4" />
               </div>
-              <h4 className="text-sm font-bold text-[#F4F8FC]">مكان الحفل الأكاديمي</h4>
+              <h4 className="text-sm font-bold text-[#F4F8FC]">مكان الحفل</h4>
               <p className="text-xs text-slate-300 leading-relaxed">
-                {eventConfig.officialGraduationLocation || 'قريباً (سيتم تحديده فور اعتماده)'}
+                {eventConfig.officialGraduationLocation || 'قريباً (سيتم تحديده من فريق التنظيم)'}
               </p>
             </div>
 
@@ -287,9 +287,9 @@ export const EventsPage: React.FC = () => {
               <div className="w-9 h-9 rounded-xl bg-[#35D6C2]/15 text-[#35D6C2] flex items-center justify-center">
                 <ShieldCheck className="w-4 h-4" />
               </div>
-              <h4 className="text-sm font-bold text-[#F4F8FC]">البروتوكول الرسمي</h4>
+              <h4 className="text-sm font-bold text-[#F4F8FC]">فقرات الاحتفال</h4>
               <p className="text-xs text-slate-300 leading-relaxed">
-                تسليم شهادات التقدير، التقاط صور التخرج بوشاح التمريض الفيروزي، وترديد القسم المهني.
+                التكريم التذكاري للطلاب، التقاط صور التخرج بوشاح التمريض الفيروزي، وتوثيق ذكريات الدفعة.
               </p>
             </div>
           </div>
@@ -298,7 +298,7 @@ export const EventsPage: React.FC = () => {
             <div className="space-y-4">
               <h3 className="text-base font-bold text-[#F4F8FC] flex items-center gap-2">
                 <GraduationCap className="w-4 h-4 text-[#35D6C2]" />
-                <span>إعلانات حفل التخرج الرسمي</span>
+                <span>إعلانات حفل تخرج دفعة 2027</span>
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {gradAnnouncements.map((ann) => (
@@ -317,13 +317,13 @@ export const EventsPage: React.FC = () => {
               onClick={() => navigateTo('payments')}
               className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#35D6C2] to-[#24B8A5] text-[#0A0D12] font-extrabold text-xs sm:text-sm shadow-lg shadow-[#35D6C2]/20 active:scale-95 transition-all"
             >
-              الانتقال إلى دفعات حفل التخرج الرسمي
+              الانتقال إلى دفعات حفل تخرج 2027
             </button>
             <button
               onClick={() => navigateTo('official_grad')}
               className="px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-[#F4F8FC] font-bold text-xs border border-white/10"
             >
-              عرض صفحة المراسيم الرسمية الكاملة
+              عرض صفحة تفاصيل حفل تخرج 2027
             </button>
           </div>
         </div>

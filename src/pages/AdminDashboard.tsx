@@ -17,6 +17,7 @@ import {
   MediaItem,
   UserRole,
   ModeratorRequest,
+  LoggedInUserAccount,
 } from '../types';
 import { MediaUploadZone, UploadResult } from '../components/MediaUploadZone';
 import { ScrubStudentManagementSection } from '../components/ScrubStudentManagementSection';
@@ -105,6 +106,7 @@ export const AdminDashboard: React.FC = () => {
     moderatorRequests,
     approveModeratorRequest,
     rejectModeratorRequest,
+    promoteUserToModerator,
     revokeModeratorRole,
     supervisors,
     refreshSupervisors,
@@ -138,6 +140,10 @@ export const AdminDashboard: React.FC = () => {
   const [searchModQuery, setSearchModQuery] = useState('');
   const [revokeTargetSup, setRevokeTargetSup] = useState<{ userId: string; fullName: string; email: string } | null>(null);
   const [loggedUsersRoleFilter, setLoggedUsersRoleFilter] = useState<'all' | 'super_admin' | 'moderator' | 'student'>('all');
+  const [selectedUserAccount, setSelectedUserAccount] = useState<LoggedInUserAccount | null>(null);
+  const [confirmRoleAction, setConfirmRoleAction] = useState<'promote' | 'revoke' | null>(null);
+  const [userRoleFeedback, setUserRoleFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isUpdatingUserRole, setIsUpdatingUserRole] = useState(false);
 
   // Rejection modal state
   const [rejectModalReq, setRejectModalReq] = useState<any | null>(null);
@@ -186,6 +192,18 @@ export const AdminDashboard: React.FC = () => {
   const [mediaAlbum, setMediaAlbum] = useState('حفلة السكراب');
   const [mediaCat, setMediaCat] = useState<'scrub_night' | 'official_grad' | 'team' | 'posters' | 'memories'>('scrub_night');
 
+  // Site Identity & "حول الموقع" Editable State
+  const [editBrandName, setEditBrandName] = useState(
+    eventConfig.brandName || 'تخرج دفعة التمريض 2027'
+  );
+  const [editBrandSubtitle, setEditBrandSubtitle] = useState(
+    eventConfig.brandSubtitle || 'رحلة علم، تعب، وذكريات تجمعنا'
+  );
+  const [editAboutSiteText, setEditAboutSiteText] = useState(
+    eventConfig.aboutSiteText ||
+      'منصة خاصة بطلاب دفعة التمريض 2027، مخصصة لتنظيم شؤون الدفعة وفعاليات التخرج وتوثيق الذكريات وتنسيق المعلومات بين الطلاب وفريق التنظيم. الموقع مستقل عن الإدارة الرسمية للمؤسسة التعليمية'
+  );
+
   // Event & Countdown Config Form State
   const [editScrubEventName, setEditScrubEventName] = useState(eventConfig.scrubEventName || 'حفلة السكراب');
   const [editScrubDate, setEditScrubDate] = useState(eventConfig.scrubPartyDate || '2026-12-12T09:00:00');
@@ -198,7 +216,7 @@ export const AdminDashboard: React.FC = () => {
   const [editIsScrubDateConfirmed, setEditIsScrubDateConfirmed] = useState(eventConfig.isScrubDateConfirmed ?? false);
   const [editScrubFeeIQD, setEditScrubFeeIQD] = useState<number>(eventConfig.scrubFeeIQD || 35000);
 
-  const [editOfficialTitle, setEditOfficialTitle] = useState(eventConfig.officialGraduationTitle || 'حفل التخرج الرسمي');
+  const [editOfficialTitle, setEditOfficialTitle] = useState(eventConfig.officialGraduationTitle || 'حفل تخرج دفعة 2027');
   const [editOfficialStatus, setEditOfficialStatus] = useState<GraduationOfficialStatus>(eventConfig.officialGraduationStatus || 'coming_soon');
   const [editOfficialDate, setEditOfficialDate] = useState(eventConfig.officialGraduationDate || 'قريباً');
   const [editOfficialLocation, setEditOfficialLocation] = useState(eventConfig.officialGraduationLocation || 'قريباً');
@@ -212,7 +230,7 @@ export const AdminDashboard: React.FC = () => {
   const [editCountdownEnabled, setEditCountdownEnabled] = useState(eventConfig.countdownEnabled ?? true);
   const [editCountdownPublished, setEditCountdownPublished] = useState(eventConfig.countdownPublished ?? true);
   const [editCountdownTarget, setEditCountdownTarget] = useState<'scrub_night' | 'scrub_party' | 'official_grad' | 'custom'>(eventConfig.countdownTarget || 'scrub_party');
-  const [editCountdownTitle, setEditCountdownTitle] = useState(eventConfig.countdownTitle || 'العد التنازلي لحفلة السكراب — معهد التمريض دفعة 2027');
+  const [editCountdownTitle, setEditCountdownTitle] = useState(eventConfig.countdownTitle || 'العد التنازلي لحفلة السكراب — تخرج دفعة التمريض 2027');
   const [editCountdownDate, setEditCountdownDate] = useState(eventConfig.countdownDate || '2026-12-12');
   const [editCountdownTime, setEditCountdownTime] = useState(eventConfig.countdownTime || '09:00');
   const [editCountdownTimezone, setEditCountdownTimezone] = useState(eventConfig.countdownTimezone || 'Asia/Baghdad');
@@ -304,6 +322,12 @@ export const AdminDashboard: React.FC = () => {
   const handleSaveConfig = (e: React.FormEvent) => {
     e.preventDefault();
     updateEventConfig({
+      brandName: editBrandName.trim() || 'تخرج دفعة التمريض 2027',
+      brandSubtitle: editBrandSubtitle.trim() || 'رحلة علم، تعب، وذكريات تجمعنا',
+      aboutSiteText:
+        editAboutSiteText.trim() ||
+        'منصة خاصة بطلاب دفعة التمريض 2027، مخصصة لتنظيم شؤون الدفعة وفعاليات التخرج وتوثيق الذكريات وتنسيق المعلومات بين الطلاب وفريق التنظيم. الموقع مستقل عن الإدارة الرسمية للمؤسسة التعليمية',
+
       scrubEventName: editScrubEventName.trim(),
       scrubPartyDate: editScrubDate,
       scrubPartyDateDisplay: editScrubDisplay.trim(),
@@ -422,18 +446,18 @@ export const AdminDashboard: React.FC = () => {
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-black text-[#F4F8FC]">
-                لوحة الإدارة السريرية والمالية — معهد التمريض
+                لوحة إدارة وتنظيم شؤون الدفعة — تخرج دفعة التمريض 2027
               </h1>
               <span className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold border ${
-                isAdmin
+                isSuperAdmin
                   ? 'bg-[#D7B875]/20 text-[#D7B875] border-[#D7B875]/35'
                   : 'bg-[#342A78]/60 text-indigo-200 border-indigo-400/40'
               }`}>
-                {isAdmin ? 'مدير النظام الأعلى' : 'مشرف معتمد'}
+                {isSuperAdmin ? 'مشرف ومنظم المنصة (Super Admin)' : 'مشرف في فريق تنظيم الدفعة'}
               </span>
             </div>
             <p className="text-xs text-slate-300">
-              دفعة 2027 • المنظم المسؤول: <strong className="text-[#35D6C2]">{currentUser?.displayTitle || currentUser?.fullName}</strong>
+              تخرج طلاب معهد التمريض — دفعة 2027 • المنظم المسؤول: <strong className="text-[#35D6C2]">{currentUser?.displayTitle || currentUser?.fullName}</strong>
             </p>
           </div>
         </div>
@@ -850,6 +874,32 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
+          {userRoleFeedback && (
+            <div
+              className={`p-4 rounded-2xl flex items-center justify-between gap-2.5 text-xs font-bold ${
+                userRoleFeedback.type === 'success'
+                  ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30'
+                  : 'bg-red-500/15 text-red-200 border border-red-500/30'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {userRoleFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                )}
+                <span>{userRoleFeedback.text}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUserRoleFeedback(null)}
+                className="text-xs underline opacity-80 hover:opacity-100"
+              >
+                إغلاق
+              </button>
+            </div>
+          )}
+
           {loggedInUsers.length === 0 ? (
             <div className="text-center py-16 rounded-3xl bg-[#101827] border border-white/5 space-y-3">
               <Users className="w-12 h-12 text-[#35D6C5]/40 mx-auto" />
@@ -866,12 +916,14 @@ export const AdminDashboard: React.FC = () => {
                     <tr>
                       <th className="py-3.5 px-4">الاسم الظاهر</th>
                       <th className="py-3.5 px-4">طريقة الدخول</th>
-                      <th className="py-3.5 px-4">البريد الإلكتروني أو رقم الموبايل</th>
+                      <th className="py-3.5 px-4">
+                        {isSuperAdmin ? 'البريد الإلكتروني أو رقم الموبايل' : 'رقم الموبايل / خصوصية البريد'}
+                      </th>
                       <th className="py-3.5 px-4">الصلاحية</th>
                       <th className="py-3.5 px-4">معرف المستخدم (UID)</th>
                       <th className="py-3.5 px-4">تاريخ التسجيل</th>
                       <th className="py-3.5 px-4">تاريخ ووقت آخر دخول</th>
-                      <th className="py-3.5 px-4">الحالة</th>
+                      <th className="py-3.5 px-4 text-center">إدارة الصلاحيات / التفاصيل</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -887,19 +939,33 @@ export const AdminDashboard: React.FC = () => {
                         const q = loggedUsersSearch.toLowerCase();
                         return (
                           (u.displayName || '').toLowerCase().includes(q) ||
-                          (u.email || '').toLowerCase().includes(q) ||
+                          (isSuperAdmin && (u.email || '').toLowerCase().includes(q)) ||
                           (u.phoneNumber || '').includes(q) ||
                           (u.uid || '').toLowerCase().includes(q)
                         );
                       })
                       .map((acc) => (
-                        <tr key={acc.uid} className="hover:bg-white/[0.03] transition-colors">
+                        <tr
+                          key={acc.uid}
+                          onClick={() => {
+                            setSelectedUserAccount(acc);
+                            setConfirmRoleAction(null);
+                          }}
+                          className="hover:bg-white/[0.04] transition-colors cursor-pointer"
+                        >
                           <td className="py-3.5 px-4 font-black text-white">
                             <div className="flex items-center gap-2.5">
                               <div className="w-8 h-8 rounded-xl bg-[#35D6C5]/15 text-[#35D6C5] flex items-center justify-center font-black shrink-0">
                                 {(acc.displayName || 'م').charAt(0)}
                               </div>
-                              <span>{acc.displayName || 'مستخدم مسجل'}</span>
+                              <div>
+                                <span className="hover:text-[#35D6C5] transition-colors block">
+                                  {acc.displayName || 'مستخدم مسجل'}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-normal">
+                                  اضغط لعرض التفاصيل وإدارة الصلاحيات
+                                </span>
+                              </div>
                             </div>
                           </td>
                           <td className="py-3.5 px-4">
@@ -920,16 +986,28 @@ export const AdminDashboard: React.FC = () => {
                             </span>
                           </td>
                           <td className="py-3.5 px-4 font-mono text-slate-200" dir="ltr">
-                            {acc.phoneNumber || acc.email || '—'}
+                            {isSuperAdmin ? (
+                              acc.phoneNumber || acc.email || '—'
+                            ) : (
+                              <span
+                                className="inline-flex items-center gap-1 text-slate-400 text-[11px] font-sans"
+                                dir="rtl"
+                              >
+                                <Lock className="w-3 h-3 text-[#D6B777]" />
+                                <span>
+                                  {acc.phoneNumber || 'البريد محجوب (للمشرف الرئيسي فقط)'}
+                                </span>
+                              </span>
+                            )}
                           </td>
                           <td className="py-3.5 px-4">
                             {acc.role === 'super_admin' || acc.role === 'admin' ? (
                               <span className="px-2 py-0.5 rounded-lg bg-[#D7B875]/20 text-[#D7B875] border border-[#D7B875]/35 text-[10px] font-bold">
-                                مدير النظام
+                                المشرف العام
                               </span>
                             ) : acc.role === 'moderator' ? (
                               <span className="px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/35 text-[10px] font-bold">
-                                مشرف
+                                مشرف معتمد
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 rounded-lg bg-white/5 text-slate-300 border border-white/10 text-[10px] font-bold">
@@ -955,15 +1033,271 @@ export const AdminDashboard: React.FC = () => {
                                 })
                               : '—'}
                           </td>
-                          <td className="py-3.5 px-4">
-                            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold">
-                              {acc.lastLoginAt ? 'دخل المنصة فعلياً' : 'حساب مسجل'}
-                            </span>
+                          <td className="py-3.5 px-4 text-center">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedUserAccount(acc);
+                                setConfirmRoleAction(null);
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-[#35D6C5]/15 hover:bg-[#35D6C5]/25 text-[#35D6C5] border border-[#35D6C5]/30 text-[11px] font-bold inline-flex items-center gap-1"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>تفاصيل / صلاحيات</span>
+                            </button>
                           </td>
                         </tr>
                       ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* Interactive User Details & Role Promotion/Revocation Modal (Super Admin & Moderator View) */}
+          {selectedUserAccount && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+              <div className="max-w-lg w-full rounded-3xl bg-[#101827] border border-[#35D6C5]/40 p-6 space-y-5 shadow-2xl text-right">
+                <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-[#35D6C5]/20 border border-[#35D6C5]/40 text-[#35D6C5] flex items-center justify-center font-black text-lg shrink-0">
+                      {(selectedUserAccount.displayName || 'م').charAt(0)}
+                    </div>
+                    <div>
+                      <h3 className="text-base sm:text-lg font-black text-white">
+                        {selectedUserAccount.displayName || 'مستخدم مسجل'}
+                      </h3>
+                      <span className="text-xs text-[#35D6C5] font-bold">
+                        بطاقة تعريف الحساب وإدارة الصلاحيات (RBAC)
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedUserAccount(null);
+                      setConfirmRoleAction(null);
+                    }}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    <XCircle className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {/* User Details Grid */}
+                <div className="p-4 rounded-2xl bg-[#090E17] border border-white/10 space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <span className="text-slate-400">الاسم الكامل:</span>
+                    <span className="font-black text-white">
+                      {selectedUserAccount.displayName || 'مستخدم مسجل'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <span className="text-slate-400">المعرف الفريد (UID):</span>
+                    <span className="font-mono text-slate-200 text-[11px]" dir="ltr">
+                      {selectedUserAccount.uid}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <span className="text-slate-400">البريد الإلكتروني:</span>
+                    {isSuperAdmin ? (
+                      <span className="font-mono text-[#35D6C5]" dir="ltr">
+                        {selectedUserAccount.email || 'غير متوفر'}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[#D6B777] font-bold">
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>محجوب (متاح للمشرف الرئيسي فقط)</span>
+                      </span>
+                    )}
+                  </div>
+                  {selectedUserAccount.phoneNumber && (
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <span className="text-slate-400">رقم الهاتف:</span>
+                      <span className="font-mono text-white" dir="ltr">
+                        {selectedUserAccount.phoneNumber}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <span className="text-slate-400">تاريخ التسجيل بالمنصة:</span>
+                    <span className="font-mono text-slate-200" dir="ltr">
+                      {selectedUserAccount.createdAt
+                        ? new Date(selectedUserAccount.createdAt).toLocaleString('ar-IQ')
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <span className="text-slate-400">حالة الحساب:</span>
+                    <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold text-[11px]">
+                      {selectedUserAccount.lastLoginAt ? 'نشط — دخل المنصة فعلياً' : 'حساب مسجل نشط'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">حالة الإشراف الحالية:</span>
+                    {selectedUserAccount.role === 'super_admin' ||
+                    selectedUserAccount.role === 'admin' ||
+                    (selectedUserAccount.email &&
+                      selectedUserAccount.email.toLowerCase() ===
+                        'mustafaaalihassonkazh@gmail.com') ? (
+                      <span className="px-2.5 py-0.5 rounded-lg bg-[#D7B875]/20 text-[#D7B875] border border-[#D7B875]/40 font-black text-[11px]">
+                        المشرف العام الرئيسي (Super Admin)
+                      </span>
+                    ) : selectedUserAccount.role === 'moderator' ? (
+                      <span className="px-2.5 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-black text-[11px]">
+                        مشرف معتمد (Moderator)
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-lg bg-white/10 text-slate-300 font-bold text-[11px]">
+                        طالب / مستخدم عادي (Student)
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Role Promotion / Revocation Controls (Strictly Super Admin Only) */}
+                {isSuperAdmin ? (
+                  selectedUserAccount.role === 'super_admin' ||
+                  (selectedUserAccount.email &&
+                    selectedUserAccount.email.toLowerCase() ===
+                      'mustafaaalihassonkazh@gmail.com') ? (
+                    <div className="p-3.5 rounded-2xl bg-[#D7B875]/10 border border-[#D7B875]/30 text-xs text-[#D7B875] flex items-center gap-2 font-bold">
+                      <ShieldCheck className="w-4 h-4 shrink-0" />
+                      <span>
+                        هذا الحساب هو المشرف العام الرئيسي للمنصة وهو محمي بشكل دائم من إلغاء الصلاحيات.
+                      </span>
+                    </div>
+                  ) : confirmRoleAction === 'promote' ? (
+                    <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/40 space-y-3 text-xs">
+                      <div className="font-black text-emerald-300">
+                        تأكيد ترقية «{selectedUserAccount.displayName}» إلى مشرف معتمد:
+                      </div>
+                      <p className="text-slate-300 leading-relaxed">
+                        سيحصل هذا المستخدم على صلاحيات المشرف الكاملة في إدارة الطلبة والدفعات والأغاني والإعلانات (مع بقاء عناوين البريد الإلكتروني للمستخدمين محجوبة عنه).
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={isUpdatingUserRole}
+                          onClick={async () => {
+                            setIsUpdatingUserRole(true);
+                            const res = await promoteUserToModerator({
+                              uid: selectedUserAccount.uid,
+                              displayName:
+                                selectedUserAccount.displayName || 'مشرف معتمد',
+                              email: selectedUserAccount.email,
+                            });
+                            setIsUpdatingUserRole(false);
+                            setUserRoleFeedback({
+                              type: res.success ? 'success' : 'error',
+                              text: res.notice,
+                            });
+                            setConfirmRoleAction(null);
+                            setSelectedUserAccount(null);
+                          }}
+                          className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 text-[#0A0D12] font-black shadow-lg"
+                        >
+                          {isUpdatingUserRole
+                            ? 'جاري الترقية وتحديث الصلاحيات...'
+                            : 'تأكيد الترقية إلى مشرف الآن'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmRoleAction(null)}
+                          className="px-4 py-2.5 rounded-xl bg-white/10 text-white font-bold"
+                        >
+                          تراجع
+                        </button>
+                      </div>
+                    </div>
+                  ) : confirmRoleAction === 'revoke' ? (
+                    <div className="p-4 rounded-2xl bg-red-950/30 border border-red-500/40 space-y-3 text-xs">
+                      <div className="font-black text-red-300">
+                        تأكيد إلغاء صلاحيات المشرف لـ «{selectedUserAccount.displayName}»:
+                      </div>
+                      <p className="text-slate-300 leading-relaxed">
+                        سيتم سحب صلاحيات الإشراف فوراً من قاعدة البيانات (/admins و /user_accounts) وإعادة الحساب إلى رتبة طالب عادي.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={isUpdatingUserRole}
+                          onClick={async () => {
+                            setIsUpdatingUserRole(true);
+                            const res = await revokeModeratorRole(
+                              selectedUserAccount.uid
+                            );
+                            setIsUpdatingUserRole(false);
+                            setUserRoleFeedback({
+                              type: res.success ? 'success' : 'error',
+                              text: res.notice,
+                            });
+                            setConfirmRoleAction(null);
+                            setSelectedUserAccount(null);
+                          }}
+                          className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-black shadow-lg"
+                        >
+                          {isUpdatingUserRole
+                            ? 'جاري سحب الصلاحيات...'
+                            : 'تأكيد إلغاء صلاحيات المشرف'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmRoleAction(null)}
+                          className="px-4 py-2.5 rounded-xl bg-white/10 text-white font-bold"
+                        >
+                          تراجع
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
+                      {selectedUserAccount.role !== 'moderator' ? (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmRoleAction('promote')}
+                          className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#35D6C5] to-[#20B8A8] text-[#0A0D12] font-black text-xs shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <ShieldCheck className="w-4 h-4" />
+                          <span>ترقية إلى مشرف</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmRoleAction('revoke')}
+                          className="flex-1 py-2.5 px-4 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <UserX className="w-4 h-4" />
+                          <span>إلغاء صلاحيات المشرف</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedUserAccount(null)}
+                        className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs font-bold"
+                      >
+                        إغلاق
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <div className="p-3.5 rounded-2xl bg-[#090E17] border border-[#D7B875]/30 text-xs text-[#D7B875] flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 shrink-0" />
+                      <span>
+                        صلاحية ترقية المستخدمين إلى مشرفين أو إلغاء صلاحياتهم محصورة بالمشرف العام الرئيسي فقط.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedUserAccount(null)}
+                      className="px-3 py-1.5 rounded-xl bg-white/10 text-white font-bold shrink-0"
+                    >
+                      إغلاق
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1130,7 +1464,7 @@ export const AdminDashboard: React.FC = () => {
                             <span className="font-mono text-white" dir="ltr">{req.userPhone}</span>
                           </div>
                         )}
-                        {req.userEmail && (
+                        {isSuperAdmin && req.userEmail && (
                           <div className="flex items-center justify-between text-slate-300">
                             <span className="text-slate-400">البريد:</span>
                             <span className="font-mono text-white" dir="ltr">{req.userEmail}</span>
@@ -1305,6 +1639,77 @@ export const AdminDashboard: React.FC = () => {
       {/* TAB: SUPERVISORS MANAGEMENT (إدارة المشرفين والصلاحيات) */}
       {activeAdminTab === 'supervisors_management' && (
         <div className="space-y-6">
+          {/* Cohort Organizing Team List (قائمة الإشراف وفريق تنظيم دفعة 2027) */}
+          <div className="rounded-3xl bg-[#101827] border border-[#D7B875]/35 p-6 space-y-4 shadow-xl">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-white">
+                  قائمة الإشراف وفريق تنظيم دفعة 2027
+                </h3>
+                <p className="text-xs text-[#929BAA]">
+                  أعضاء فريق تنظيم الدفعة الظاهرون في صفحة التواصل وقائمة الإشراف
+                </p>
+              </div>
+              <span className="px-3 py-1 rounded-xl bg-[#D7B875]/15 border border-[#D7B875]/35 text-[#D7B875] text-xs font-extrabold">
+                {(eventConfig.organizers || []).length} منظمين في القائمة
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {(eventConfig.organizers && eventConfig.organizers.length > 0
+                ? eventConfig.organizers
+                : [
+                    {
+                      id: 'org-1',
+                      name: 'مصطفى علي حسون',
+                      role: 'فريق تنظيم دفعة 2027',
+                      instagram: 'https://www.instagram.com/mustafaa.hassoun?igsh=MTlvbG9rZjhxcm1kZA==',
+                    },
+                    {
+                      id: 'org-2',
+                      name: 'مصطفى أركان ساجت',
+                      role: 'فريق تنظيم دفعة 2027',
+                      instagram: 'https://www.instagram.com/t__suf?igsh=MWI3N2c1b3FkbXdsdA==',
+                    },
+                    {
+                      id: 'org-4',
+                      name: 'علي أكبر حسين عبيد',
+                      role: 'فريق تنظيم دفعة 2027',
+                      instagram: 'https://www.instagram.com/4hll0_/',
+                    },
+                  ]
+              ).map((org) => (
+                <div
+                  key={org.id}
+                  className="p-4 rounded-2xl bg-[#090E17] border border-white/10 flex flex-col justify-between gap-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#35D6C5]/15 border border-[#35D6C5]/35 text-[#35D6C5] flex items-center justify-center font-black text-sm shrink-0">
+                      {org.name.charAt(0)}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-white">{org.name}</h4>
+                      <span className="text-[11px] text-[#D7B875] font-bold">
+                        {org.role || 'فريق تنظيم دفعة 2027'}
+                      </span>
+                    </div>
+                  </div>
+                  {org.instagram && (
+                    <a
+                      href={org.instagram}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-2 px-3 rounded-xl bg-white/5 hover:bg-[#35D6C5]/15 text-[#A6F0DF] border border-white/10 hover:border-[#35D6C5]/40 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-[#35D6C5]" />
+                      <span>حساب الإنستغرام للتواصل</span>
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="rounded-3xl bg-[#101827] border border-[#35D6C5]/30 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
@@ -1312,11 +1717,11 @@ export const AdminDashboard: React.FC = () => {
                   <ShieldAlert className="w-5 h-5" />
                 </div>
                 <h2 className="text-lg sm:text-xl font-black text-white">
-                  إدارة المشرفين والصلاحيات ({supervisors.length})
+                  حسابات المشرفين وصلاحيات لوحة التحكم ({supervisors.length})
                 </h2>
               </div>
               <p className="text-xs text-[#929BAA] leading-relaxed max-w-2xl">
-                قائمة المشرفين المعتمدين حالياً في قاعدة البيانات. يحق للمشرف العام فقط مراجعة صلاحيات المشرفين أو إلغاء الإشراف وإعادة الحساب إلى رتبة طالب.
+                قائمة حسابات المشرفين المعتمدين في قاعدة البيانات. يحق للمشرف العام مراجعة صلاحيات المشرفين أو إلغاء الإشراف وإعادة الحساب إلى رتبة طالب.
               </p>
             </div>
 
@@ -1349,7 +1754,7 @@ export const AdminDashboard: React.FC = () => {
           {!isSuperAdmin && (
             <div className="p-4 rounded-2xl bg-[#090E17] border border-[#D7B875]/30 flex items-center gap-3 text-xs text-[#D7B875]">
               <Lock className="w-4 h-4 shrink-0" />
-              <span>أنت تتصفح القائمة بصفتك مشرفاً معتمداً. صلاحية ترقية أو إلغاء إشراف المشرفين الآخرين محصورة بالمشرف العام فقط.</span>
+              <span>أنت تتصفح القائمة بصفتك مشرفاً في فريق التنظيم. صلاحية ترقية أو إلغاء إشراف المشرفين الآخرين محصورة بالمشرف العام فقط.</span>
             </div>
           )}
 
@@ -1378,7 +1783,7 @@ export const AdminDashboard: React.FC = () => {
                         <div>
                           <h3 className="text-sm font-black text-white">{sup.fullName}</h3>
                           <span className="text-[11px] font-mono text-slate-400 block" dir="ltr">
-                            {sup.email || sup.userId}
+                            {isSuperAdmin ? sup.email || sup.userId : `UID: ${sup.userId}`}
                           </span>
                         </div>
                       </div>
@@ -1570,7 +1975,7 @@ export const AdminDashboard: React.FC = () => {
                             </span>
                           </div>
                           <p className="text-xs text-[#929BAA] mt-0.5" dir="ltr">
-                            {req.email}
+                            {isSuperAdmin ? req.email : 'البريد محجوب (للمشرف الرئيسي فقط)'}
                           </p>
                         </div>
                       </div>
@@ -1882,7 +2287,9 @@ export const AdminDashboard: React.FC = () => {
                       <tr key={g.id} className="hover:bg-white/5 transition-colors">
                         <td className="p-3.5">
                           <div className="font-bold">{g.displayTitle || g.fullName}</div>
-                          <div className="text-[10px] text-[#929BAA]">{g.email}</div>
+                          <div className="text-[10px] text-[#929BAA]">
+                            {isSuperAdmin ? g.email : 'البريد محجوب لحماية الخصوصية'}
+                          </div>
                         </td>
                         <td className="p-3.5 font-mono">
                           <div>{g.phone}</div>
@@ -2084,9 +2491,9 @@ export const AdminDashboard: React.FC = () => {
         <div className="rounded-3xl bg-[#101827] border border-white/10 p-6 sm:p-8 space-y-6 shadow-2xl">
           <div className="border-b border-white/10 pb-3 flex justify-between items-center">
             <div>
-              <h3 className="text-lg font-bold text-white">إعدادات ومواعيد الحفلات (تعديل حي بدون كود)</h3>
+              <h3 className="text-lg font-bold text-white">إعدادات هوية الموقع ومواعيد الحفلات (تعديل حي بدون كود)</h3>
               <p className="text-xs text-[#929BAA]">
-                تعديل تواريخ الفعاليات، القاعات، المصور، الرسوم، وحالة العداد التنازلي التلقائي.
+                تعديل اسم الموقع، نص «حول الموقع»، وتواريخ الفعاليات والقاعات والمصور والرسوم وحالة العداد التنازلي.
               </p>
             </div>
             {configSavedNotice && (
@@ -2098,6 +2505,56 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <form onSubmit={handleSaveConfig} className="space-y-6">
+            {/* Section 0: Site Identity & "حول الموقع" (About the Site) */}
+            <div className="p-5 rounded-2xl bg-[#10151C] border border-[#D7B875]/35 space-y-4 shadow-lg">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#D7B875]/20 pb-3">
+                <h4 className="text-sm font-black text-[#D7B875] flex items-center gap-2">
+                  <Info className="w-4 h-4" />
+                  <span>هوية الموقع ونص «حول الموقع» (توضيح طبيعة المنصة)</span>
+                </h4>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-white mb-1.5">
+                    عنوان الموقع الرئيسي:
+                  </label>
+                  <input
+                    type="text"
+                    value={editBrandName}
+                    onChange={(e) => setEditBrandName(e.target.value)}
+                    placeholder="تخرج دفعة التمريض 2027"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#142638] border border-white/10 text-white text-xs focus:outline-none focus:border-[#35D6C5]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-white mb-1.5">
+                    العنوان الفرعي أسفله:
+                  </label>
+                  <input
+                    type="text"
+                    value={editBrandSubtitle}
+                    onChange={(e) => setEditBrandSubtitle(e.target.value)}
+                    placeholder="رحلة علم، تعب، وذكريات تجمعنا"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#142638] border border-white/10 text-white text-xs focus:outline-none focus:border-[#35D6C5]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-white mb-1.5">
+                  نص قسم «حول الموقع» (يظهر في الصفحة الرئيسية وأسفل الموقع):
+                </label>
+                <textarea
+                  rows={3}
+                  value={editAboutSiteText}
+                  onChange={(e) => setEditAboutSiteText(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#142638] border border-white/10 text-white text-xs leading-relaxed focus:outline-none focus:border-[#35D6C5]"
+                />
+              </div>
+            </div>
+
             {/* Master Top-of-Home Countdown Timer Configuration */}
             <div className="p-5 rounded-2xl bg-[#10151C] border border-[#35D6C5]/35 space-y-4 shadow-lg">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#35D6C5]/20 pb-3">

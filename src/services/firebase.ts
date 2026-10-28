@@ -1161,10 +1161,28 @@ export async function recordLoggedInUserAccount(
   saveLocalLoggedInUsers(mergedLocal);
 
   // Save to Firestore /user_accounts/{uid}
+  const isFirstRegistration = !existingCloud && !existingLocal;
   try {
     await setDoc(doc(db, 'user_accounts', user.uid), accountRecord, {
       merge: true,
     });
+    if (isFirstRegistration && !isUserAdmin(user)) {
+      const notifId = `notif-user-${user.uid}`;
+      const notifPayload = {
+        id: notifId,
+        title: 'انضمام مستخدم جديد إلى المنصة',
+        message: `قام (${resolvedDisplayName}) بتسجيل الدخول وإنشاء حساب في المنصة (${loginMethod === 'google' ? 'عبر Google' : 'عبر البريد'}).`,
+        type: 'general',
+        targetAudience: 'admins',
+        readBy: [],
+        linkRoute: 'admin_dashboard',
+        createdAt: nowIso,
+        createdBy: user.uid,
+      };
+      await setDoc(doc(db, 'notifications', notifId), notifPayload, {
+        merge: true,
+      });
+    }
   } catch (err) {
     console.warn('[User Account Sync] Could not write to /user_accounts:', err);
   }
@@ -1215,10 +1233,18 @@ export async function updateLoggedInUserDisplayName(
   return updatedRecord;
 }
 
-export async function getAllLoggedInUserAccounts(): Promise<
-  LoggedInUserAccount[]
-> {
+export async function getAllLoggedInUserAccounts(
+  viewerIsSuperAdmin = true
+): Promise<LoggedInUserAccount[]> {
   const localUsers = getLocalLoggedInUsers();
+  const redactIfNeeded = (list: LoggedInUserAccount[]): LoggedInUserAccount[] =>
+    viewerIsSuperAdmin
+      ? list
+      : list.map((u) => ({
+          ...u,
+          email: '',
+        }));
+
   try {
     const snap = await getDocs(collection(db, 'user_accounts'));
     const cloudUsers = snap.docs.map(
@@ -1231,12 +1257,16 @@ export async function getAllLoggedInUserAccounts(): Promise<
     for (const u of cloudUsers) {
       byUid.set(u.uid, u);
     }
-    return Array.from(byUid.values()).sort((a, b) =>
+    const sorted = Array.from(byUid.values()).sort((a, b) =>
       (b.lastLoginAt || '').localeCompare(a.lastLoginAt || '')
     );
+    saveLocalLoggedInUsers(sorted);
+    return redactIfNeeded(sorted);
   } catch {
-    return localUsers.sort((a, b) =>
-      (b.lastLoginAt || '').localeCompare(a.lastLoginAt || '')
+    return redactIfNeeded(
+      localUsers.sort((a, b) =>
+        (b.lastLoginAt || '').localeCompare(a.lastLoginAt || '')
+      )
     );
   }
 }
@@ -1333,11 +1363,23 @@ export async function getMyModeratorRequest(userId: string): Promise<ModeratorRe
   return localFound || null;
 }
 
-export async function getAllModeratorRequests(): Promise<ModeratorRequest[]> {
+export async function getAllModeratorRequests(
+  viewerIsSuperAdmin = true
+): Promise<ModeratorRequest[]> {
   const localList = getLocalModeratorRequests();
+  const redactIfNeeded = (list: ModeratorRequest[]): ModeratorRequest[] =>
+    viewerIsSuperAdmin
+      ? list
+      : list.map((r) => ({
+          ...r,
+          userEmail: '',
+        }));
+
   try {
     const snap = await getDocs(collection(db, 'moderator_requests'));
-    const cloudRequests = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ModeratorRequest));
+    const cloudRequests = snap.docs.map(
+      (d) => ({ id: d.id, ...d.data() } as ModeratorRequest)
+    );
     const byId = new Map<string, ModeratorRequest>();
     for (const r of localList) byId.set(r.id, r);
     for (const r of cloudRequests) byId.set(r.id, r);
@@ -1345,9 +1387,11 @@ export async function getAllModeratorRequests(): Promise<ModeratorRequest[]> {
       b.requestedAt.localeCompare(a.requestedAt)
     );
     saveLocalModeratorRequests(merged);
-    return merged;
+    return redactIfNeeded(merged);
   } catch {
-    return localList.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+    return redactIfNeeded(
+      localList.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
+    );
   }
 }
 
@@ -1469,12 +1513,118 @@ export async function rejectModeratorRequest(
   };
 }
 
+export async function fbPromoteUserToModerator(
+  targetUser: { uid: string; displayName: string; email?: string },
+  adminUid: string,
+  adminName: string
+): Promise<{ success: boolean; notice: string }> {
+  const nowIso = new Date().toISOString();
+  if (
+    targetUser.uid === 'super_admin_root' ||
+    (targetUser.email &&
+      targetUser.email.trim().toLowerCase() === BOOTSTRAP_ADMIN_EMAIL.toLowerCase())
+  ) {
+    return {
+      success: false,
+      notice: 'حساب المشرف العام الأساسي يمتلك أعلى الصلاحيات دائماً ولا يمكن تغيير رتبته.',
+    };
+  }
+
+  // 1. Update local loggedInUsers cache
+  const localUsers = getLocalLoggedInUsers();
+  const updatedLocalUsers = localUsers.map((u) =>
+    u.uid === targetUser.uid ? { ...u, role: 'moderator' as UserRole } : u
+  );
+  saveLocalLoggedInUsers(updatedLocalUsers);
+
+  // 2. Write to Firestore /admins/{uid} and /user_accounts/{uid}
+  try {
+    await setDoc(
+      doc(db, 'admins', targetUser.uid),
+      {
+        email: targetUser.email || '',
+        fullName: targetUser.displayName || 'مشرف معتمد',
+        role: 'moderator',
+        createdAt: nowIso,
+        approvedBy: adminUid,
+        approvedByName: adminName,
+      },
+      { merge: true }
+    );
+    await setDoc(
+      doc(db, 'user_accounts', targetUser.uid),
+      {
+        role: 'moderator',
+        updatedAt: nowIso,
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('[fbPromoteUserToModerator] Firestore write warning:', err);
+  }
+
+  // 3. Also mark any pending moderator_request for this user as accepted
+  try {
+    const requests = await getAllModeratorRequests(true);
+    const targetReq = requests.find(
+      (r) => r.userId === targetUser.uid || r.id === targetUser.uid
+    );
+    if (targetReq) {
+      const updatedReq: ModeratorRequest = {
+        ...targetReq,
+        status: 'accepted',
+        reviewedAt: nowIso,
+        reviewedBy: adminUid,
+        reviewedByName: adminName,
+      };
+      const mergedLocal = [
+        updatedReq,
+        ...requests.filter((r) => r.id !== targetReq.id),
+      ];
+      saveLocalModeratorRequests(mergedLocal);
+      await setDoc(doc(db, 'moderator_requests', targetReq.id), updatedReq, {
+        merge: true,
+      });
+    }
+  } catch (err) {
+    console.warn('[fbPromoteUserToModerator] request sync note:', err);
+  }
+
+  return {
+    success: true,
+    notice: `تمت ترقية «${targetUser.displayName}» إلى مشرف معتمد بنجاح وتفعيل كافة صلاحياته الإدارية.`,
+  };
+}
+
 export async function fbRevokeModeratorRole(
   targetUserId: string,
   adminUid: string,
   adminName: string
 ): Promise<{ success: boolean; notice: string }> {
   const nowIso = new Date().toISOString();
+  const localUsers = getLocalLoggedInUsers();
+  const targetAccount = localUsers.find((u) => u.uid === targetUserId);
+  if (
+    targetUserId === 'super_admin_root' ||
+    (targetAccount?.email &&
+      targetAccount.email.trim().toLowerCase() ===
+        BOOTSTRAP_ADMIN_EMAIL.toLowerCase()) ||
+    targetAccount?.role === 'super_admin'
+  ) {
+    return {
+      success: false,
+      notice:
+        'حساب المشرف العام الرئيسي محمي بالكامل ولا يمكن إلغاء صلاحياته أبداً.',
+    };
+  }
+
+  // Update local cache immediately
+  saveLocalLoggedInUsers(
+    localUsers.map((u) =>
+      u.uid === targetUserId ? { ...u, role: 'student' as UserRole } : u
+    )
+  );
+
   try {
     // 1. Remove from /admins
     await deleteDoc(doc(db, 'admins', targetUserId));
@@ -1500,8 +1650,10 @@ export async function fbRevokeModeratorRole(
 
   // 3. Update moderator_requests if present
   try {
-    const requests = await getAllModeratorRequests();
-    const targetReq = requests.find((r) => r.userId === targetUserId || r.id === targetUserId);
+    const requests = await getAllModeratorRequests(true);
+    const targetReq = requests.find(
+      (r) => r.userId === targetUserId || r.id === targetUserId
+    );
     if (targetReq) {
       const updatedReq: ModeratorRequest = {
         ...targetReq,
@@ -1511,9 +1663,14 @@ export async function fbRevokeModeratorRole(
         reviewedByName: adminName,
         adminNote: 'تم إلغاء صلاحية الإشراف بواسطة المشرف العام.',
       };
-      const mergedLocal = [updatedReq, ...requests.filter((r) => r.id !== targetReq.id)];
+      const mergedLocal = [
+        updatedReq,
+        ...requests.filter((r) => r.id !== targetReq.id),
+      ];
       saveLocalModeratorRequests(mergedLocal);
-      await setDoc(doc(db, 'moderator_requests', targetReq.id), updatedReq, { merge: true });
+      await setDoc(doc(db, 'moderator_requests', targetReq.id), updatedReq, {
+        merge: true,
+      });
     }
   } catch (err) {
     console.warn('[fbRevokeModeratorRole] update requests:', err);
@@ -1534,11 +1691,13 @@ export interface SupervisorRecord {
   approvedBy?: string;
 }
 
-export async function getAllSupervisors(): Promise<SupervisorRecord[]> {
+export async function getAllSupervisors(
+  viewerIsSuperAdmin = true
+): Promise<SupervisorRecord[]> {
   const supervisors: SupervisorRecord[] = [
     {
       userId: 'super_admin_root',
-      email: BOOTSTRAP_ADMIN_EMAIL,
+      email: viewerIsSuperAdmin ? BOOTSTRAP_ADMIN_EMAIL : '',
       fullName: 'المشرف العام (مصطفى علي)',
       role: 'super_admin',
       createdAt: '2026-01-01T00:00:00.000Z',
@@ -1550,10 +1709,18 @@ export async function getAllSupervisors(): Promise<SupervisorRecord[]> {
     const adminSnap = await getDocs(collection(db, 'admins'));
     adminSnap.forEach((d) => {
       const data = d.data();
-      if (!supervisors.some((s) => s.userId === d.id || s.email.toLowerCase() === (data.email || '').toLowerCase())) {
+      const rawEmail = data.email || '';
+      if (
+        !supervisors.some(
+          (s) =>
+            s.userId === d.id ||
+            (rawEmail &&
+              rawEmail.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL.toLowerCase())
+        )
+      ) {
         supervisors.push({
           userId: d.id,
-          email: data.email || '',
+          email: viewerIsSuperAdmin ? rawEmail : '',
           fullName: data.fullName || 'مشرف معتمد',
           role: data.role === 'super_admin' ? 'super_admin' : 'moderator',
           createdAt: data.createdAt,
@@ -1570,13 +1737,21 @@ export async function getAllSupervisors(): Promise<SupervisorRecord[]> {
     const userSnap = await getDocs(collection(db, 'user_accounts'));
     userSnap.forEach((d) => {
       const data = d.data();
+      const rawEmail = data.email || '';
       if (
-        (data.role === 'moderator' || data.role === 'admin' || data.role === 'super_admin') &&
-        !supervisors.some((s) => s.userId === d.id || (data.email && s.email.toLowerCase() === data.email.toLowerCase()))
+        (data.role === 'moderator' ||
+          data.role === 'admin' ||
+          data.role === 'super_admin') &&
+        !supervisors.some(
+          (s) =>
+            s.userId === d.id ||
+            (rawEmail &&
+              rawEmail.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL.toLowerCase())
+        )
       ) {
         supervisors.push({
           userId: d.id,
-          email: data.email || '',
+          email: viewerIsSuperAdmin ? rawEmail : '',
           fullName: data.displayName || 'مشرف',
           role: data.role,
           createdAt: data.createdAt,
@@ -1584,7 +1759,10 @@ export async function getAllSupervisors(): Promise<SupervisorRecord[]> {
       }
     });
   } catch (err) {
-    console.warn('[getAllSupervisors] user_accounts collection fetch error:', err);
+    console.warn(
+      '[getAllSupervisors] user_accounts collection fetch error:',
+      err
+    );
   }
 
   return supervisors;

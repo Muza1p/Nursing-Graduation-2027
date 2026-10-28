@@ -13,6 +13,7 @@ import {
   deleteObject,
 } from 'firebase/storage';
 import { app, db, auth } from './firebase';
+import { LocalStorageManager } from './storage';
 import { GraduationSong, SongCategory, SongStorageType } from '../types';
 
 const MUSIC_METADATA_STORAGE_KEY = 'nursing_grad_music_library_v1';
