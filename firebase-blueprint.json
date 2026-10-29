@@ -970,6 +970,362 @@
         }
       },
       "required": ["id", "userId", "studentName", "templateId", "dataUrl", "createdAt"]
+    },
+    "SiteAnalyticsSummary": {
+      "title": "SiteAnalyticsSummary",
+      "description": "Global real-time website visitor counters (total visits and estimated unique visitors)",
+      "type": "object",
+      "properties": {
+        "totalVisits": {
+          "type": "number",
+          "description": "Cumulative site visits across sessions"
+        },
+        "uniqueVisitorsEstimate": {
+          "type": "number",
+          "description": "Estimated unique visitors count"
+        },
+        "lastUpdatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of most recent visit update"
+        },
+        "lastVisitDate": {
+          "type": "string",
+          "description": "Date key YYYY-MM-DD of most recent visit"
+        }
+      },
+      "required": ["totalVisits", "uniqueVisitorsEstimate", "lastUpdatedAt"]
+    },
+    "SiteAnalyticsDaily": {
+      "title": "SiteAnalyticsDaily",
+      "description": "Daily visitor analytics bucket keyed by YYYY-MM-DD",
+      "type": "object",
+      "properties": {
+        "dateKey": {
+          "type": "string",
+          "description": "Date string YYYY-MM-DD in Asia/Baghdad timezone"
+        },
+        "visits": {
+          "type": "number",
+          "description": "Total visits recorded on this date"
+        },
+        "uniqueVisitors": {
+          "type": "number",
+          "description": "Estimated unique visitors recorded on this date"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update for this date"
+        }
+      },
+      "required": ["dateKey", "visits", "uniqueVisitors", "updatedAt"]
+    },
+    "PaymentReceiptSubmission": {
+      "title": "PaymentReceiptSubmission",
+      "description": "SuperQi payment receipt submission metadata and AI analysis result pending supervisor review",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique receipt submission ID"
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Target ScrubStudent ID"
+        },
+        "studentName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120,
+          "description": "Arabic student name"
+        },
+        "amountIQD": {
+          "type": "number",
+          "description": "Submitted payment amount in IQD"
+        },
+        "vaultReceiptId": {
+          "type": "string",
+          "description": "Reference ID in private_receipt_vault"
+        },
+        "imageSha256": {
+          "type": "string",
+          "description": "SHA-256 fingerprint of uploaded receipt image"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending_review", "approved", "rejected"],
+          "description": "Review status"
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "description": "Idempotency key preventing duplicate balance updates"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO creation timestamp"
+        }
+      },
+      "required": ["id", "studentId", "studentName", "amountIQD", "vaultReceiptId", "status", "idempotencyKey", "createdAt"]
+    },
+    "PrivateReceiptVaultItem": {
+      "title": "PrivateReceiptVaultItem",
+      "description": "Permission-protected private storage for encrypted/isolated receipt images",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Vault receipt ID"
+        },
+        "submissionId": {
+          "type": "string",
+          "description": "Associated submission ID"
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Target student ID"
+        },
+        "encryptedPayload": {
+          "type": "string",
+          "description": "Protected receipt image payload"
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "Image MIME type"
+        },
+        "imageSha256": {
+          "type": "string",
+          "description": "SHA-256 hash of image"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation ISO timestamp"
+        }
+      },
+      "required": ["id", "submissionId", "studentId", "encryptedPayload", "mimeType", "imageSha256", "createdAt"]
+    },
+    "FinancialSettlementRecord": {
+      "title": "FinancialSettlementRecord",
+      "description": "Recorded administrative financial settlement and adjustment log for a student",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Settlement record ID"
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Target ScrubStudent ID"
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Student Arabic full name"
+        },
+        "previousTotalFeeIQD": {
+          "type": "number",
+          "description": "Total fee before adjustment"
+        },
+        "newTotalFeeIQD": {
+          "type": "number",
+          "description": "Total fee after adjustment"
+        },
+        "previousPaidIQD": {
+          "type": "number",
+          "description": "Paid amount before adjustment"
+        },
+        "newPaidIQD": {
+          "type": "number",
+          "description": "Paid amount after adjustment"
+        },
+        "previousRemainingIQD": {
+          "type": "number",
+          "description": "Remaining balance before adjustment"
+        },
+        "newRemainingIQD": {
+          "type": "number",
+          "description": "Remaining balance after adjustment"
+        },
+        "settlementDeltaIQD": {
+          "type": "number",
+          "description": "Administrative discount or settlement amount in IQD"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Mandatory reason for the financial adjustment"
+        },
+        "performedBy": {
+          "type": "string",
+          "description": "Admin/Supervisor who performed the settlement"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of the settlement"
+        }
+      },
+      "required": ["id", "studentId", "studentName", "reason", "performedBy", "createdAt"]
+    },
+    "AiTrendCreation": {
+      "title": "AiTrendCreation",
+      "description": "Private student AI graduation trend creation stored with strict owner isolation",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique creation ID"
+        },
+        "ownerUid": {
+          "type": "string",
+          "description": "Owner UID or private device session ID"
+        },
+        "ideaId": {
+          "type": "string",
+          "description": "Selected trend idea ID"
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Trend category ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Arabic title of the trend creation"
+        },
+        "promptUsed": {
+          "type": "string",
+          "description": "Prompt used to create the design"
+        },
+        "aspectRatio": {
+          "type": "string",
+          "enum": ["9:16", "4:5", "1:1", "3:4", "16:9"],
+          "description": "Selected social media aspect ratio"
+        },
+        "isPublicShared": {
+          "type": "boolean",
+          "description": "False by default; true only if user explicitly opts in to share"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp"
+        }
+      },
+      "required": ["id", "ownerUid", "ideaId", "categoryId", "title", "aspectRatio", "isPublicShared", "createdAt"]
+    },
+    "AiTrendSharedItem": {
+      "title": "AiTrendSharedItem",
+      "description": "Opt-in shared graduation trend showcase item in the public cohort gallery",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Shared gallery item ID"
+        },
+        "ownerUid": {
+          "type": "string",
+          "description": "Creator UID"
+        },
+        "studentDisplayName": {
+          "type": "string",
+          "description": "Optional student name displayed on shared card"
+        },
+        "ideaId": {
+          "type": "string",
+          "description": "Trend idea ID"
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Trend category ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Trend title"
+        },
+        "promptUsed": {
+          "type": "string",
+          "description": "Prompt used"
+        },
+        "aspectRatio": {
+          "type": "string",
+          "description": "Aspect ratio"
+        },
+        "previewDataUrl": {
+          "type": "string",
+          "description": "Compressed preview image data URL"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp"
+        }
+      },
+      "required": ["id", "ownerUid", "ideaId", "categoryId", "title", "createdAt"]
+    },
+    "AiTrendCustomIdea": {
+      "title": "AiTrendCustomIdea",
+      "description": "Admin-managed trend idea or custom category configuration",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Idea ID"
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Category ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Arabic idea title"
+        },
+        "subtitle": {
+          "type": "string",
+          "description": "Short subtitle"
+        },
+        "promptTemplate": {
+          "type": "string",
+          "description": "Detailed AI prompt template"
+        },
+        "isEnabled": {
+          "type": "boolean",
+          "description": "Whether idea is active and visible to students"
+        },
+        "isFeatured": {
+          "type": "boolean",
+          "description": "Whether idea is featured in top sections"
+        },
+        "sortOrder": {
+          "type": "number",
+          "description": "Display sort order"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["id", "categoryId", "title", "promptTemplate", "isEnabled", "updatedAt"]
+    },
+    "AiTrendStats": {
+      "title": "AiTrendStats",
+      "description": "Aggregate usage statistics for the AI Graduation Trends Studio",
+      "type": "object",
+      "properties": {
+        "totalCreations": {
+          "type": "number",
+          "description": "Total designs created"
+        },
+        "totalAiAnalyses": {
+          "type": "number",
+          "description": "Total smart photo analyses performed"
+        },
+        "totalIdeaSuggestions": {
+          "type": "number",
+          "description": "Total AI prompt/idea suggestions generated"
+        },
+        "totalDownloads": {
+          "type": "number",
+          "description": "Total high-resolution downloads"
+        },
+        "lastUpdatedAt": {
+          "type": "string",
+          "description": "Last updated timestamp"
+        }
+      },
+      "required": ["totalCreations", "lastUpdatedAt"]
     }
   },
   "firestore": {
@@ -1032,6 +1388,42 @@
     "/notifications/{notificationId}": {
       "schema": "AppNotification",
       "description": "Unified notifications collection for updates, supervisor decisions, and announcements"
+    },
+    "/site_analytics/{docId}": {
+      "schema": "SiteAnalyticsSummary",
+      "description": "Global website visitor summary statistics"
+    },
+    "/site_analytics_daily/{dateKey}": {
+      "schema": "SiteAnalyticsDaily",
+      "description": "Daily website visitor statistics keyed by YYYY-MM-DD"
+    },
+    "/payment_receipt_submissions/{submissionId}": {
+      "schema": "PaymentReceiptSubmission",
+      "description": "SuperQi payment receipt submission records pending supervisor verification"
+    },
+    "/private_receipt_vault/{vaultId}": {
+      "schema": "PrivateReceiptVaultItem",
+      "description": "Permission-protected private vault for encrypted receipt images"
+    },
+    "/financial_settlements/{settlementId}": {
+      "schema": "FinancialSettlementRecord",
+      "description": "Recorded administrative financial settlements and balance adjustments"
+    },
+    "/ai_trend_creations/{creationId}": {
+      "schema": "AiTrendCreation",
+      "description": "Private student AI graduation trend creations (list disabled for privacy)"
+    },
+    "/ai_trend_shared_gallery/{itemId}": {
+      "schema": "AiTrendSharedItem",
+      "description": "Opt-in public shared designs in the AI Graduation Trends Studio"
+    },
+    "/ai_trend_custom_ideas/{ideaId}": {
+      "schema": "AiTrendCustomIdea",
+      "description": "Site manager customized trend ideas and categories"
+    },
+    "/ai_trend_stats/{docId}": {
+      "schema": "AiTrendStats",
+      "description": "Aggregate usage statistics for the AI Graduation Trends Studio"
     }
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   searchStudentPaymentByName,
@@ -6,6 +6,14 @@ import {
   StudentLookupCandidate,
   normalizeArabicName,
 } from '../services/studentManagement';
+import {
+  SUPERQI_CARD_NUMBER,
+  SUPERQI_CARD_DISPLAY,
+  copySuperQiCardNumber,
+  openSuperQiAppOrFallback,
+  validateReceiptImageFile,
+} from '../services/superQiReceiptService';
+import { ScrubStudent } from '../types';
 import { AnimatedEcgWaveform } from '../components/MedicalIllustrations';
 import {
   Sparkles,
@@ -17,6 +25,15 @@ import {
   AlertTriangle,
   RefreshCw,
   Database,
+  Copy,
+  ExternalLink,
+  Upload,
+  ShieldCheck,
+  FileCheck2,
+  CreditCard,
+  Send,
+  X,
+  Info,
 } from 'lucide-react';
 
 interface MatchedStudentLookupData {
@@ -27,25 +44,298 @@ interface MatchedStudentLookupData {
   totalFeeIQD: number;
 }
 
+/**
+ * Official Mastercard Brand Mark (overlapping Red #EB001B and Orange-Yellow #F79E1B circles)
+ */
+const OfficialMastercardLogo: React.FC<{ className?: string }> = ({
+  className = 'w-12 h-8',
+}) => (
+  <svg
+    viewBox="0 0 152 100"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    aria-label="Mastercard"
+  >
+    <circle cx="52" cy="50" r="42" fill="#EB001B" />
+    <circle cx="100" cy="50" r="42" fill="#F79E1B" fillOpacity="0.92" />
+    <path
+      d="M76 17.5C65.6 25.2 59 36.9 59 50C59 63.1 65.6 74.8 76 82.5C86.4 74.8 93 63.1 93 50C93 36.9 86.4 25.2 76 17.5Z"
+      fill="#FF5F00"
+    />
+  </svg>
+);
+
 export const PaymentsPage: React.FC = () => {
   const {
+    currentUser,
+    firebaseUser,
     eventConfig,
     payments,
     scrubStudents,
     studentPayments,
+    submitSuperQiReceipt,
   } = useApp();
+
+  const receiptFormSectionRef = useRef<HTMLDivElement | null>(null);
+  const cardNumberInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Requirement 3: Pre-Login / Pre-Payment Important Notice State
+  const [noticeAcknowledged, setNoticeAcknowledged] = useState<boolean>(false);
+
+  // Requirement 2: SuperQi Card Copy & Open App Feedback
+  const [copyFeedbackMessage, setCopyFeedbackMessage] = useState<string | null>(
+    null
+  );
+  const [showManualCopyFallback, setShowManualCopyFallback] =
+    useState<boolean>(false);
+  const [superQiOpenMessage, setSuperQiOpenMessage] = useState<string | null>(
+    null
+  );
+
+  // Requirement 4 & 5: Receipt Submission Form State
+  const [receiptStudentSearch, setReceiptStudentSearch] = useState<string>('');
+  const [selectedReceiptStudent, setSelectedReceiptStudent] =
+    useState<ScrubStudent | null>(null);
+  const [isAutoLinkedStudent, setIsAutoLinkedStudent] =
+    useState<boolean>(false);
+  const [receiptAmountIQD, setReceiptAmountIQD] = useState<string>('35000');
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(
+    null
+  );
+  const [receiptReferenceNumber, setReceiptReferenceNumber] =
+    useState<string>('');
+  const [receiptTransactionDate, setReceiptTransactionDate] = useState<string>(
+    () => new Date().toISOString().split('T')[0]
+  );
+  const [receiptNotes, setReceiptNotes] = useState<string>('');
+  const [isSubmittingReceipt, setIsSubmittingReceipt] =
+    useState<boolean>(false);
+  const [receiptFormError, setReceiptFormError] = useState<string | null>(null);
+  const [receiptSubmittedSuccessMsg, setReceiptSubmittedSuccessMsg] = useState<
+    string | null
+  >(null);
 
   // Public Student Payment Lookup State (No Login, No Password, No Verification Code)
   const [lookupQueryName, setLookupQueryName] = useState('');
   const [lookupError, setLookupError] = useState<string | null>(null);
-  const [matchedStudent, setMatchedStudent] = useState<MatchedStudentLookupData | null>(null);
-  const [multipleCandidates, setMultipleCandidates] = useState<StudentLookupCandidate[]>([]);
+  const [matchedStudent, setMatchedStudent] =
+    useState<MatchedStudentLookupData | null>(null);
+  const [multipleCandidates, setMultipleCandidates] = useState<
+    StudentLookupCandidate[]
+  >([]);
 
-  const activeScrubStudents = scrubStudents.filter((s) => s.status === 'active');
+  const activeScrubStudents = useMemo(
+    () => scrubStudents.filter((s) => s.status === 'active'),
+    [scrubStudents]
+  );
   const isDatabaseEmpty = activeScrubStudents.length === 0;
 
+  // Requirement 4: Automatically detect if logged-in user is linked/matched to a student record
+  useEffect(() => {
+    if (!activeScrubStudents.length) return;
+    const uid = firebaseUser?.uid || currentUser?.id;
+    const email = (
+      firebaseUser?.email ||
+      currentUser?.email ||
+      ''
+    ).toLowerCase();
+
+    if (uid) {
+      const linkedByUid = activeScrubStudents.find(
+        (s) =>
+          s.linkedUserId === uid ||
+          (email && (s.linkedUserEmail || '').toLowerCase() === email)
+      );
+      if (linkedByUid) {
+        setSelectedReceiptStudent(linkedByUid);
+        setReceiptStudentSearch(linkedByUid.fullName);
+        setIsAutoLinkedStudent(true);
+        if (linkedByUid.remainingBalanceIQD > 0) {
+          setReceiptAmountIQD(String(linkedByUid.remainingBalanceIQD));
+        }
+        return;
+      }
+    }
+
+    // If user is logged in and has a unique exact fullName match in activeScrubStudents
+    if (currentUser?.fullName) {
+      const normUser = normalizeArabicName(currentUser.fullName);
+      const exactMatches = activeScrubStudents.filter(
+        (s) => normalizeArabicName(s.fullName) === normUser
+      );
+      if (exactMatches.length === 1) {
+        setSelectedReceiptStudent(exactMatches[0]);
+        setReceiptStudentSearch(exactMatches[0].fullName);
+        setIsAutoLinkedStudent(true);
+        if (exactMatches[0].remainingBalanceIQD > 0) {
+          setReceiptAmountIQD(String(exactMatches[0].remainingBalanceIQD));
+        }
+      }
+    }
+  }, [
+    activeScrubStudents,
+    firebaseUser?.uid,
+    firebaseUser?.email,
+    currentUser?.id,
+    currentUser?.email,
+    currentUser?.fullName,
+  ]);
+
+  // Revoke local file preview URL when changed or unmounted
+  useEffect(() => {
+    return () => {
+      if (receiptPreviewUrl) {
+        URL.revokeObjectURL(receiptPreviewUrl);
+      }
+    };
+  }, [receiptPreviewUrl]);
+
+  // Filtered candidates for student name search in Receipt Submission Form (Requirement 4)
+  const receiptSearchCandidates = useMemo(() => {
+    const q = receiptStudentSearch.trim();
+    if (!q || isAutoLinkedStudent) return [];
+    const normQ = normalizeArabicName(q);
+    if (!normQ) return [];
+
+    return activeScrubStudents
+      .filter((s) => {
+        const normName = normalizeArabicName(s.fullName);
+        return (
+          s.fullName.includes(q) ||
+          normName.includes(normQ) ||
+          String(s.studentNumber) === q
+        );
+      })
+      .slice(0, 12);
+  }, [receiptStudentSearch, activeScrubStudents, isAutoLinkedStudent]);
+
+  // Check if the typed name has multiple similar matches in the roster
+  const hasSimilarRosterAmbiguity = useMemo(() => {
+    if (selectedReceiptStudent) return false;
+    return receiptSearchCandidates.length > 1;
+  }, [selectedReceiptStudent, receiptSearchCandidates]);
+
+  // Copy SuperQi card number handler (Requirement 2)
+  const handleCopyCardNumber = async () => {
+    setCopyFeedbackMessage(null);
+    const res = await copySuperQiCardNumber();
+    if (res.copied) {
+      setCopyFeedbackMessage(res.message);
+      setShowManualCopyFallback(false);
+      setTimeout(() => setCopyFeedbackMessage(null), 4000);
+    } else {
+      setShowManualCopyFallback(true);
+      setCopyFeedbackMessage(res.message);
+      setTimeout(() => {
+        cardNumberInputRef.current?.focus();
+        cardNumberInputRef.current?.select();
+      }, 60);
+    }
+  };
+
+  // Open SuperQi app handler (Requirement 2)
+  const handleOpenSuperQi = () => {
+    const res = openSuperQiAppOrFallback();
+    setSuperQiOpenMessage(res.message);
+  };
+
+  // Scroll to Receipt Submission Form (Requirement 2)
+  const handleScrollToReceiptForm = () => {
+    receiptFormSectionRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  };
+
+  // Handle Receipt Image File Change (Requirement 5)
+  const handleReceiptFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setReceiptFormError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateReceiptImageFile(file);
+    if (!validation.valid) {
+      setReceiptFormError(validation.error || 'ملف الصورة غير صالح.');
+      e.target.value = '';
+      return;
+    }
+
+    if (receiptPreviewUrl) {
+      URL.revokeObjectURL(receiptPreviewUrl);
+    }
+    setReceiptFile(file);
+    setReceiptPreviewUrl(URL.createObjectURL(file));
+  };
+
+  // Submit SuperQi Receipt Form Handler (Requirement 5 & 6)
+  const handleReceiptFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setReceiptFormError(null);
+    setReceiptSubmittedSuccessMsg(null);
+
+    const typedName = (
+      selectedReceiptStudent?.fullName || receiptStudentSearch
+    ).trim();
+    if (!typedName || typedName.length < 3) {
+      setReceiptFormError(
+        'يرجى اختيار اسمك من قائمة طلاب الدفعة أو كتابة اسمك الثلاثي الصحيح.'
+      );
+      return;
+    }
+
+    const numericAmount = Number(String(receiptAmountIQD).replace(/,/g, ''));
+    if (!numericAmount || numericAmount < 250) {
+      setReceiptFormError(
+        'يرجى إدخال المبلغ المدفوع بالدينار العراقي بصورة صحيحة.'
+      );
+      return;
+    }
+
+    if (!receiptFile) {
+      setReceiptFormError('يرجى إرفاق صورة واضحة لوصل التحويل قبل الإرسال.');
+      return;
+    }
+
+    setIsSubmittingReceipt(true);
+    try {
+      const result = await submitSuperQiReceipt({
+        studentId: selectedReceiptStudent?.id || 'unconfirmed_identity',
+        studentNumber: selectedReceiptStudent?.studentNumber,
+        studentName: selectedReceiptStudent?.fullName || typedName,
+        submittedRawName: typedName,
+        identityConfirmed: Boolean(
+          isAutoLinkedStudent || selectedReceiptStudent
+        ),
+        amountIQD: numericAmount,
+        transactionReference: receiptReferenceNumber.trim(),
+        transactionDate: receiptTransactionDate,
+        notes: receiptNotes.trim(),
+        file: receiptFile,
+      });
+
+      if (result.success) {
+        setReceiptSubmittedSuccessMsg(result.message);
+        setReceiptFile(null);
+        if (receiptPreviewUrl) {
+          URL.revokeObjectURL(receiptPreviewUrl);
+          setReceiptPreviewUrl(null);
+        }
+        setReceiptReferenceNumber('');
+        setReceiptNotes('');
+      } else {
+        setReceiptFormError(result.message);
+      }
+    } finally {
+      setIsSubmittingReceipt(false);
+    }
+  };
+
   // Helper to compute any additional Official Graduation payments recorded in the general payments ledger
-  const computeTotalOfficialGradPaid = (student: MatchedStudentLookupData): number => {
+  const computeTotalOfficialGradPaid = (
+    student: MatchedStudentLookupData
+  ): number => {
     const normStudentName = normalizeArabicName(student.fullName);
     const ledgerGradPaid = payments
       .filter(
@@ -53,7 +343,8 @@ export const PaymentsPage: React.FC = () => {
           p.eventTarget === 'official_grad' &&
           p.isVerified !== false &&
           (p.studentId === student.id ||
-            (p.graduateName && normalizeArabicName(p.graduateName) === normStudentName))
+            (p.graduateName &&
+              normalizeArabicName(p.graduateName) === normStudentName))
       )
       .reduce((sum, p) => sum + Math.max(0, Number(p.amountIQD) || 0), 0);
 
@@ -77,7 +368,11 @@ export const PaymentsPage: React.FC = () => {
       return;
     }
 
-    const result = searchStudentPaymentByName(trimmed, scrubStudents, studentPayments);
+    const result = searchStudentPaymentByName(
+      trimmed,
+      scrubStudents,
+      studentPayments
+    );
 
     if (result.status === 'empty_database') {
       setLookupError('لم تتم إضافة سجلات الطلاب بعد في قاعدة البيانات.');
@@ -85,7 +380,9 @@ export const PaymentsPage: React.FC = () => {
     }
 
     if (result.status === 'not_found') {
-      setLookupError('لم يتم العثور على طالب مطابق لهذا الاسم. يرجى التأكد من كتابة الاسم بصورة صحيحة.');
+      setLookupError(
+        'لم يتم العثور على طالب مطابق لهذا الاسم. يرجى التأكد من كتابة الاسم بصورة صحيحة.'
+      );
       return;
     }
 
@@ -100,7 +397,11 @@ export const PaymentsPage: React.FC = () => {
   };
 
   const handleSelectCandidate = (studentId: string) => {
-    const record = getStudentPaymentById(studentId, scrubStudents, studentPayments);
+    const record = getStudentPaymentById(
+      studentId,
+      scrubStudents,
+      studentPayments
+    );
     if (record) {
       setMultipleCandidates([]);
       setLookupError(null);
@@ -125,24 +426,33 @@ export const PaymentsPage: React.FC = () => {
 
   const scrubPaidIQD = matchedStudent ? matchedStudent.paidAmountIQD : 0;
   const scrubRemainingIQD = Math.max(0, officialScrubPriceIQD - scrubPaidIQD);
-  const isScrubCompleted = scrubPaidIQD >= officialScrubPriceIQD && officialScrubPriceIQD > 0;
+  const isScrubCompleted =
+    scrubPaidIQD >= officialScrubPriceIQD && officialScrubPriceIQD > 0;
 
   // Official Graduation Price (defaults to "قريباً — لم يتم تحديد السعر" until confirmed by admin)
   const isOfficialGradPriceConfirmed = Boolean(
-    eventConfig.isOfficialGradPriceConfirmed && eventConfig.officialGradFeeIQD > 0
+    eventConfig.isOfficialGradPriceConfirmed &&
+      eventConfig.officialGradFeeIQD > 0
   );
   const officialGradPriceIQD = isOfficialGradPriceConfirmed
     ? eventConfig.officialGradFeeIQD
     : 0;
-  const gradPaidIQD = matchedStudent ? computeTotalOfficialGradPaid(matchedStudent) : 0;
+  const gradPaidIQD = matchedStudent
+    ? computeTotalOfficialGradPaid(matchedStudent)
+    : 0;
   const gradRemainingIQD = isOfficialGradPriceConfirmed
     ? Math.max(0, officialGradPriceIQD - gradPaidIQD)
     : 0;
   const isGradCompleted =
-    isOfficialGradPriceConfirmed && gradPaidIQD >= officialGradPriceIQD && officialGradPriceIQD > 0;
+    isOfficialGradPriceConfirmed &&
+    gradPaidIQD >= officialGradPriceIQD &&
+    officialGradPriceIQD > 0;
 
   return (
-    <div className="py-6 sm:py-10 space-y-6 sm:space-y-8 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-right">
+    <div
+      className="py-6 sm:py-10 space-y-6 sm:space-y-8 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-right"
+      dir="rtl"
+    >
       {/* Page Header */}
       <div className="text-center max-w-2xl mx-auto space-y-2.5">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#142638] border border-[#35D6C5]/35 text-xs font-bold text-white">
@@ -150,12 +460,532 @@ export const PaymentsPage: React.FC = () => {
           <span>قائمة الطلاب والدفعات — تخرج دفعة التمريض 2027</span>
         </div>
         <h1 className="text-2xl sm:text-4xl font-black text-white">
-          الاستعلام المباشر عن دفعات التخرج
+          الاستعلام عن الدفعات والدفع الإلكتروني عبر SuperQi
         </h1>
         <p className="text-xs sm:text-sm text-[#E8EEF2]/80">
-          اكتب اسمك في حقل البحث واضغط على «بحث» لعرض تفاصيل دفعات حفلة السكراب وحفل تخرج دفعة 2027 مباشرة دون الحاجة لتسجيل الدخول.
+          استعلم عن رصيدك المالي مباشرة، أو حوّل دفعتك عبر بطاقة SuperQi ثم أرسل صورة الوصل ليتم فحصها وتحديث حسابك المالي.
         </p>
-        <AnimatedEcgWaveform color="#35D6C5" opacity="opacity-20" className="w-full h-8 pt-1" />
+        <AnimatedEcgWaveform
+          color="#35D6C5"
+          opacity="opacity-20"
+          className="w-full h-8 pt-1"
+        />
+      </div>
+
+      {/* =================================================================== */}
+      {/* REQUIREMENT 3: PRE-LOGIN / PRE-PAYMENT RECEIPT NOTICE               */}
+      {/* =================================================================== */}
+      <div className="rounded-3xl bg-[#142238] border-2 border-[#35D6C5]/45 p-5 sm:p-7 shadow-xl space-y-4">
+        <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-3.5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-[#35D6C5]/15 border border-[#35D6C5]/40 text-[#35D6C5] flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-black text-white">
+                تنويه مهم يا ممرضينا ❤️🩺
+              </h2>
+              <span className="text-[11px] text-[#A6F0DF] font-bold">
+                يظهر هذا التنويه لجميع الزوار والطلاب قبل البدء بعملية الدفع أو رفع الوصل
+              </span>
+            </div>
+          </div>
+          {noticeAcknowledged && (
+            <span className="px-3 py-1 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center gap-1.5 shrink-0">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>تمت القراءة</span>
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-2.5 text-xs sm:text-sm text-white/95 leading-relaxed bg-[#0E1826] p-4 sm:p-5 rounded-2xl border border-white/10">
+          <p className="font-bold">
+            قبل ما تبدي بعملية الدفع، تأكد من بيانات المستلم واحتفظ بصورة واضحة من وصل التحويل بعد إكمال العملية.
+          </p>
+          <p className="font-bold text-[#A6F0DF]">
+            بعد الدفع، ارجع للموقع وحدد اسمك والمبلغ اللي دفعته وارفع صورة الوصل حتى يتم فحصه ومراجعة العملية وتحديث حسابك.
+          </p>
+          <p className="font-extrabold text-amber-300">
+            ⚠️ لا تشارك كلمة مرورك أو رمز التحقق OTP مع أي شخص.
+          </p>
+          <p className="text-xs sm:text-sm text-slate-200 font-bold pt-1 border-t border-white/10">
+            خصوصية الوصولات محفوظة، ولا يحق الاطلاع عليها إلا للمشرفين المخوّلين الذين يحددهم مدير الموقع
+          </p>
+        </div>
+
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              setNoticeAcknowledged(true);
+              handleScrollToReceiptForm();
+            }}
+            className={`px-6 py-3 rounded-2xl font-black text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer shadow-md ${
+              noticeAcknowledged
+                ? 'bg-[#2A9D8F] text-white'
+                : 'bg-[#35D6C5] hover:opacity-95 text-[#0F172A]'
+            }`}
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>فهمت، متابعة</span>
+          </button>
+        </div>
+      </div>
+
+      {/* =================================================================== */}
+      {/* REQUIREMENT 2: OFFICIAL SUPERQI PAYMENT CARD                        */}
+      {/* =================================================================== */}
+      <div className="rounded-3xl bg-[#111E32] border border-[#35D6C5]/40 p-5 sm:p-7 shadow-2xl space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-[#1B2D48] border border-[#35D6C5]/40 flex items-center justify-center shrink-0">
+              <CreditCard className="w-6 h-6 text-[#35D6C5]" />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold text-[#35D6C5] block">
+                بوابة التحويل المالي المعتمدة للدفعة
+              </span>
+              <h2 className="text-xl sm:text-2xl font-black text-white">
+                الدفع عبر SuperQi
+              </h2>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 self-start sm:self-center bg-[#0C1524] px-4 py-2 rounded-2xl border border-white/10">
+            <OfficialMastercardLogo className="w-11 h-7 shrink-0" />
+            <div className="text-right">
+              <span className="text-xs font-black text-white block">
+                SuperQi Mastercard
+              </span>
+              <span className="text-[10px] text-slate-300 block">
+                البطاقة الرسمية لاستلام دفعات التخرج
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+          {/* Realistic Indigo & Turquoise Bank Card Visual (7 cols) */}
+          <div className="lg:col-span-7">
+            <div className="relative rounded-3xl bg-gradient-to-br from-[#172542] via-[#1C3154] to-[#0F1A2E] border-2 border-[#35D6C5]/45 p-6 sm:p-7 shadow-2xl space-y-6 overflow-hidden">
+              {/* Top Card Row: Brand & Mastercard Logo */}
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <span className="text-[11px] font-bold text-[#A6F0DF] block">
+                    بطاقة استلام دفعات تخرج دفعة التمريض 2027
+                  </span>
+                  <h3 className="text-lg sm:text-xl font-black text-white tracking-wide">
+                    SuperQi • كي كارد
+                  </h3>
+                </div>
+                <OfficialMastercardLogo className="w-14 h-9 shrink-0" />
+              </div>
+
+              {/* Card Number Box */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-[#0B1322]/90 border border-[#35D6C5]/40 space-y-2">
+                <div className="flex items-center justify-between text-xs text-slate-300">
+                  <span className="font-bold">رقم البطاقة / الحساب المستلم:</span>
+                  <span className="text-[#35D6C5] font-bold">انسخ الرقم للتحويل</span>
+                </div>
+                <div
+                  className="text-2xl sm:text-3xl font-black text-white font-mono tracking-wider text-center py-1 select-all"
+                  dir="ltr"
+                >
+                  {SUPERQI_CARD_NUMBER}
+                </div>
+                <div
+                  className="text-xs text-[#A6F0DF] font-mono text-center"
+                  dir="ltr"
+                >
+                  ({SUPERQI_CARD_DISPLAY})
+                </div>
+
+                {showManualCopyFallback && (
+                  <div className="pt-2">
+                    <input
+                      ref={cardNumberInputRef}
+                      type="text"
+                      readOnly
+                      value={SUPERQI_CARD_NUMBER}
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="w-full px-3 py-2 rounded-xl bg-[#142238] border border-[#35D6C5] text-white font-mono text-center text-sm font-bold"
+                      dir="ltr"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Copy Feedback Banner */}
+              {copyFeedbackMessage && (
+                <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs font-extrabold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{copyFeedbackMessage}</span>
+                </div>
+              )}
+
+              {/* SuperQi Open App Feedback Banner */}
+              {superQiOpenMessage && (
+                <div className="p-3 rounded-xl bg-[#0B1322] border border-[#35D6C5]/40 text-slate-200 text-xs font-bold flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Info className="w-4 h-4 text-[#35D6C5] shrink-0" />
+                    <span>{superQiOpenMessage}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSuperQiOpenMessage(null)}
+                    className="text-slate-400 hover:text-white cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* 3 Action Buttons on the Card */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={handleCopyCardNumber}
+                  className="py-3 px-4 rounded-2xl bg-[#35D6C5] hover:opacity-95 text-[#0F172A] font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md cursor-pointer"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>نسخ رقم البطاقة</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenSuperQi}
+                  className="py-3 px-4 rounded-2xl bg-[#1E3252] hover:bg-[#263E63] text-white font-extrabold text-xs sm:text-sm border border-white/15 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <ExternalLink className="w-4 h-4 text-[#35D6C5]" />
+                  <span>فتح تطبيق SuperQi</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleScrollToReceiptForm}
+                  className="py-3 px-4 rounded-2xl bg-white hover:bg-slate-100 text-[#0F172A] font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md cursor-pointer"
+                >
+                  <Upload className="w-4 h-4 text-[#1F7A70]" />
+                  <span>إرسال وصل الدفع</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Step-by-Step Instructions Column (5 cols) */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="p-5 rounded-3xl bg-[#0D1726] border border-white/10 space-y-3.5">
+              <h3 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
+                <FileCheck2 className="w-4 h-4 text-[#35D6C5]" />
+                <span>خطوات الدفع وتوثيق الوصل:</span>
+              </h3>
+              <ol className="space-y-2.5 text-xs text-slate-200 leading-relaxed list-decimal list-inside">
+                <li>
+                  اضغط على <strong className="text-[#35D6C5]">«نسخ رقم البطاقة»</strong> لنسخ الرقم (<span className="font-mono text-white">6132013829</span>).
+                </li>
+                <li>
+                  افتح تطبيق <strong className="text-white">SuperQi</strong> وأكمل تحويل المبلغ المطلوب، ثم خذ لقطة شاشة (Screenshot) واضحة لوصل التحويل.
+                </li>
+                <li>
+                  عد إلى هذه الصفحة واضغط على <strong className="text-white">«إرسال وصل الدفع»</strong> بالأسفل.
+                </li>
+                <li>
+                  اختر اسمك من القائمة، أدخل المبلغ المدفوع، وارفع صورة الوصل ليتم فحصه ومراجعته وتحديث حسابك المالي الرسمي.
+                </li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* =================================================================== */}
+      {/* REQUIREMENTS 4 & 5: STUDENT NAME SELECTION & RECEIPT UPLOAD FORM    */}
+      {/* =================================================================== */}
+      <div
+        ref={receiptFormSectionRef}
+        className="rounded-3xl bg-[#111E32] border border-[#35D6C5]/40 p-5 sm:p-7 shadow-2xl space-y-6"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+          <div className="space-y-1">
+            <span className="text-[11px] font-extrabold text-[#35D6C5] block">
+              توثيق الدفعات الإلكترونية • دفعة التمريض 2027
+            </span>
+            <h2 className="text-lg sm:text-2xl font-black text-white">
+              نموذج إرسال وصل الدفع للمراجعة
+            </h2>
+            <p className="text-xs text-slate-300">
+              يُحفظ الوصل بخصوصية تامة في خزنة مشفرة لا يطلع عليها إلا المشرفون المخوّلون من مدير الموقع.
+            </p>
+          </div>
+        </div>
+
+        {receiptSubmittedSuccessMsg ? (
+          <div className="p-6 rounded-3xl bg-emerald-500/15 border-2 border-emerald-500/40 text-center space-y-4 animate-in fade-in">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+            <h3 className="text-base sm:text-lg font-black text-white leading-relaxed max-w-xl mx-auto">
+              {receiptSubmittedSuccessMsg}
+            </h3>
+            <button
+              type="button"
+              onClick={() => setReceiptSubmittedSuccessMsg(null)}
+              className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold cursor-pointer"
+            >
+              إرسال وصل دفع آخر
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleReceiptFormSubmit} className="space-y-5">
+            {/* Field 1: Student Name Selection (Auto-detected if logged in, or searchable) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs sm:text-sm font-black text-white">
+                  1. اسم الطالب (اختر اسمك من القائمة الرسمية): *
+                </label>
+                {isAutoLinkedStudent && selectedReceiptStudent && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAutoLinkedStudent(false);
+                      setSelectedReceiptStudent(null);
+                      setReceiptStudentSearch('');
+                    }}
+                    className="text-[11px] text-[#35D6C5] underline cursor-pointer"
+                  >
+                    تغيير الاسم؟
+                  </button>
+                )}
+              </div>
+
+              {selectedReceiptStudent ? (
+                <div className="p-3.5 rounded-2xl bg-[#0B1322] border border-emerald-500/40 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <UserCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <div>
+                      <span className="text-sm font-black text-white block">
+                        {selectedReceiptStudent.fullName}
+                      </span>
+                      <span className="text-[11px] text-emerald-300 font-mono">
+                        التسلسل: {selectedReceiptStudent.studentNumber} •{' '}
+                        {selectedReceiptStudent.section || 'المرحلة الثانية صباحي'} • المتبقي الحالي:{' '}
+                        {selectedReceiptStudent.remainingBalanceIQD.toLocaleString('en-US')} د.ع
+                      </span>
+                    </div>
+                  </div>
+                  {!isAutoLinkedStudent && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedReceiptStudent(null);
+                        setReceiptStudentSearch('');
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs text-slate-200 font-bold cursor-pointer"
+                    >
+                      تغيير
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={receiptStudentSearch}
+                    onChange={(e) => {
+                      setReceiptStudentSearch(e.target.value);
+                      setSelectedReceiptStudent(null);
+                    }}
+                    placeholder="ابحث عن اسمك الثلاثي أو الرباعي واختره من القائمة..."
+                    className="w-full rounded-2xl bg-[#0B1322] border border-white/20 focus:border-[#35D6C5] px-4 py-3 text-xs sm:text-sm font-bold text-white placeholder-slate-400 outline-none"
+                  />
+
+                  {receiptSearchCandidates.length > 0 && (
+                    <div className="rounded-2xl bg-[#0B1322] border border-[#35D6C5]/40 p-2.5 space-y-1.5 max-h-56 overflow-y-auto">
+                      <span className="text-[11px] font-bold text-[#35D6C5] block px-2">
+                        اضغط على اسمك الكامل لتأكيد الربط بالسجل الصحيح:
+                      </span>
+                      {receiptSearchCandidates.map((stu) => (
+                        <button
+                          key={stu.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedReceiptStudent(stu);
+                            setReceiptStudentSearch(stu.fullName);
+                            if (stu.remainingBalanceIQD > 0) {
+                              setReceiptAmountIQD(String(stu.remainingBalanceIQD));
+                            }
+                          }}
+                          className="w-full text-right p-2.5 rounded-xl bg-[#142238] hover:bg-[#1E3252] border border-white/10 hover:border-[#35D6C5]/50 text-xs text-white font-bold flex items-center justify-between gap-2 cursor-pointer"
+                        >
+                          <span>
+                            ت ({stu.studentNumber}) — {stu.fullName}{' '}
+                            {stu.section ? `(${stu.section})` : ''}
+                          </span>
+                          <span className="text-[11px] text-[#35D6C5] font-mono">
+                            المتبقي: {stu.remainingBalanceIQD.toLocaleString('en-US')} د.ع
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {hasSimilarRosterAmbiguity && (
+                    <p className="text-[11px] text-amber-300 font-bold">
+                      ⚠️ توجد عدة أسماء متشابهة؛ يرجى النقر على اسمك الكامل من القائمة أعلاه لتجنب الخلط، أو سيُحال الطلب للمراجعة اليدوية من المشرف.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Field 2 & 3: Amount Paid & Upload Receipt Image */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs sm:text-sm font-black text-white">
+                  2. المبلغ المدفوع (بالدينار العراقي): *
+                </label>
+                <input
+                  type="number"
+                  step="250"
+                  min="250"
+                  required
+                  value={receiptAmountIQD}
+                  onChange={(e) => setReceiptAmountIQD(e.target.value)}
+                  placeholder="مثال: 35000"
+                  className="w-full rounded-2xl bg-[#0B1322] border border-white/20 focus:border-[#35D6C5] px-4 py-3 text-sm font-mono font-black text-[#35D6C5] outline-none"
+                />
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {[2000, 5000, 10000, 15000, 25000, 33000, 35000].map(
+                    (preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setReceiptAmountIQD(String(preset))}
+                        className="px-2.5 py-1 rounded-lg bg-[#0B1322] hover:bg-[#1E3252] border border-white/10 text-[11px] font-mono text-slate-200 cursor-pointer"
+                      >
+                        {preset.toLocaleString('en-US')} د.ع
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs sm:text-sm font-black text-white">
+                  3. رفع صورة وصل التحويل (JPG / PNG / WEBP): *
+                </label>
+                <label className="w-full rounded-2xl bg-[#0B1322] hover:bg-[#142238] border-2 border-dashed border-[#35D6C5]/50 p-3.5 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition">
+                  <Upload className="w-5 h-5 text-[#35D6C5]" />
+                  <span className="text-xs font-extrabold text-white">
+                    {receiptFile
+                      ? `تم اختيار: ${receiptFile.name}`
+                      : 'اضغط هنا لاختيار صورة الوصل من جهازك'}
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    صورة واضحة لوصل SuperQi (بحد أقصى 10MB)
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/heic"
+                    onChange={handleReceiptFileChange}
+                    className="hidden"
+                  />
+                </label>
+                {receiptPreviewUrl && (
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-[#0B1322] border border-white/10">
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={receiptPreviewUrl}
+                        alt="معاينة الوصل"
+                        className="w-10 h-10 rounded-lg object-cover border border-white/20"
+                      />
+                      <span className="text-[11px] text-emerald-300 font-bold">
+                        جاهز للإرسال والفحص الذكي
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReceiptFile(null);
+                        if (receiptPreviewUrl) {
+                          URL.revokeObjectURL(receiptPreviewUrl);
+                          setReceiptPreviewUrl(null);
+                        }
+                      }}
+                      className="text-xs text-rose-300 hover:text-rose-200 px-2 py-1 cursor-pointer"
+                    >
+                      إزالة
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Optional Fields: Reference Number, Transaction Date, Notes */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-200">
+                  رقم العملية أو المرجع (اختياري):
+                </label>
+                <input
+                  type="text"
+                  value={receiptReferenceNumber}
+                  onChange={(e) => setReceiptReferenceNumber(e.target.value)}
+                  placeholder="إن وُجد في الوصل..."
+                  className="w-full rounded-xl bg-[#0B1322] border border-white/15 px-3.5 py-2.5 text-xs text-white font-mono outline-none focus:border-[#35D6C5]"
+                  dir="ltr"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-200">
+                  تاريخ العملية (اختياري):
+                </label>
+                <input
+                  type="date"
+                  value={receiptTransactionDate}
+                  onChange={(e) => setReceiptTransactionDate(e.target.value)}
+                  className="w-full rounded-xl bg-[#0B1322] border border-white/15 px-3.5 py-2.5 text-xs text-white font-mono outline-none focus:border-[#35D6C5]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-200">
+                  ملاحظات إضافية (اختياري):
+                </label>
+                <input
+                  type="text"
+                  value={receiptNotes}
+                  onChange={(e) => setReceiptNotes(e.target.value)}
+                  placeholder="مثال: دفعة حفلة السكراب..."
+                  className="w-full rounded-xl bg-[#0B1322] border border-white/15 px-3.5 py-2.5 text-xs text-white outline-none focus:border-[#35D6C5]"
+                />
+              </div>
+            </div>
+
+            {receiptFormError && (
+              <div className="p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-200 text-xs font-extrabold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{receiptFormError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end pt-2 border-t border-white/10">
+              <button
+                type="submit"
+                disabled={isSubmittingReceipt}
+                className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-[#35D6C5] hover:opacity-95 disabled:opacity-50 text-[#0F172A] font-black text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+              >
+                <Send className="w-4 h-4" />
+                <span>
+                  {isSubmittingReceipt
+                    ? 'جارِ رفع الوصل وفحص البيانات...'
+                    : 'إرسال الوصل للمراجعة'}
+                </span>
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       {/* Empty Database Notice (if no student records exist yet) */}
@@ -179,7 +1009,7 @@ export const PaymentsPage: React.FC = () => {
                   htmlFor="student-name-lookup"
                   className="block text-sm sm:text-base font-black text-white"
                 >
-                  اسم الطالب
+                  الاستعلام المباشر عن الرصيد باسم الطالب
                 </label>
                 <div className="flex flex-col sm:flex-row gap-2.5">
                   <input
@@ -307,24 +1137,32 @@ export const PaymentsPage: React.FC = () => {
 
                   <div className="space-y-3 text-xs sm:text-sm">
                     <div className="p-3.5 rounded-2xl bg-[#101B2C]/90 border border-white/10 flex items-center justify-between gap-2">
-                      <span className="text-[#E8EEF2]/80 font-bold">مبلغ المساهمة المحدد:</span>
+                      <span className="text-[#E8EEF2]/80 font-bold">
+                        مبلغ المساهمة المحدد:
+                      </span>
                       <span className="font-black text-white text-sm sm:text-base">
                         {officialScrubPriceIQD.toLocaleString('en-US')} دينار عراقي
                       </span>
                     </div>
 
                     <div className="p-3.5 rounded-2xl bg-[#101B2C]/90 border border-[#35D6C5]/30 flex items-center justify-between gap-2">
-                      <span className="text-[#A6F0DF] font-bold">المبلغ الواصل:</span>
+                      <span className="text-[#A6F0DF] font-bold">
+                        المبلغ الواصل:
+                      </span>
                       <span className="font-black text-[#35D6C5] text-sm sm:text-base">
                         {scrubPaidIQD.toLocaleString('en-US')} دينار عراقي
                       </span>
                     </div>
 
                     <div className="p-3.5 rounded-2xl bg-[#101B2C]/90 border border-[#D6B777]/30 flex items-center justify-between gap-2">
-                      <span className="text-[#D6B777] font-bold">المبلغ المتبقي:</span>
+                      <span className="text-[#D6B777] font-bold">
+                        المبلغ المتبقي:
+                      </span>
                       <span
                         className={`font-black text-sm sm:text-base ${
-                          scrubRemainingIQD === 0 ? 'text-emerald-400' : 'text-[#D6B777]'
+                          scrubRemainingIQD === 0
+                            ? 'text-emerald-400'
+                            : 'text-[#D6B777]'
                         }`}
                       >
                         {scrubRemainingIQD.toLocaleString('en-US')} دينار عراقي
@@ -335,7 +1173,9 @@ export const PaymentsPage: React.FC = () => {
                       <span className="text-[#E8EEF2]/80 font-bold">الحالة:</span>
                       <span
                         className={`font-black text-sm ${
-                          isScrubCompleted ? 'text-emerald-400' : 'text-amber-300'
+                          isScrubCompleted
+                            ? 'text-emerald-400'
+                            : 'text-amber-300'
                         }`}
                       >
                         {isScrubCompleted ? 'مكتمل' : 'غير مكتمل'}
@@ -380,7 +1220,9 @@ export const PaymentsPage: React.FC = () => {
 
                   <div className="space-y-3 text-xs sm:text-sm">
                     <div className="p-3.5 rounded-2xl bg-[#101B2C]/90 border border-white/10 flex items-center justify-between gap-2">
-                      <span className="text-[#E8EEF2]/80 font-bold">مبلغ المساهمة المحدد:</span>
+                      <span className="text-[#E8EEF2]/80 font-bold">
+                        مبلغ المساهمة المحدد:
+                      </span>
                       <span className="font-black text-[#D6B777] text-xs sm:text-sm">
                         {isOfficialGradPriceConfirmed
                           ? `${officialGradPriceIQD.toLocaleString('en-US')} دينار عراقي`
@@ -389,14 +1231,18 @@ export const PaymentsPage: React.FC = () => {
                     </div>
 
                     <div className="p-3.5 rounded-2xl bg-[#101B2C]/90 border border-[#35D6C5]/30 flex items-center justify-between gap-2">
-                      <span className="text-[#A6F0DF] font-bold">المبلغ الواصل:</span>
+                      <span className="text-[#A6F0DF] font-bold">
+                        المبلغ الواصل:
+                      </span>
                       <span className="font-black text-[#35D6C5] text-sm sm:text-base">
                         {gradPaidIQD.toLocaleString('en-US')} دينار عراقي
                       </span>
                     </div>
 
                     <div className="p-3.5 rounded-2xl bg-[#101B2C]/90 border border-[#D6B777]/30 flex items-center justify-between gap-2">
-                      <span className="text-[#D6B777] font-bold">المبلغ المتبقي:</span>
+                      <span className="text-[#D6B777] font-bold">
+                        المبلغ المتبقي:
+                      </span>
                       <span className="font-black text-slate-300 text-xs sm:text-sm">
                         {isOfficialGradPriceConfirmed
                           ? `${gradRemainingIQD.toLocaleString('en-US')} دينار عراقي`
@@ -427,3 +1273,4 @@ export const PaymentsPage: React.FC = () => {
     </div>
   );
 };
+

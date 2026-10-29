@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   ScrubStudent,
   StudentPayment,
   PaymentMethod,
   PaymentStatus,
+  PaymentReceiptSubmission,
 } from '../types';
 import {
   formatIQD,
@@ -21,6 +22,7 @@ import {
   getUnifiedPaymentStatusArabic,
   ImportReport,
 } from '../services/studentManagement';
+import { loadProtectedReceiptObjectUrl } from '../services/superQiReceiptService';
 import {
   Users,
   Plus,
@@ -64,6 +66,14 @@ export const ScrubStudentManagementSection: React.FC = () => {
     pendingRegistrationRequests,
     isSuperAdmin,
     canManageFinances,
+    myPermissions,
+    currentUser,
+    receiptSubmissions,
+    approveSuperQiReceipt,
+    rejectSuperQiReceipt,
+    reanalyzeSuperQiReceipt,
+    financialSettlements,
+    applyStudentFinancialAdjustment,
     importOfficial46List,
     importCustomStudentsList,
     addScrubStudent,
@@ -82,7 +92,49 @@ export const ScrubStudentManagementSection: React.FC = () => {
     confirmStudentReviewDeposit,
     changeStudentPaymentStatusManual,
     openReceipt,
+    reconciliation46Report,
+    runReconcile46SubmittedNames,
   } = useApp();
+
+  const canViewReceipts =
+    isSuperAdmin || Boolean(myPermissions?.view_financial_receipts);
+  const canAnalyzeReceipts =
+    isSuperAdmin || Boolean(myPermissions?.analyze_receipts);
+  const canApproveRejectPayments =
+    isSuperAdmin || Boolean(myPermissions?.approve_reject_payments);
+  const canRecordManualPayment =
+    isSuperAdmin || Boolean(myPermissions?.record_manual_payment);
+  const canEditFinancialAmounts =
+    isSuperAdmin || Boolean(myPermissions?.edit_financial_amounts);
+
+  const [show46ReportPanel, setShow46ReportPanel] = useState<boolean>(false);
+  const [active46ReportSubTab, setActive46ReportSubTab] = useState<
+    'added' | 'existing' | 'duplicates' | 'similar' | 'failed'
+  >('added');
+  const [isRunning46Audit, setIsRunning46Audit] = useState<boolean>(false);
+
+  // SuperQi Receipts Review State
+  const [showReceiptsQueuePanel, setShowReceiptsQueuePanel] =
+    useState<boolean>(true);
+  const [receiptQueueFilter, setReceiptQueueFilter] = useState<
+    'pending_review' | 'approved' | 'rejected' | 'all'
+  >('pending_review');
+  const [inspectingSubmission, setInspectingSubmission] =
+    useState<PaymentReceiptSubmission | null>(null);
+  const [protectedImageBlobUrl, setProtectedImageBlobUrl] = useState<
+    string | null
+  >(null);
+  const [isLoadingProtectedImage, setIsLoadingProtectedImage] =
+    useState<boolean>(false);
+  const [protectedImageError, setProtectedImageError] = useState<string | null>(
+    null
+  );
+  const [approvalStudentId, setApprovalStudentId] = useState<string>('');
+  const [approvalAmountIQD, setApprovalAmountIQD] = useState<number>(35000);
+  const [approvalReviewNote, setApprovalReviewNote] = useState<string>('');
+  const [rejectionReasonText, setRejectionReasonText] = useState<string>('');
+  const [isProcessingReceiptDecision, setIsProcessingReceiptDecision] =
+    useState<boolean>(false);
 
   // View Mode: active vs archived
   const [viewMode, setViewMode] = useState<'active' | 'archived'>('active');
@@ -93,7 +145,14 @@ export const ScrubStudentManagementSection: React.FC = () => {
     'all' | 'شعبة 1' | 'شعبة 2' | 'شعبة 3' | 'شعبة 4'
   >('all');
   const [statusFilter, setStatusFilter] = useState<
-    'all' | 'deposit' | 'partial' | 'completed' | 'unpaid' | 'needs_review' | 'linked'
+    | 'all'
+    | 'deposit'
+    | 'partial'
+    | 'completed'
+    | 'unpaid'
+    | 'has_pending_receipt'
+    | 'needs_review'
+    | 'linked'
   >('all');
   const [sortBy, setSortBy] = useState<
     'number_asc' | 'number_desc' | 'name_asc' | 'paid_desc' | 'remaining_desc'
@@ -118,15 +177,28 @@ export const ScrubStudentManagementSection: React.FC = () => {
   const [newNotes, setNewNotes] = useState('');
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
 
-  // 2. Edit Student Modal State
+  // 2. Edit Student & Financial Amounts / Settlements Modal State (Requirement 9)
   const [editingStudent, setEditingStudent] = useState<ScrubStudent | null>(null);
   const [editFullName, setEditFullName] = useState('');
   const [editTitle, setEditTitle] = useState<'nurse_m' | 'nurse_f'>('nurse_m');
   const [editTotalFee, setEditTotalFee] = useState<number>(35000);
+  const [editVerifiedPaid, setEditVerifiedPaid] = useState<number>(0);
+  const [editRemainingBalance, setEditRemainingBalance] = useState<number>(35000);
+  const [useCustomRemainingSettlement, setUseCustomRemainingSettlement] =
+    useState<boolean>(false);
+  const [editSettlementReason, setEditSettlementReason] = useState<string>('');
   const [editPhone, setEditPhone] = useState('');
   const [editInstId, setEditInstId] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [editPaymentStatusManual, setEditPaymentStatusManual] = useState<PaymentStatus>('unpaid');
+  const [isSavingFinancialEdit, setIsSavingFinancialEdit] = useState<boolean>(false);
+
+  // Quick Manual Payment Modal State (Requirement 10: زر «إضافة دفعة يدوية»)
+  const [showQuickManualPaymentModal, setShowQuickManualPaymentModal] =
+    useState<boolean>(false);
+  const [quickManualStudentId, setQuickManualStudentId] = useState<string>('');
+  const [quickManualStudentQuery, setQuickManualStudentQuery] =
+    useState<string>('');
 
   // 3. Single Student Archive Confirmation Modal
   const [archivingStudent, setArchivingStudent] = useState<ScrubStudent | null>(null);
@@ -230,6 +302,25 @@ export const ScrubStudentManagementSection: React.FC = () => {
     const section3Count = activeStudents.filter((s) => s.section === 'شعبة 3' || s.sectionNumber === 3).length;
     const section4Count = activeStudents.filter((s) => s.section === 'شعبة 4' || s.sectionNumber === 4).length;
 
+    const pendingReceiptStudentIds = new Set<string>();
+    const pendingReceiptNormNames = new Set<string>();
+    receiptSubmissions
+      .filter((r) => r.status === 'pending_review')
+      .forEach((r) => {
+        if (r.studentId) pendingReceiptStudentIds.add(r.studentId);
+        const normName = normalizeArabicName(r.submittedRawName || r.studentName || '');
+        if (normName) {
+          pendingReceiptNormNames.add(normName);
+        }
+      });
+
+    const hasPendingReceiptCount = activeStudents.filter(
+      (s) =>
+        pendingReceiptStudentIds.has(s.id) ||
+        pendingReceiptNormNames.has(s.normalizedName) ||
+        s.pendingPaidIQD > 0
+    ).length;
+
     return {
       totalStudents,
       totalFeeIQD,
@@ -242,12 +333,59 @@ export const ScrubStudentManagementSection: React.FC = () => {
       unpaidCount,
       linkedCount,
       reviewCount,
+      hasPendingReceiptCount,
+      pendingReceiptStudentIds,
+      pendingReceiptNormNames,
       section1Count,
       section2Count,
       section3Count,
       section4Count,
     };
-  }, [activeStudents]);
+  }, [activeStudents, receiptSubmissions]);
+
+  // Revoke temporary protected Blob URL when modal closes or changes (Requirement 13)
+  useEffect(() => {
+    return () => {
+      if (protectedImageBlobUrl) {
+        URL.revokeObjectURL(protectedImageBlobUrl);
+      }
+    };
+  }, [protectedImageBlobUrl]);
+
+  const handleOpenInspectSubmission = async (sub: PaymentReceiptSubmission) => {
+    if (protectedImageBlobUrl) {
+      URL.revokeObjectURL(protectedImageBlobUrl);
+      setProtectedImageBlobUrl(null);
+    }
+    setInspectingSubmission(sub);
+    setApprovalStudentId(sub.studentId && sub.studentId !== 'unconfirmed_identity' ? sub.studentId : '');
+    setApprovalAmountIQD(sub.amountIQD || 35000);
+    setApprovalReviewNote('');
+    setRejectionReasonText('');
+    setProtectedImageError(null);
+
+    if (canViewReceipts && sub.vaultReceiptId) {
+      setIsLoadingProtectedImage(true);
+      const loaded = await loadProtectedReceiptObjectUrl(sub.vaultReceiptId, sub.id);
+      setIsLoadingProtectedImage(false);
+      if (loaded.objectUrl) {
+        setProtectedImageBlobUrl(loaded.objectUrl);
+      } else {
+        setProtectedImageError(
+          loaded.error || 'تعذر تحميل صورة الوصل من الخزنة المشفرة.'
+        );
+      }
+    }
+  };
+
+  const handleCloseInspectSubmission = () => {
+    if (protectedImageBlobUrl) {
+      URL.revokeObjectURL(protectedImageBlobUrl);
+      setProtectedImageBlobUrl(null);
+    }
+    setInspectingSubmission(null);
+    setProtectedImageError(null);
+  };
 
   // Filtered & Sorted Students
   const filteredAndSortedStudents = useMemo(() => {
@@ -282,7 +420,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
         matchesSearch = numMatch || nameMatch || phoneMatch || idMatch || secMatch;
       }
 
-      // Filter by status
+      // Filter by status (Requirement 8)
       let matchesStatus = true;
       if (statusFilter === 'deposit') {
         matchesStatus = stu.paymentStatus === 'deposit';
@@ -293,6 +431,11 @@ export const ScrubStudentManagementSection: React.FC = () => {
         matchesStatus = stu.paymentStatus === 'completed';
       } else if (statusFilter === 'unpaid') {
         matchesStatus = stu.paymentStatus === 'unpaid' && !stu.needsReview;
+      } else if (statusFilter === 'has_pending_receipt') {
+        matchesStatus =
+          summaryStats.pendingReceiptStudentIds.has(stu.id) ||
+          summaryStats.pendingReceiptNormNames.has(stu.normalizedName) ||
+          stu.pendingPaidIQD > 0;
       } else if (statusFilter === 'needs_review') {
         matchesStatus = Boolean(stu.needsReview || stu.paymentStatus === 'needs_review');
       } else if (statusFilter === 'linked') {
@@ -326,6 +469,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
     sectionFilter,
     statusFilter,
     sortBy,
+    summaryStats,
   ]);
 
   // Pagination slice
@@ -429,37 +573,80 @@ export const ScrubStudentManagementSection: React.FC = () => {
     }
   };
 
-  // Handle Edit Student Submit
+  // Handle Edit Student & Financial Adjustment Submit (Requirement 9)
   const handleEditStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent) return;
+    setIsSavingFinancialEdit(true);
 
-    const res = await updateScrubStudent(editingStudent.id, {
-      fullName: editFullName,
-      preferredTitle: editTitle,
-      totalFeeIQD: editTotalFee,
-      phone: editPhone,
-      institutionalStudentId: editInstId,
-      notes: editNotes,
-    });
+    try {
+      // 1. Update general student profile fields
+      const resProfile = await updateScrubStudent(editingStudent.id, {
+        fullName: editFullName,
+        preferredTitle: editTitle,
+        totalFeeIQD: editTotalFee,
+        phone: editPhone,
+        institutionalStudentId: editInstId,
+        notes: editNotes,
+      });
 
-    const currentStatusKey: PaymentStatus = editingStudent.needsReview
-      ? 'needs_review'
-      : editingStudent.paymentStatus;
+      // 2. If user has financial edit permission, apply financial adjustments & settlements
+      const currentStatusKey: PaymentStatus = editingStudent.needsReview
+        ? 'needs_review'
+        : editingStudent.paymentStatus;
 
-    if (editPaymentStatusManual !== currentStatusKey) {
-      await changeStudentPaymentStatusManual(
-        editingStudent.id,
-        editPaymentStatusManual,
-        editNotes || undefined
+      const feeChanged = editTotalFee !== editingStudent.totalFeeIQD;
+      const paidChanged = editVerifiedPaid !== editingStudent.verifiedPaidIQD;
+      const autoRemaining = Math.max(
+        0,
+        editTotalFee -
+          editVerifiedPaid -
+          (editingStudent.settlementAdjustmentIQD || 0)
       );
-    }
+      const remainingChanged =
+        useCustomRemainingSettlement && editRemainingBalance !== autoRemaining;
+      const statusChanged = editPaymentStatusManual !== currentStatusKey;
 
-    if (res.success) {
-      setFeedbackBanner({ type: 'success', text: res.message });
-      setEditingStudent(null);
-    } else {
-      setFeedbackBanner({ type: 'error', text: res.message });
+      if (
+        canEditFinancialAmounts &&
+        (feeChanged || paidChanged || remainingChanged || statusChanged)
+      ) {
+        const finRes = await applyStudentFinancialAdjustment({
+          studentId: editingStudent.id,
+          newTotalFeeIQD: editTotalFee,
+          newPaidIQD: editVerifiedPaid,
+          newRemainingIQD: useCustomRemainingSettlement
+            ? editRemainingBalance
+            : autoRemaining,
+          newPaymentStatus: statusChanged
+            ? editPaymentStatusManual
+            : undefined,
+          adminNotes: editNotes,
+          reason:
+            editSettlementReason.trim() ||
+            editNotes.trim() ||
+            'تعديل مالي وتسوية إدارية من لوحة إدارة دفعات الطلاب',
+        });
+
+        if (!finRes.success) {
+          setFeedbackBanner({ type: 'error', text: finRes.message });
+          setIsSavingFinancialEdit(false);
+          return;
+        }
+        setFeedbackBanner({ type: 'success', text: finRes.message });
+        setEditingStudent(null);
+        setIsSavingFinancialEdit(false);
+        return;
+      }
+
+      if (resProfile.success) {
+        setFeedbackBanner({ type: 'success', text: resProfile.message });
+        setEditingStudent(null);
+      } else {
+        setFeedbackBanner({ type: 'error', text: resProfile.message });
+      }
+    } finally {
+      setIsSavingFinancialEdit(false);
     }
   };
 
@@ -559,7 +746,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-[#F4F8FC]">
-              قائمة الطلاب والمشاركين وسجل الدفعات — تخرج دفعة التمريض 2027 (244 طالب/طالبة)
+              إدارة دفعات الطلاب — تخرج دفعة التمريض 2027 ({activeStudents.length} طالب/طالبة)
             </h2>
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#E8EEF2]/90 pt-0.5">
               <span className="px-2.5 py-1 rounded-lg bg-[#0A0D12]/80 border border-white/10">
@@ -579,6 +766,27 @@ export const ScrubStudentManagementSection: React.FC = () => {
 
           {/* Primary Action Buttons */}
           <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+            {canRecordManualPayment && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFeedbackBanner(null);
+                  setQuickManualStudentId('');
+                  setQuickManualStudentQuery('');
+                  setPayAmountInput(5000);
+                  setPayDateInput(new Date().toISOString().split('T')[0]);
+                  setPayMethodInput('cash');
+                  setPayReceiptInput('');
+                  setPayNotesInput('');
+                  setShowQuickManualPaymentModal(true);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-[#2A9D8F] hover:opacity-95 text-white font-black text-xs shadow-lg flex items-center gap-1.5 cursor-pointer"
+              >
+                <Banknote className="w-4 h-4" />
+                <span>إضافة دفعة يدوية</span>
+              </button>
+            )}
+
             {canManageFinances && (
               <>
                 <button
@@ -601,6 +809,31 @@ export const ScrubStudentManagementSection: React.FC = () => {
                 >
                   <Upload className="w-4 h-4 text-[#35D6C2]" />
                   <span>فحص/دمج القائمة الرسمية (244)</span>
+                </button>
+
+                <button
+                  onClick={async () => {
+                    setShow46ReportPanel(true);
+                    setIsRunning46Audit(true);
+                    try {
+                      const rep = await runReconcile46SubmittedNames();
+                      setFeedbackBanner({
+                        type: 'success',
+                        text: `اكتمل فحص ومطابقة قائمة الـ 46 طالباً: المضافة حديثاً (${rep.newlyAddedNames.length})، الموجودة مسبقاً (${rep.alreadyExistingNames.length})، المكررة الممنوعة (${rep.preventedDuplicates.length})، المتشابهة للمراجعة (${rep.similarNamesForManualReview.length})، الفاشلة (${rep.failedNames.length}).`,
+                      });
+                    } finally {
+                      setIsRunning46Audit(false);
+                    }
+                  }}
+                  disabled={isRunning46Audit}
+                  className="px-3.5 py-2.5 rounded-xl bg-[#0D9488]/20 hover:bg-[#0D9488]/30 text-[#35D6C5] font-extrabold text-xs border border-[#35D6C5]/40 flex items-center gap-1.5 shadow-md cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-[#35D6C5]" />
+                  <span>
+                    {isRunning46Audit
+                      ? 'جارِ فحص الـ 46 اسماً...'
+                      : 'تقرير فحص قائمة الـ 46 طالباً'}
+                  </span>
                 </button>
               </>
             )}
@@ -776,6 +1009,500 @@ export const ScrubStudentManagementSection: React.FC = () => {
         </div>
       )}
 
+      {/* =================================================================== */}
+      {/* REQUIREMENTS 6, 7 & 13: SUPERQI RECEIPTS & AI ANALYSIS PANEL         */}
+      {/* =================================================================== */}
+      {(canViewReceipts || canAnalyzeReceipts || canApproveRejectPayments) && (
+        <div className="rounded-3xl bg-[#0D1726] border border-[#35D6C5]/40 p-5 sm:p-6 space-y-5 shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-[#35D6C5]/15 border border-[#35D6C5]/30 text-[#35D6C5] text-[11px] font-extrabold">
+                <Receipt className="w-3.5 h-3.5" />
+                <span>
+                  مراجعة وصولات الدفع الإلكترونية عبر SuperQi وتحليل الذكاء الاصطناعي
+                </span>
+              </div>
+              <h3 className="text-base sm:text-lg font-black text-white">
+                وصولات الدفع المرفوعة ({receiptSubmissions.length}) • قيد المراجعة:{' '}
+                <span className="text-amber-300 font-mono">
+                  {
+                    receiptSubmissions.filter(
+                      (r) => r.status === 'pending_review'
+                    ).length
+                  }
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                الوصولات محفوظة في خزنة مشفرة خاصة. لا يتم اعتماد أي دفعة أو تعديل رصيد الطالب تلقائياً بمجرد رفع الصورة أو تحليل الذكاء الاصطناعي إلا بعد موافقة المشرف المخوّل.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {(
+                [
+                  {
+                    id: 'pending_review',
+                    label: 'قيد المراجعة',
+                    count: receiptSubmissions.filter(
+                      (r) => r.status === 'pending_review'
+                    ).length,
+                  },
+                  {
+                    id: 'approved',
+                    label: 'المعتمدة',
+                    count: receiptSubmissions.filter(
+                      (r) => r.status === 'approved'
+                    ).length,
+                  },
+                  {
+                    id: 'rejected',
+                    label: 'المرفوضة',
+                    count: receiptSubmissions.filter(
+                      (r) => r.status === 'rejected'
+                    ).length,
+                  },
+                  {
+                    id: 'all',
+                    label: 'الكل',
+                    count: receiptSubmissions.length,
+                  },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setReceiptQueueFilter(tab.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border cursor-pointer flex items-center gap-1.5 ${
+                    receiptQueueFilter === tab.id
+                      ? 'bg-[#35D6C5] text-[#0A0D12] border-[#35D6C5]'
+                      : 'bg-[#111C2D] text-slate-300 border-white/10'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span className="px-1.5 py-0.2 rounded bg-black/20 font-mono text-[10px]">
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowReceiptsQueuePanel(!showReceiptsQueuePanel)
+                }
+                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold border border-white/10 cursor-pointer"
+              >
+                {showReceiptsQueuePanel ? 'طي القائمة' : 'عرض القائمة'}
+              </button>
+            </div>
+          </div>
+
+          {showReceiptsQueuePanel && (
+            <div className="space-y-3">
+              {receiptSubmissions.filter((r) =>
+                receiptQueueFilter === 'all'
+                  ? true
+                  : r.status === receiptQueueFilter
+              ).length === 0 ? (
+                <div className="p-6 rounded-2xl bg-[#111C2D] border border-white/10 text-center text-xs text-slate-400">
+                  لا توجد وصولات دفع مرفوعة ضمن هذا التصنيف حالياً.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {receiptSubmissions
+                    .filter((r) =>
+                      receiptQueueFilter === 'all'
+                        ? true
+                        : r.status === receiptQueueFilter
+                    )
+                    .map((sub) => {
+                      const aiClass = sub.aiAnalysis?.classification;
+                      const isPreliminaryMatch =
+                        aiClass === 'البيانات متطابقة مبدئياً';
+                      return (
+                        <div
+                          key={sub.id}
+                          className="p-4 rounded-2xl bg-[#111C2D] border border-white/10 flex flex-col justify-between gap-3"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span className="text-sm font-black text-white block">
+                                  {sub.submittedRawName || sub.studentName}
+                                </span>
+                                <span className="text-[11px] text-slate-400 font-mono">
+                                  {sub.studentNumber
+                                    ? `التسلسل الرسمي: ت (${sub.studentNumber}) • ${sub.studentName}`
+                                    : 'بحاجة لتأكيد ربط سجل الطالب يدوياً'}
+                                </span>
+                              </div>
+                              <span
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-black border shrink-0 ${
+                                  sub.status === 'approved'
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                    : sub.status === 'rejected'
+                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                }`}
+                              >
+                                {sub.status === 'approved'
+                                  ? 'معتمد ومضاف للرصيد'
+                                  : sub.status === 'rejected'
+                                  ? 'مرفوض'
+                                  : 'قيد المراجعة'}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-[#0A0F1A] border border-white/5 text-xs">
+                              <div>
+                                <span className="text-[10px] text-slate-400 block">
+                                  المبلغ المرسل من الطالب:
+                                </span>
+                                <strong className="text-[#35D6C5] font-mono text-sm">
+                                  {formatIQD(sub.amountIQD)}
+                                </strong>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-slate-400 block">
+                                  تاريخ العملية / المرجع:
+                                </span>
+                                <strong className="text-white font-mono text-[11px]">
+                                  {sub.transactionDate} •{' '}
+                                  {sub.transactionReference || 'بدون مرجع نصي'}
+                                </strong>
+                              </div>
+                            </div>
+
+                            {/* AI Receipt Analysis Badge (Visible only to authorized supervisors) */}
+                            {canAnalyzeReceipts && sub.aiAnalysis && (
+                              <div
+                                className={`p-2.5 rounded-xl border text-[11px] space-y-1 ${
+                                  isPreliminaryMatch
+                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+                                    : 'bg-amber-500/10 border-amber-500/30 text-amber-200'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2 font-black">
+                                  <span>
+                                    نتيجة فحص الذكاء الاصطناعي: «
+                                    {sub.aiAnalysis.classification}»
+                                  </span>
+                                  <span className="font-mono text-[10px]">
+                                    المستخرج:{' '}
+                                    {sub.aiAnalysis.extractedAmountIQD
+                                      ? `${sub.aiAnalysis.extractedAmountIQD.toLocaleString()} د.ع`
+                                      : 'غير واضح'}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] opacity-90">
+                                  {sub.aiAnalysis.summaryArabic}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {new Date(sub.createdAt).toLocaleString('ar-IQ')}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenInspectSubmission(sub)}
+                              className="px-3.5 py-2 rounded-xl bg-[#35D6C5] hover:opacity-95 text-[#0A0D12] font-black text-xs flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>فحص الوصل واتخاذ القرار</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* FEATURE 2: Comprehensive Report for the 46 Submitted Student Names */}
+      {reconciliation46Report && show46ReportPanel && (
+        <div className="rounded-3xl bg-[#0D1522] border border-[#35D6C5]/35 p-5 sm:p-6 space-y-5 shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-[#35D6C5]/15 border border-[#35D6C5]/30 text-[#35D6C5] text-[11px] font-extrabold">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>تقرير نتيجة الإضافة والفحص الدقيق لقائمة الـ 46 طالباً</span>
+              </div>
+              <h3 className="text-base sm:text-lg font-black text-white">
+                تقرير مطابقة قائمة الأسماء المرسلة (46 اسماً) مع قاعدة البيانات الحالية
+              </h3>
+              <p className="text-xs text-slate-400">
+                تم فحص جميع الأسماء مع تجاهل المسافات الزائدة والتشكيل، معالجة التصاق الكلمات («سؤددوليد»)، الاحتفاظ بالأرقام («عباس محمد شيال ١») والأسماء الثنائية دون اختلاق اسم ثالث، ومنع تكرار «عباس خضير» أو أي سجل موجود مسبقاً دون المساس بأي أرصدة مالية.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={async () => {
+                  setIsRunning46Audit(true);
+                  try {
+                    await runReconcile46SubmittedNames();
+                  } finally {
+                    setIsRunning46Audit(false);
+                  }
+                }}
+                disabled={isRunning46Audit}
+                className="px-3.5 py-2 rounded-xl bg-[#35D6C5] text-[#0A0D12] font-extrabold text-xs hover:opacity-95 cursor-pointer"
+              >
+                {isRunning46Audit ? 'جارِ التدقيق...' : 'إعادة فحص القائمة الآن'}
+              </button>
+              <button
+                onClick={() => setShow46ReportPanel(false)}
+                className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold border border-white/10 cursor-pointer"
+              >
+                إخفاء التقرير
+              </button>
+            </div>
+          </div>
+
+          {/* 6 KPI Summary Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="p-3.5 rounded-2xl bg-[#111C2D] border border-white/10 space-y-1">
+              <span className="text-[11px] text-slate-400 block font-bold">
+                إجمالي الأسماء في القائمة
+              </span>
+              <span className="text-xl font-black text-white font-mono">
+                {reconciliation46Report.totalUniqueInList}
+              </span>
+              <span className="text-[10px] text-slate-400 block">
+                ({reconciliation46Report.rawListCount} شاملة تكرار عباس خضير)
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setActive46ReportSubTab('added')}
+              className={`p-3.5 rounded-2xl border text-right space-y-1 transition cursor-pointer ${
+                active46ReportSubTab === 'added'
+                  ? 'bg-emerald-500/20 border-emerald-400'
+                  : 'bg-[#111C2D] border-emerald-500/30 hover:bg-emerald-500/10'
+              }`}
+            >
+              <span className="text-[11px] text-emerald-300 block font-bold">
+                الأسماء المضافة حديثاً
+              </span>
+              <span className="text-xl font-black text-emerald-400 font-mono">
+                {reconciliation46Report.newlyAddedNames.length}
+              </span>
+              <span className="text-[10px] text-emerald-200/80 block">
+                سجلات ناقصة أُضيفت بالاسم الأصلي
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActive46ReportSubTab('existing')}
+              className={`p-3.5 rounded-2xl border text-right space-y-1 transition cursor-pointer ${
+                active46ReportSubTab === 'existing'
+                  ? 'bg-[#35D6C5]/20 border-[#35D6C5]'
+                  : 'bg-[#111C2D] border-[#35D6C5]/30 hover:bg-[#35D6C5]/10'
+              }`}
+            >
+              <span className="text-[11px] text-[#35D6C5] block font-bold">
+                الأسماء الموجودة مسبقاً
+              </span>
+              <span className="text-xl font-black text-[#35D6C5] font-mono">
+                {reconciliation46Report.alreadyExistingNames.length}
+              </span>
+              <span className="text-[10px] text-[#A6F0DF]/80 block">
+                محفوظة بكامل دفعاتها دون تغيير
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActive46ReportSubTab('duplicates')}
+              className={`p-3.5 rounded-2xl border text-right space-y-1 transition cursor-pointer ${
+                active46ReportSubTab === 'duplicates'
+                  ? 'bg-indigo-500/20 border-indigo-400'
+                  : 'bg-[#111C2D] border-indigo-500/30 hover:bg-indigo-500/10'
+              }`}
+            >
+              <span className="text-[11px] text-indigo-300 block font-bold">
+                الأسماء المكررة التي مُنعت
+              </span>
+              <span className="text-xl font-black text-indigo-300 font-mono">
+                {reconciliation46Report.preventedDuplicates.length}
+              </span>
+              <span className="text-[10px] text-indigo-200/80 block">
+                شاملة منع تكرار «عباس خضير»
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActive46ReportSubTab('similar')}
+              className={`p-3.5 rounded-2xl border text-right space-y-1 transition cursor-pointer ${
+                active46ReportSubTab === 'similar'
+                  ? 'bg-amber-500/20 border-amber-400'
+                  : 'bg-[#111C2D] border-amber-500/30 hover:bg-amber-500/10'
+              }`}
+            >
+              <span className="text-[11px] text-amber-300 block font-bold">
+                متشابهة تحتاج مراجعة يدوية
+              </span>
+              <span className="text-xl font-black text-amber-400 font-mono">
+                {reconciliation46Report.similarNamesForManualReview.length}
+              </span>
+              <span className="text-[10px] text-amber-200/80 block">
+                لم تُدمج تلقائياً لمنع الخلط
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActive46ReportSubTab('failed')}
+              className={`p-3.5 rounded-2xl border text-right space-y-1 transition cursor-pointer ${
+                active46ReportSubTab === 'failed'
+                  ? 'bg-red-500/20 border-red-400'
+                  : 'bg-[#111C2D] border-white/10 hover:bg-white/5'
+              }`}
+            >
+              <span className="text-[11px] text-slate-300 block font-bold">
+                أسماء فشل حفظها
+              </span>
+              <span className="text-xl font-black text-emerald-400 font-mono">
+                {reconciliation46Report.failedNames.length}
+              </span>
+              <span className="text-[10px] text-emerald-300 block">
+                نجاح الحفظ بنسبة 100%
+              </span>
+            </button>
+          </div>
+
+          {/* Detailed Sub-Tab View */}
+          <div className="rounded-2xl bg-[#090F1A] border border-white/10 p-4 max-h-80 overflow-y-auto space-y-2.5 text-xs">
+            {active46ReportSubTab === 'added' && (
+              <>
+                <div className="font-extrabold text-emerald-300 pb-2 border-b border-white/10">
+                  الأسماء المضافة حديثاً إلى قاعدة البيانات ({reconciliation46Report.newlyAddedNames.length}):
+                </div>
+                {reconciliation46Report.newlyAddedNames.length === 0 ? (
+                  <p className="text-slate-400 py-3">
+                    جميع الأسماء الـ 46 موجودة ومطابقة بالفعل في قاعدة البيانات ولا توجد سجلات ناقصة.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-white/10">
+                    {reconciliation46Report.newlyAddedNames.map((item) => (
+                      <div
+                        key={item.studentId}
+                        className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+                            ت: {item.assignedStudentNumber}
+                          </span>
+                          <span className="font-black text-white text-sm">
+                            {item.submittedName}
+                          </span>
+                          <span className="text-[11px] text-slate-400">
+                            (الرقم في قائمة الـ 46: #{item.indexIn46})
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-amber-200/90">
+                          {item.note}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {active46ReportSubTab === 'existing' && (
+              <>
+                <div className="font-extrabold text-[#35D6C5] pb-2 border-b border-white/10">
+                  الأسماء الموجودة مسبقاً في قاعدة البيانات ({reconciliation46Report.alreadyExistingNames.length}):
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                  {reconciliation46Report.alreadyExistingNames.map((item, idx) => (
+                    <div
+                      key={`${item.submittedName}-${idx}`}
+                      className="p-2.5 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between gap-2"
+                    >
+                      <div>
+                        <span className="font-black text-white block">
+                          #{item.indexIn46} — {item.submittedName}
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          السجل المقابل: ت ({item.matchedStudentNumber}) {item.matchedFullName}
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded bg-[#35D6C5]/15 text-[#35D6C5] text-[10px] font-bold shrink-0">
+                        موجود مسبقاً
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {active46ReportSubTab === 'duplicates' && (
+              <>
+                <div className="font-extrabold text-indigo-300 pb-2 border-b border-white/10">
+                  الأسماء المكررة التي تم منع إضافتها ({reconciliation46Report.preventedDuplicates.length}):
+                </div>
+                <div className="divide-y divide-white/10">
+                  {reconciliation46Report.preventedDuplicates.map((dup, idx) => (
+                    <div
+                      key={`${dup.submittedName}-${idx}`}
+                      className="py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1"
+                    >
+                      <span className="font-black text-white">
+                        {dup.submittedName}
+                      </span>
+                      <span className="text-[11px] text-indigo-200/90">
+                        {dup.reason}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {active46ReportSubTab === 'similar' && (
+              <>
+                <div className="font-extrabold text-amber-300 pb-2 border-b border-white/10">
+                  الأسماء المتشابهة التي تحتاج مراجعة يدوية ({reconciliation46Report.similarNamesForManualReview.length}):
+                </div>
+                <div className="divide-y divide-white/10">
+                  {reconciliation46Report.similarNamesForManualReview.map((sim, idx) => (
+                    <div key={`${sim.submittedName}-${idx}`} className="py-2.5 space-y-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-black text-amber-300 text-sm">
+                          #{sim.indexIn46} — الاسم في القائمة: «{sim.submittedName}»
+                        </span>
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 font-bold">
+                          عدد السجلات المشابهة: {sim.candidateRecords.length}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        {sim.reviewReason}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {active46ReportSubTab === 'failed' && (
+              <div className="py-6 text-center text-emerald-300 font-bold">
+                لا يوجد أي اسم فشل حفظه (0 أخطاء). تمت معالجة وحفظ جميع السجلات بنجاح.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Review Alert Banner if any student is flagged for duplicate/similarity review */}
       {summaryStats.reviewCount > 0 && viewMode === 'active' && (
         <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
@@ -869,19 +1596,22 @@ export const ScrubStudentManagementSection: React.FC = () => {
                 className="bg-transparent text-xs text-[#F4F8FC] font-bold focus:outline-none"
               >
                 <option value="all" className="bg-[#0A0D12]">
-                  كل حالات الدفع ({viewMode === 'active' ? activeStudents.length : archivedStudents.length})
+                  جميع الطلاب ({viewMode === 'active' ? activeStudents.length : archivedStudents.length})
                 </option>
-                <option value="unpaid" className="bg-[#0A0D12]">
-                  غير مدفوع ({summaryStats.unpaidCount})
+                <option value="completed" className="bg-[#0A0D12]">
+                  دافع بالكامل ({summaryStats.completedCount})
                 </option>
                 <option value="partial" className="bg-[#0A0D12]">
-                  مدفوع جزئياً / عربون ({summaryStats.depositCount + summaryStats.partialCount})
+                  دافع جزئياً ({summaryStats.depositCount + summaryStats.partialCount})
+                </option>
+                <option value="unpaid" className="bg-[#0A0D12]">
+                  لم يدفع ({summaryStats.unpaidCount})
+                </option>
+                <option value="has_pending_receipt" className="bg-[#0A0D12]">
+                  لديه طلب دفع قيد المراجعة ({summaryStats.hasPendingReceiptCount})
                 </option>
                 <option value="deposit" className="bg-[#0A0D12]">
                   دافع عربون فقط ({summaryStats.depositCount})
-                </option>
-                <option value="completed" className="bg-[#0A0D12]">
-                  مكتمل الدفع ({summaryStats.completedCount})
                 </option>
                 <option value="linked" className="bg-[#0A0D12]">
                   مرتبط بحساب مستخدم ({summaryStats.linkedCount})
@@ -900,19 +1630,19 @@ export const ScrubStudentManagementSection: React.FC = () => {
                 className="bg-transparent text-xs text-[#F4F8FC] font-bold focus:outline-none"
               >
                 <option value="number_asc" className="bg-[#0A0D12]">
-                  الترتيب: رقم الطالب (1 ← {activeStudents.length || 244})
+                  الترتيب: التسلسل (1 ← {activeStudents.length || 244})
                 </option>
                 <option value="number_desc" className="bg-[#0A0D12]">
-                  الترتيب: رقم الطالب ({activeStudents.length || 244} ← 1)
+                  الترتيب: التسلسل ({activeStudents.length || 244} ← 1)
                 </option>
                 <option value="name_asc" className="bg-[#0A0D12]">
                   الترتيب: الاسم الأبجدي (أ ← ي)
                 </option>
                 <option value="paid_desc" className="bg-[#0A0D12]">
-                  الترتيب: الأعلى تسديداً
+                  الترتيب: المبلغ المدفوع (الأعلى أولاً)
                 </option>
                 <option value="remaining_desc" className="bg-[#0A0D12]">
-                  الترتيب: الأعلى متبقياً
+                  الترتيب: المبلغ المتبقي (الأعلى أولاً)
                 </option>
               </select>
             </div>
@@ -1061,29 +1791,35 @@ export const ScrubStudentManagementSection: React.FC = () => {
         </div>
       ) : (
         <>
-          {/* DESKTOP TABLE VIEW (6 Official Columns + Account & Actions) */}
+          {/* DESKTOP TABLE VIEW (Requirement 8: إدارة دفعات الطلاب) */}
           <div className="hidden md:block rounded-3xl bg-[#101B2C] border border-white/10 overflow-hidden shadow-2xl">
             <div className="overflow-x-auto">
               <table className="w-full text-right text-xs">
                 <thead className="bg-[#10151C] text-[#E8EEF2] border-b border-white/10">
                   <tr>
                     <th className="p-3.5 w-16 text-center font-black text-[#35D6C5]">
-                      1. التسلسل
+                      التسلسل
                     </th>
                     <th className="p-3.5">
-                      2. الاسم الكامل كما ورد في القائمة الرسمية
+                      اسم الطالب
                     </th>
                     <th className="p-3.5">
-                      3. المبلغ المدفوع
+                      المبلغ الإجمالي المطلوب
                     </th>
                     <th className="p-3.5">
-                      4. المبلغ المتبقي
+                      المبلغ المدفوع
                     </th>
                     <th className="p-3.5">
-                      5. حالة الدفع
+                      المبلغ المتبقي
                     </th>
                     <th className="p-3.5">
-                      6. ملاحظات المطابقة أو الدفع
+                      حالة الدفع
+                    </th>
+                    <th className="p-3.5">
+                      تاريخ آخر دفعة
+                    </th>
+                    <th className="p-3.5">
+                      ملاحظات المطابقة أو الدفع
                     </th>
                     <th className="p-3.5 text-center">الإجراءات المالية والإدارية</th>
                   </tr>
@@ -1103,6 +1839,15 @@ export const ScrubStudentManagementSection: React.FC = () => {
                       );
                     const stuPaysCount = stuValidPayments.length;
                     const lastPaymentRecord = stuValidPayments[0] || null;
+                    const lastPayDateText =
+                      stu.lastPaymentDate ||
+                      lastPaymentRecord?.date ||
+                      'لا توجد دفعات';
+                    const hasPendingSuperQi =
+                      summaryStats.pendingReceiptStudentIds.has(stu.id) ||
+                      summaryStats.pendingReceiptNormNames.has(
+                        stu.normalizedName
+                      );
                     const unifiedStatusArabic = getUnifiedPaymentStatusArabic(stu);
                     const badgeStatusKey: PaymentStatus = stu.needsReview
                       ? 'needs_review'
@@ -1132,7 +1877,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
                           </span>
                         </td>
 
-                        {/* 2. الاسم الكامل كما ورد في القائمة الرسمية */}
+                        {/* 2. اسم الطالب */}
                         <td className="p-3.5">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-black text-sm text-[#F4F8FC]">
@@ -1164,14 +1909,32 @@ export const ScrubStudentManagementSection: React.FC = () => {
                                 <span>حساب مرتبط</span>
                               </span>
                             )}
+                            {hasPendingSuperQi && (
+                              <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-extrabold">
+                                وصل قيد المراجعة
+                              </span>
+                            )}
                           </div>
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5 flex items-center gap-2">
-                            <span>المبلغ الكامل: {formatIQD(stu.totalFeeIQD || 35000)}</span>
-                            {stu.phone && <span>• هاتف: {stu.phone}</span>}
-                          </div>
+                          {stu.phone && (
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              هاتف: {stu.phone}
+                            </div>
+                          )}
                         </td>
 
-                        {/* 3. المبلغ المدفوع */}
+                        {/* 3. المبلغ الإجمالي المطلوب */}
+                        <td className="p-3.5">
+                          <div className="font-mono font-black text-white text-sm">
+                            {formatIQD(stu.totalFeeIQD || 35000)}
+                          </div>
+                          {Boolean(stu.settlementAdjustmentIQD) && (
+                            <div className="text-[10px] text-indigo-300 font-mono">
+                              تسوية: {formatIQD(stu.settlementAdjustmentIQD || 0)}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* 4. المبلغ المدفوع */}
                         <td className="p-3.5">
                           <div className="font-mono font-black text-emerald-400 text-sm">
                             {formatIQD(stu.verifiedPaidIQD)}
@@ -1186,7 +1949,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
                           </div>
                         </td>
 
-                        {/* 4. المبلغ المتبقي */}
+                        {/* 5. المبلغ المتبقي */}
                         <td className="p-3.5">
                           <div
                             className={`font-mono font-black text-sm ${
@@ -1197,12 +1960,12 @@ export const ScrubStudentManagementSection: React.FC = () => {
                           >
                             {formatIQD(stu.remainingBalanceIQD)}
                           </div>
-                          <div className="text-[10px] text-slate-400">
-                            35,000 − {stu.verifiedPaidIQD.toLocaleString()} د.ع
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            {(stu.totalFeeIQD || 35000).toLocaleString()} − {stu.verifiedPaidIQD.toLocaleString()} د.ع
                           </div>
                         </td>
 
-                        {/* 5. حالة الدفع */}
+                        {/* 6. حالة الدفع */}
                         <td className="p-3.5">
                           <span
                             className={`inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold ${getPaymentStatusBadgeClass(
@@ -1211,14 +1974,14 @@ export const ScrubStudentManagementSection: React.FC = () => {
                           >
                             {unifiedStatusArabic}
                           </span>
-                          <div className="text-[10px] text-slate-400 mt-1 font-mono">
-                            {lastPaymentRecord
-                              ? `آخر دفعة: ${lastPaymentRecord.date}`
-                              : 'لا توجد دفعات'}
-                          </div>
                         </td>
 
-                        {/* 6. ملاحظات المطابقة أو الدفع */}
+                        {/* 7. تاريخ آخر دفعة */}
+                        <td className="p-3.5 font-mono text-[11px] text-slate-300">
+                          {lastPayDateText}
+                        </td>
+
+                        {/* 8. ملاحظات المطابقة أو الدفع */}
                         <td className="p-3.5 max-w-xs">
                           {stu.needsReview ? (
                             <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/35 space-y-2 text-[11px] text-amber-100">
@@ -1273,7 +2036,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
                           )}
                         </td>
 
-                        {/* Actions */}
+                        {/* Actions: زر «عرض سجل الدفعات» و زر «تعديل» */}
                         <td className="p-3.5">
                           <div className="flex items-center justify-center gap-1.5 flex-wrap">
                             <button
@@ -1288,11 +2051,11 @@ export const ScrubStudentManagementSection: React.FC = () => {
                                 setPayDateInput(new Date().toISOString().split('T')[0]);
                                 setPayModalFeedback(null);
                               }}
-                              className="px-2.5 py-1.5 rounded-xl bg-[#35D6C2]/15 hover:bg-[#35D6C2]/25 text-[#35D6C2] border border-[#35D6C2]/30 font-bold text-[11px] flex items-center gap-1"
-                              title="إضافة دفعة جديدة أو تعديل الدفعات السابقة"
+                              className="px-2.5 py-1.5 rounded-xl bg-[#35D6C2]/15 hover:bg-[#35D6C2]/25 text-[#35D6C2] border border-[#35D6C2]/30 font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                              title="عرض سجل الدفعات والوصولات والتسويات المالية"
                             >
                               <CreditCard className="w-3.5 h-3.5" />
-                              <span>الدفعات ({stuPaysCount})</span>
+                              <span>عرض سجل الدفعات ({stuPaysCount})</span>
                             </button>
 
                             {viewMode === 'active' && canManageFinances && (
@@ -1302,7 +2065,13 @@ export const ScrubStudentManagementSection: React.FC = () => {
                                     setEditingStudent(stu);
                                     setEditFullName(stu.fullName);
                                     setEditTitle(stu.preferredTitle);
-                                    setEditTotalFee(stu.totalFeeIQD);
+                                    setEditTotalFee(stu.totalFeeIQD || 35000);
+                                    setEditVerifiedPaid(stu.verifiedPaidIQD || 0);
+                                    setEditRemainingBalance(
+                                      stu.remainingBalanceIQD ?? 35000
+                                    );
+                                    setUseCustomRemainingSettlement(false);
+                                    setEditSettlementReason('');
                                     setEditPhone(stu.phone || '');
                                     setEditInstId(
                                       stu.institutionalStudentId || ''
@@ -1312,10 +2081,11 @@ export const ScrubStudentManagementSection: React.FC = () => {
                                       stu.needsReview ? 'needs_review' : stu.paymentStatus
                                     );
                                   }}
-                                  className="p-1.5 rounded-xl bg-white/5 hover:bg-white/15 text-slate-200 border border-white/10"
-                                  title="تعديل بيانات الطالب أو تغيير حالة الدفع"
+                                  className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 text-slate-200 border border-white/10 font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                                  title="تعديل بيانات الطالب أو المبالغ المالية"
                                 >
-                                  <Edit2 className="w-3.5 h-3.5" />
+                                  <Edit2 className="w-3.5 h-3.5 text-[#35D6C5]" />
+                                  <span>تعديل</span>
                                 </button>
 
                                 <button
@@ -1776,16 +2546,21 @@ export const ScrubStudentManagementSection: React.FC = () => {
       )}
 
       {/* =================================================================== */}
-      {/* MODAL 2: EDIT STUDENT DETAILS                                       */}
+      {/* MODAL 2: EDIT STUDENT & FINANCIAL AMOUNTS / SETTLEMENTS (Req 9)     */}
       {/* =================================================================== */}
       {editingStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-lg rounded-3xl bg-[#101B2C] border border-white/15 p-6 shadow-2xl space-y-4 text-right">
+          <div className="w-full max-w-xl rounded-3xl bg-[#101B2C] border border-white/15 p-6 shadow-2xl space-y-4 text-right max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="text-base font-black text-[#F4F8FC]">
-                تعديل بيانات الطالب رقم ({editingStudent.studentNumber}) —{' '}
-                {editingStudent.fullName}
-              </h3>
+              <div>
+                <h3 className="text-base font-black text-[#F4F8FC]">
+                  تعديل بيانات ومبالغ الطالب رقم ({editingStudent.studentNumber}) —{' '}
+                  {editingStudent.fullName}
+                </h3>
+                <p className="text-[11px] text-[#35D6C5]">
+                  المبلغ المتبقي = المبلغ الإجمالي المطلوب − إجمالي الدفعات المعتمدة − التسويات الإدارية
+                </p>
+              </div>
               <button
                 onClick={() => setEditingStudent(null)}
                 className="text-slate-400 hover:text-white"
@@ -1808,6 +2583,135 @@ export const ScrubStudentManagementSection: React.FC = () => {
                 />
               </div>
 
+              {/* Financial Amounts & Administrative Settlement Box (Requirement 9) */}
+              {canEditFinancialAmounts && (
+                <div className="p-4 rounded-2xl bg-[#0A0D12] border border-[#35D6C5]/35 space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-[#35D6C5] text-xs">
+                      تعديل المبالغ المالية والتسويات الإدارية:
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      التسويات السابقة: {formatIQD(editingStudent.settlementAdjustmentIQD || 0)}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-slate-300 font-bold mb-1">
+                        المبلغ الإجمالي المطلوب (د.ع):
+                      </label>
+                      <input
+                        type="number"
+                        step={500}
+                        min={0}
+                        value={editTotalFee}
+                        onChange={(e) => {
+                          const val = Math.max(0, Number(e.target.value) || 0);
+                          setEditTotalFee(val);
+                          if (!useCustomRemainingSettlement) {
+                            setEditRemainingBalance(
+                              Math.max(
+                                0,
+                                val -
+                                  editVerifiedPaid -
+                                  (editingStudent.settlementAdjustmentIQD || 0)
+                              )
+                            );
+                          }
+                        }}
+                        className="w-full px-3 py-2 rounded-xl bg-[#101B2C] border border-white/15 text-white font-mono font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-emerald-300 font-bold mb-1">
+                        المبلغ المدفوع المعتمد (د.ع):
+                      </label>
+                      <input
+                        type="number"
+                        step={250}
+                        min={0}
+                        value={editVerifiedPaid}
+                        onChange={(e) => {
+                          const val = Math.max(0, Number(e.target.value) || 0);
+                          setEditVerifiedPaid(val);
+                          if (!useCustomRemainingSettlement) {
+                            setEditRemainingBalance(
+                              Math.max(
+                                0,
+                                editTotalFee -
+                                  val -
+                                  (editingStudent.settlementAdjustmentIQD || 0)
+                              )
+                            );
+                          }
+                        }}
+                        className="w-full px-3 py-2 rounded-xl bg-[#101B2C] border border-emerald-500/40 text-emerald-300 font-mono font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[#D7B875] font-bold mb-1">
+                        المبلغ المتبقي (د.ع):
+                      </label>
+                      <input
+                        type="number"
+                        step={250}
+                        min={0}
+                        readOnly={!useCustomRemainingSettlement}
+                        value={
+                          useCustomRemainingSettlement
+                            ? editRemainingBalance
+                            : Math.max(
+                                0,
+                                editTotalFee -
+                                  editVerifiedPaid -
+                                  (editingStudent.settlementAdjustmentIQD || 0)
+                              )
+                        }
+                        onChange={(e) =>
+                          setEditRemainingBalance(
+                            Math.max(0, Number(e.target.value) || 0)
+                          )
+                        }
+                        className={`w-full px-3 py-2 rounded-xl border font-mono font-black ${
+                          useCustomRemainingSettlement
+                            ? 'bg-[#101B2C] border-[#D7B875] text-[#D7B875]'
+                            : 'bg-[#101B2C]/60 border-white/10 text-[#D7B875]'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-[11px] text-slate-300 font-bold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useCustomRemainingSettlement}
+                      onChange={(e) =>
+                        setUseCustomRemainingSettlement(e.target.checked)
+                      }
+                      className="rounded accent-[#35D6C5]"
+                    />
+                    <span>
+                      تحديد مبلغ متبقٍ مخصص عبر تسوية مالية إدارية موثقة (خصم/إعفاء جزئي مسجل في السجل المالي)
+                    </span>
+                  </label>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">
+                      سبب التعديل المالي أو التسوية الإدارية (يُحفظ في سجل التسويات مع اسم المشرف والتاريخ):
+                    </label>
+                    <input
+                      type="text"
+                      value={editSettlementReason}
+                      onChange={(e) => setEditSettlementReason(e.target.value)}
+                      placeholder="مثال: تسوية رصيد / تعديل دفعة / إعفاء جزئي..."
+                      className="w-full px-3 py-2 rounded-xl bg-[#101B2C] border border-white/15 text-white"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-white font-bold mb-1">
@@ -1827,7 +2731,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
 
                 <div>
                   <label className="block text-[#35D6C2] font-bold mb-1">
-                    تغيير حالة الدفع عند الحاجة:
+                    حالة الدفع:
                   </label>
                   <select
                     value={editPaymentStatusManual}
@@ -1838,7 +2742,8 @@ export const ScrubStudentManagementSection: React.FC = () => {
                   >
                     <option value="unpaid">لم يدفع (0 د.ع)</option>
                     <option value="deposit">دفع عربون</option>
-                    <option value="completed">مكتمل (35,000 د.ع)</option>
+                    <option value="partial">دافع جزئياً</option>
+                    <option value="completed">دافع بالكامل (مكتمل)</option>
                     <option value="needs_review">تحتاج إلى مراجعة</option>
                   </select>
                 </div>
@@ -1872,7 +2777,7 @@ export const ScrubStudentManagementSection: React.FC = () => {
 
               <div>
                 <label className="block text-white font-bold mb-1">
-                  ملاحظات المطابقة أو الدفع:
+                  الملاحظات الإدارية:
                 </label>
                 <input
                   type="text"
@@ -1892,9 +2797,10 @@ export const ScrubStudentManagementSection: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#35D6C2] text-[#0A0D12] font-extrabold"
+                  disabled={isSavingFinancialEdit}
+                  className="px-5 py-2 rounded-xl bg-[#35D6C2] text-[#0A0D12] font-extrabold cursor-pointer"
                 >
-                  حفظ التعديلات
+                  {isSavingFinancialEdit ? 'جارِ الحفظ...' : 'حفظ التعديلات وتحديث الرصيد'}
                 </button>
               </div>
             </form>
@@ -1980,21 +2886,37 @@ export const ScrubStudentManagementSection: React.FC = () => {
               </button>
             </div>
 
-            {/* Balance Calculation Summary Bar (Paid & Remaining Only) */}
-            <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-[#10151C] border border-white/10 text-center">
+            {/* Balance Calculation Summary Bar (Total Required, Paid, Settlements, Remaining — Requirement 11) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-[#10151C] border border-white/10 text-center">
+              <div>
+                <span className="text-[11px] text-slate-300 block font-bold">
+                  المبلغ الإجمالي المطلوب
+                </span>
+                <span className="text-sm sm:text-base font-black text-white font-mono">
+                  {formatIQD(activePaymentStudent.totalFeeIQD || 35000)}
+                </span>
+              </div>
               <div>
                 <span className="text-[11px] text-[#35D6C5] block font-bold">
-                  المبلغ المدفوع
+                  الدفعات المعتمدة
                 </span>
-                <span className="text-base sm:text-lg font-black text-[#35D6C5] font-mono">
+                <span className="text-sm sm:text-base font-black text-[#35D6C5] font-mono">
                   {formatIQD(activePaymentStudent.verifiedPaidIQD)}
                 </span>
               </div>
               <div>
-                <span className="text-[11px] text-[#D6B777] block font-bold">
-                  المبلغ المتبقي
+                <span className="text-[11px] text-indigo-300 block font-bold">
+                  التسويات الإدارية
                 </span>
-                <span className="text-base sm:text-lg font-black text-[#D6B777] font-mono">
+                <span className="text-sm sm:text-base font-black text-indigo-300 font-mono">
+                  {formatIQD(activePaymentStudent.settlementAdjustmentIQD || 0)}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-[#D6B777] block font-bold">
+                  المبلغ المتبقي الحالي
+                </span>
+                <span className="text-sm sm:text-base font-black text-[#D6B777] font-mono">
                   {formatIQD(activePaymentStudent.remainingBalanceIQD)}
                 </span>
               </div>
@@ -2012,23 +2934,26 @@ export const ScrubStudentManagementSection: React.FC = () => {
               </div>
             )}
 
-            {/* Add New Payment Form (Only if remaining balance > 0 and canManageFinances) */}
-            {canManageFinances && activePaymentStudent.remainingBalanceIQD > 0 && (
+            {/* Add New Manual Payment Form (Requirement 10: إضافة دفعة يدوية) */}
+            {canRecordManualPayment && activePaymentStudent.remainingBalanceIQD > 0 && (
               <form
                 onSubmit={handleAddPaymentSubmit}
                 className="p-4 rounded-2xl bg-[#0A0D12]/90 border border-[#35D6C2]/25 space-y-3 text-xs"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <h4 className="font-black text-[#35D6C2] flex items-center gap-1.5">
                     <Plus className="w-4 h-4" />
-                    <span>تسجيل دفعة جديدة للطالب</span>
+                    <span>
+                      إضافة دفعة يدوية للطالب (المشرف المسجل:{' '}
+                      {currentUser?.fullName || 'الإدارة المالية'})
+                    </span>
                   </h4>
                   <button
                     type="button"
                     onClick={() =>
                       setPayAmountInput(activePaymentStudent.remainingBalanceIQD)
                     }
-                    className="px-2.5 py-1 rounded-lg bg-[#D7B875]/15 text-[#D7B875] border border-[#D7B875]/30 text-[11px] font-bold"
+                    className="px-2.5 py-1 rounded-lg bg-[#D7B875]/15 text-[#D7B875] border border-[#D7B875]/30 text-[11px] font-bold cursor-pointer"
                   >
                     تسديد كامل المتبقي ({formatIQD(activePaymentStudent.remainingBalanceIQD)})
                   </button>
@@ -2076,13 +3001,15 @@ export const ScrubStudentManagementSection: React.FC = () => {
                       className="w-full px-3 py-2 rounded-xl bg-[#101B2C] border border-white/10 text-white"
                     >
                       <option value="cash">نقدي (كاش باليد)</option>
-                      <option value="bank_transfer">تحويل مالي / إلكتروني</option>
+                      <option value="superqi">SuperQi (كي كارد)</option>
+                      <option value="bank_transfer">تحويل بنكي / مالي</option>
+                      <option value="zain_cash">زين كاش (ZainCash)</option>
                     </select>
                   </div>
 
                   <div>
                     <label className="block text-slate-300 font-bold mb-1">
-                      رقم الوصل (تلقائي):
+                      رقم المرجع / الوصل (اختياري):
                     </label>
                     <input
                       type="text"
@@ -2117,9 +3044,9 @@ export const ScrubStudentManagementSection: React.FC = () => {
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl bg-[#35D6C2] hover:opacity-95 text-[#0A0D12] font-extrabold text-xs shadow-md"
+                    className="px-5 py-2 rounded-xl bg-[#35D6C2] hover:opacity-95 text-[#0A0D12] font-extrabold text-xs shadow-md cursor-pointer"
                   >
-                    إصدار الوصل وتثبيت الدفعة
+                    إصدار الوصل وتثبيت الدفعة اليدوية
                   </button>
                 </div>
               </form>
@@ -2348,6 +3275,101 @@ export const ScrubStudentManagementSection: React.FC = () => {
               )}
             </div>
 
+            {/* Pending & Rejected SuperQi Receipt Requests for this Student (Requirement 11) */}
+            {(canViewReceipts || canApproveRejectPayments) && (
+              <div className="space-y-2 pt-3 border-t border-white/10">
+                <h4 className="text-xs font-black text-[#35D6C5]">
+                  طلبات وصولات SuperQi المرفوعة لهذا الطالب
+                </h4>
+                {receiptSubmissions.filter(
+                  (r) =>
+                    r.studentId === activePaymentStudent.id ||
+                    normalizeArabicName(r.submittedRawName || r.studentName) ===
+                      activePaymentStudent.normalizedName
+                ).length === 0 ? (
+                  <p className="text-[11px] text-slate-400">
+                    لا توجد وصولات SuperQi مرفوعة لهذا الطالب.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {receiptSubmissions
+                      .filter(
+                        (r) =>
+                          r.studentId === activePaymentStudent.id ||
+                          normalizeArabicName(r.submittedRawName || r.studentName) ===
+                            activePaymentStudent.normalizedName
+                      )
+                      .map((sub) => (
+                        <div
+                          key={sub.id}
+                          className="p-3 rounded-xl bg-[#0A0D12] border border-white/10 flex items-center justify-between gap-2 text-xs"
+                        >
+                          <div>
+                            <span className="font-mono font-bold text-white">
+                              {formatIQD(sub.amountIQD)}
+                            </span>
+                            <span className="text-[11px] text-slate-400 mr-2">
+                              ({sub.transactionDate}) •{' '}
+                              {sub.status === 'approved'
+                                ? 'معتمد'
+                                : sub.status === 'rejected'
+                                ? `مرفوض: ${sub.rejectionReason || ''}`
+                                : 'قيد المراجعة'}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenInspectSubmission(sub)}
+                            className="px-3 py-1 rounded-lg bg-[#35D6C5]/20 text-[#35D6C5] text-[11px] font-bold cursor-pointer"
+                          >
+                            عرض الوصل
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Administrative Financial Settlements History for this Student (Requirement 9 & 11) */}
+            <div className="space-y-2 pt-3 border-t border-white/10">
+              <h4 className="text-xs font-black text-indigo-300">
+                سجل التسويات المالية الإدارية الموثقة
+              </h4>
+              {financialSettlements.filter(
+                (st) => st.studentId === activePaymentStudent.id
+              ).length === 0 ? (
+                <p className="text-[11px] text-slate-400">
+                  لا توجد تسويات إدارية مسجلة لهذا الطالب.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {financialSettlements
+                    .filter((st) => st.studentId === activePaymentStudent.id)
+                    .map((st) => (
+                      <div
+                        key={st.id}
+                        className="p-3 rounded-xl bg-[#0A0D12] border border-indigo-500/30 text-xs space-y-1"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-indigo-300">
+                            {st.reason}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400">
+                            {new Date(st.createdAt).toLocaleString('ar-IQ')}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-300 font-mono">
+                          المتبقي: {formatIQD(st.previousRemainingIQD)} ←{' '}
+                          {formatIQD(st.newRemainingIQD)} • نُفذ بواسطة:{' '}
+                          {st.performedBy}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
             {/* Void Payment Sub-prompt */}
             {voidingPaymentId && (
               <div className="p-4 rounded-2xl bg-red-950/40 border border-[#E85D65]/40 space-y-3 text-xs">
@@ -2387,6 +3409,496 @@ export const ScrubStudentManagementSection: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* MODAL 9: QUICK MANUAL PAYMENT RECORDING («إضافة دفعة يدوية»)        */}
+      {/* =================================================================== */}
+      {showQuickManualPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-lg rounded-3xl bg-[#101B2C] border border-[#2A9D8F]/50 p-6 shadow-2xl space-y-4 text-right max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <h3 className="text-base font-black text-white">
+                  إضافة دفعة يدوية لطالب في الدفعة
+                </h3>
+                <p className="text-[11px] text-[#35D6C5]">
+                  المشرف الذي يسجل الدفعة: {currentUser?.fullName || 'الإدارة المالية'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQuickManualPaymentModal(false)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!quickManualStudentId) {
+                  setFeedbackBanner({
+                    type: 'error',
+                    text: 'يرجى اختيار الطالب من القائمة أولاً.',
+                  });
+                  return;
+                }
+                const res = await addStudentPayment({
+                  studentId: quickManualStudentId,
+                  amountIQD: payAmountInput,
+                  date: payDateInput,
+                  paymentMethod: payMethodInput,
+                  receiptNumber: payReceiptInput.trim() || undefined,
+                  notes: payNotesInput.trim() || undefined,
+                  isVerified: true,
+                });
+                if (res.success) {
+                  setFeedbackBanner({ type: 'success', text: res.message });
+                  setShowQuickManualPaymentModal(false);
+                } else {
+                  setFeedbackBanner({ type: 'error', text: res.message });
+                }
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div className="space-y-1.5">
+                <label className="block text-white font-bold">
+                  ابحث واختر اسم الطالب: *
+                </label>
+                <input
+                  type="text"
+                  value={quickManualStudentQuery}
+                  onChange={(e) => setQuickManualStudentQuery(e.target.value)}
+                  placeholder="اكتب جزءاً من اسم الطالب للتصفية..."
+                  className="w-full px-3.5 py-2 rounded-xl bg-[#0A0D12] border border-white/15 text-white"
+                />
+                <select
+                  required
+                  value={quickManualStudentId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setQuickManualStudentId(id);
+                    const stu = activeStudents.find((s) => s.id === id);
+                    if (stu && stu.remainingBalanceIQD > 0) {
+                      setPayAmountInput(stu.remainingBalanceIQD);
+                    }
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#0A0D12] border border-[#35D6C5]/40 text-white font-bold"
+                >
+                  <option value="">-- اختر الطالب من القائمة --</option>
+                  {activeStudents
+                    .filter((s) =>
+                      !quickManualStudentQuery.trim()
+                        ? true
+                        : s.fullName.includes(quickManualStudentQuery.trim()) ||
+                          s.normalizedName.includes(
+                            normalizeArabicName(quickManualStudentQuery)
+                          )
+                    )
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        ت ({s.studentNumber}) — {s.fullName} (المتبقي:{' '}
+                        {s.remainingBalanceIQD.toLocaleString()} د.ع)
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-white font-bold mb-1">
+                    المبلغ المدفوع (د.ع): *
+                  </label>
+                  <input
+                    type="number"
+                    step={250}
+                    min={250}
+                    required
+                    value={payAmountInput}
+                    onChange={(e) => setPayAmountInput(Number(e.target.value))}
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#0A0D12] border border-white/15 text-[#35D6C5] font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-white font-bold mb-1">
+                    تاريخ الدفع: *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={payDateInput}
+                    onChange={(e) => setPayDateInput(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#0A0D12] border border-white/15 text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-white font-bold mb-1">
+                    طريقة الدفع: *
+                  </label>
+                  <select
+                    value={payMethodInput}
+                    onChange={(e) =>
+                      setPayMethodInput(e.target.value as PaymentMethod)
+                    }
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#0A0D12] border border-white/15 text-white font-bold"
+                  >
+                    <option value="cash">نقدي</option>
+                    <option value="superqi">SuperQi</option>
+                    <option value="bank_transfer">تحويل بنكي</option>
+                    <option value="zain_cash">زين كاش</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-white font-bold mb-1">
+                    رقم المرجع (اختياري):
+                  </label>
+                  <input
+                    type="text"
+                    value={payReceiptInput}
+                    onChange={(e) => setPayReceiptInput(e.target.value)}
+                    placeholder="رقم الوصل أو العملية..."
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#0A0D12] border border-white/15 text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-white font-bold mb-1">
+                  الملاحظات (اختياري):
+                </label>
+                <input
+                  type="text"
+                  value={payNotesInput}
+                  onChange={(e) => setPayNotesInput(e.target.value)}
+                  placeholder="ملاحظة حول الدفعة..."
+                  className="w-full px-3 py-2.5 rounded-xl bg-[#0A0D12] border border-white/15 text-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickManualPaymentModal(false)}
+                  className="px-4 py-2 rounded-xl bg-white/5 text-slate-300 font-bold"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl bg-[#2A9D8F] text-white font-extrabold cursor-pointer"
+                >
+                  تثبيت الدفعة وتحديث الحساب المالي
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* MODAL 10: PROTECTED SUPERQI RECEIPT INSPECTION & AI REVIEW MODAL    */}
+      {/* =================================================================== */}
+      {inspectingSubmission && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-3xl rounded-3xl bg-[#101B2C] border border-[#35D6C5]/40 p-6 shadow-2xl space-y-5 text-right max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <span className="text-[11px] font-bold text-[#35D6C5] block">
+                  فحص الوصل المالي المحمي • خصوصية الوصولات محفوظة
+                </span>
+                <h3 className="text-base sm:text-lg font-black text-white">
+                  وصل الدفع المرسل من: {inspectingSubmission.submittedRawName || inspectingSubmission.studentName}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseInspectSubmission}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              {/* Protected Receipt Image Column (6 cols) */}
+              <div className="lg:col-span-6 space-y-3">
+                <div className="text-xs font-black text-white flex items-center justify-between">
+                  <span>صورة وصل التحويل (من الخزنة المشفرة):</span>
+                  <span className="text-[10px] text-emerald-300">
+                    تُلغى رابط المعاينة المؤقت تلقائياً عند الإغلاق
+                  </span>
+                </div>
+
+                {!canViewReceipts ? (
+                  <div className="p-8 rounded-2xl bg-[#0A0D12] border border-amber-500/30 text-center space-y-2">
+                    <Lock className="w-8 h-8 text-amber-400 mx-auto" />
+                    <p className="text-xs font-bold text-amber-200">
+                      ليست لديك صلاحية «مشاهدة الوصولات المالية» التي يحددها مدير الموقع.
+                    </p>
+                  </div>
+                ) : isLoadingProtectedImage ? (
+                  <div className="p-12 rounded-2xl bg-[#0A0D12] border border-white/10 text-center text-xs text-slate-300">
+                    جارِ فك تشفير وتحميل صورة الوصل بأمان...
+                  </div>
+                ) : protectedImageError ? (
+                  <div className="p-6 rounded-2xl bg-rose-950/30 border border-rose-500/40 text-xs text-rose-200">
+                    {protectedImageError}
+                  </div>
+                ) : protectedImageBlobUrl ? (
+                  <div className="rounded-2xl bg-[#0A0D12] border border-white/15 p-2 flex items-center justify-center overflow-hidden">
+                    <img
+                      src={protectedImageBlobUrl}
+                      alt="وصل الدفع"
+                      className="max-h-[420px] w-auto object-contain rounded-xl select-none"
+                      onContextMenu={(e) => e.preventDefault()}
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              {/* AI Analysis & Supervisor Decision Column (6 cols) */}
+              <div className="lg:col-span-6 space-y-4 text-xs">
+                {/* Student Submitted Info */}
+                <div className="p-3.5 rounded-2xl bg-[#0A0D12] border border-white/10 space-y-1.5">
+                  <div className="font-black text-[#35D6C5] mb-1">
+                    البيانات المدخلة من الطالب:
+                  </div>
+                  <div>
+                    الاسم المرسل:{' '}
+                    <strong className="text-white">
+                      {inspectingSubmission.submittedRawName || inspectingSubmission.studentName}
+                    </strong>
+                  </div>
+                  <div>
+                    المبلغ المدخل:{' '}
+                    <strong className="text-emerald-400 font-mono">
+                      {formatIQD(inspectingSubmission.amountIQD)}
+                    </strong>
+                  </div>
+                  <div>
+                    التاريخ والمرجع:{' '}
+                    <strong className="text-white font-mono">
+                      {inspectingSubmission.transactionDate} •{' '}
+                      {inspectingSubmission.transactionReference || 'بدون مرجع'}
+                    </strong>
+                  </div>
+                  {inspectingSubmission.notes && (
+                    <div>
+                      ملاحظات الطالب:{' '}
+                      <span className="text-slate-300">
+                        {inspectingSubmission.notes}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* AI Receipt Analysis Details (Requirement 6) */}
+                {canAnalyzeReceipts && (
+                  <div className="p-3.5 rounded-2xl bg-[#0A0D12] border border-[#35D6C5]/35 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-[#35D6C5]">
+                        تحليل الوصل بالذكاء الاصطناعي:
+                      </span>
+                      <button
+                        type="button"
+                        disabled={isProcessingReceiptDecision}
+                        onClick={async () => {
+                          setIsProcessingReceiptDecision(true);
+                          const res = await reanalyzeSuperQiReceipt(
+                            inspectingSubmission.id
+                          );
+                          setIsProcessingReceiptDecision(false);
+                          setFeedbackBanner({
+                            type: res.success ? 'success' : 'error',
+                            text: res.message,
+                          });
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-[10px] text-white font-bold cursor-pointer"
+                      >
+                        إعادة التحليل الذكي
+                      </button>
+                    </div>
+
+                    {inspectingSubmission.aiAnalysis ? (
+                      <div className="space-y-1.5 text-[11px] text-slate-200">
+                        <div className="p-2 rounded-lg bg-[#142238] font-black text-amber-300">
+                          النتيجة: «{inspectingSubmission.aiAnalysis.classification}»
+                        </div>
+                        <div>
+                          • المبلغ المستخرج من الصورة:{' '}
+                          <strong className="font-mono text-white">
+                            {inspectingSubmission.aiAnalysis.extractedAmountIQD
+                              ? formatIQD(
+                                  inspectingSubmission.aiAnalysis
+                                    .extractedAmountIQD
+                                )
+                              : 'غير واضح'}
+                          </strong>
+                        </div>
+                        <div>
+                          • تاريخ ووقت العملية:{' '}
+                          <strong className="font-mono text-white">
+                            {inspectingSubmission.aiAnalysis.extractedDateTime ||
+                              'غير واضح'}
+                          </strong>
+                        </div>
+                        <div>
+                          • رقم العملية / المرجع:{' '}
+                          <strong className="font-mono text-white">
+                            {inspectingSubmission.aiAnalysis
+                              .extractedReferenceNumber || 'غير واضح'}
+                          </strong>
+                        </div>
+                        <div>
+                          • المستلم في الوصل:{' '}
+                          <strong className="font-mono text-white">
+                            {inspectingSubmission.aiAnalysis
+                              .extractedRecipientInfo || 'غير واضح'}
+                          </strong>{' '}
+                          (
+                          {inspectingSubmission.aiAnalysis
+                            .recipientCardMatched
+                            ? 'مطابق لـ 6132013829'
+                            : 'تحقق يدوياً'}
+                          )
+                        </div>
+                        <p className="text-[11px] text-slate-300 pt-1">
+                          {inspectingSubmission.aiAnalysis.summaryArabic}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-slate-400">
+                        لم يتم تشغيل التحليل الذكي بعد.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Supervisor Approval / Rejection Controls (Requirement 7) */}
+                {canApproveRejectPayments &&
+                  inspectingSubmission.status === 'pending_review' && (
+                    <div className="p-3.5 rounded-2xl bg-[#142238] border border-emerald-500/35 space-y-3">
+                      <div className="font-black text-white">
+                        قرار المشرف المخوّل (يحدّث الحساب المالي الرسمي للطالب):
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-300 font-bold mb-1">
+                          تأكيد سجل الطالب في القائمة الرسمية: *
+                        </label>
+                        <select
+                          value={approvalStudentId}
+                          onChange={(e) => setApprovalStudentId(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-[#0A0D12] border border-white/15 text-white font-bold"
+                        >
+                          <option value="">-- اختر سجل الطالب الرسمي --</option>
+                          {activeStudents.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              ت ({s.studentNumber}) — {s.fullName} (المتبقي:{' '}
+                              {s.remainingBalanceIQD.toLocaleString()} د.ع)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-300 font-bold mb-1">
+                          المبلغ المعتمد لإضافته إلى رصيد الطالب (د.ع):
+                        </label>
+                        <input
+                          type="number"
+                          step={250}
+                          min={250}
+                          value={approvalAmountIQD}
+                          onChange={(e) =>
+                            setApprovalAmountIQD(Number(e.target.value))
+                          }
+                          className="w-full px-3 py-2 rounded-xl bg-[#0A0D12] border border-white/15 text-emerald-400 font-mono font-bold"
+                        />
+                      </div>
+
+                      <input
+                        type="text"
+                        value={approvalReviewNote}
+                        onChange={(e) => setApprovalReviewNote(e.target.value)}
+                        placeholder="ملاحظة الاعتماد (اختياري)..."
+                        className="w-full px-3 py-2 rounded-xl bg-[#0A0D12] border border-white/15 text-white"
+                      />
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          disabled={
+                            isProcessingReceiptDecision || !approvalStudentId
+                          }
+                          onClick={async () => {
+                            setIsProcessingReceiptDecision(true);
+                            const res = await approveSuperQiReceipt({
+                              submissionId: inspectingSubmission.id,
+                              targetStudentIdOverride: approvalStudentId,
+                              reviewNote: approvalReviewNote,
+                            });
+                            setIsProcessingReceiptDecision(false);
+                            setFeedbackBanner({
+                              type: res.success ? 'success' : 'error',
+                              text: res.message,
+                            });
+                            if (res.success) {
+                              handleCloseInspectSubmission();
+                            }
+                          }}
+                          className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-[#0A0D12] font-black text-xs cursor-pointer"
+                        >
+                          موافقة واعتماد الدفعة في حساب الطالب
+                        </button>
+                      </div>
+
+                      <div className="pt-2 border-t border-white/10 space-y-2">
+                        <input
+                          type="text"
+                          value={rejectionReasonText}
+                          onChange={(e) =>
+                            setRejectionReasonText(e.target.value)
+                          }
+                          placeholder="سبب رفض الوصل في حال الرفض..."
+                          className="w-full px-3 py-2 rounded-xl bg-[#0A0D12] border border-rose-500/30 text-white"
+                        />
+                        <button
+                          type="button"
+                          disabled={isProcessingReceiptDecision}
+                          onClick={async () => {
+                            setIsProcessingReceiptDecision(true);
+                            const res = await rejectSuperQiReceipt({
+                              submissionId: inspectingSubmission.id,
+                              reason:
+                                rejectionReasonText.trim() ||
+                                'بيانات الوصل غير مطابقة بعد المراجعة',
+                            });
+                            setIsProcessingReceiptDecision(false);
+                            setFeedbackBanner({
+                              type: res.success ? 'success' : 'error',
+                              text: res.message,
+                            });
+                            if (res.success) {
+                              handleCloseInspectSubmission();
+                            }
+                          }}
+                          className="w-full py-2 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-bold text-xs cursor-pointer"
+                        >
+                          رفض طلب الوصل
+                        </button>
+                      </div>
+                    </div>
+                  )}
+              </div>
+            </div>
           </div>
         </div>
       )}

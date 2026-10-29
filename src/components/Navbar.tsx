@@ -13,6 +13,7 @@ import {
   Image as ImageIcon,
   LogIn,
   Bell,
+  Sparkles,
 } from 'lucide-react';
 import { StethoscopeGradCapIllustration } from './MedicalIllustrations';
 import { NotificationCenterModal } from './NotificationCenterModal';
@@ -89,6 +90,17 @@ export const Navbar: React.FC = () => {
       isActive: currentPage === 'gallery',
       onClick: () => {
         navigateTo('gallery');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setMobileMenuOpen(false);
+      },
+    },
+    {
+      key: 'ai_trends_studio',
+      label: 'استوديو ترندات AI',
+      icon: Sparkles,
+      isActive: currentPage === 'ai_trends_studio',
+      onClick: () => {
+        navigateTo('ai_trends_studio');
         window.scrollTo({ top: 0, behavior: 'smooth' });
         setMobileMenuOpen(false);
       },

@@ -23,6 +23,10 @@ import {
   ModeratorRequest,
   FinancialLinkRequest,
   SavedStudioDesign,
+  SupervisorPermissions,
+  PaymentReceiptSubmission,
+  ReceiptAiAnalysisResult,
+  FinancialSettlementRecord,
 } from '../types';
 import {
   DEFAULT_CONFIG,
@@ -83,7 +87,34 @@ import {
   isSuperAdminUser,
   canManageFinances as checkCanManageFinances,
   ImportReport,
+  reconcileAndImportSubmitted46Names,
+  getSavedReconciliation46Report,
+  Reconciliation46Report,
 } from '../services/studentManagement';
+import {
+  recordWebsiteVisitOncePerSession,
+  subscribeToSiteAnalytics,
+  getCachedSiteAnalytics,
+  fetchSiteAnalyticsSnapshot,
+  ComputedSiteAnalytics,
+} from '../services/visitorAnalyticsService';
+import {
+  DEFAULT_SUPER_ADMIN_PERMISSIONS,
+  DEFAULT_MODERATOR_PERMISSIONS,
+  NO_SUPERVISOR_PERMISSIONS,
+  getSavedSupervisorPermissionsMap,
+  normalizePermissionsObject,
+  updateSupervisorPermissionsBySiteManager,
+  getLocalReceiptSubmissions,
+  saveLocalReceiptSubmissions,
+  subscribeToReceiptSubmissions,
+  submitSuperQiReceiptRequest,
+  getLocalFinancialSettlements,
+  saveLocalFinancialSettlements,
+  subscribeToFinancialSettlements,
+  loadAuthorizedReceiptBlobUrl,
+  analyzeReceiptImageWithAI,
+} from '../services/superQiReceiptService';
 import {
   signInWithPopup,
   signInWithRedirect,
@@ -117,6 +148,7 @@ export type PageRoute =
   | 'register'
   | 'graduate_dashboard'
   | 'graduation_studio'
+  | 'ai_trends_studio'
   | 'admin_dashboard';
 
 interface AppContextType {
@@ -142,6 +174,10 @@ interface AppContextType {
   scrubStudents: ScrubStudent[];
   studentPayments: StudentPayment[];
   importOfficial46List: () => Promise<ImportReport>;
+  reconciliation46Report: Reconciliation46Report | null;
+  runReconcile46SubmittedNames: () => Promise<Reconciliation46Report>;
+  siteAnalytics: ComputedSiteAnalytics;
+  refreshSiteAnalytics: () => Promise<void>;
   importCustomStudentsList: (
     entries: Array<{
       fullName: string;
@@ -417,6 +453,63 @@ interface AppContextType {
     phone?: string;
     avatarUrl?: string;
   }) => Promise<{ success: boolean; message: string }>;
+
+  // Granular Supervisor Permissions (Requirement 12 & 13)
+  myPermissions: SupervisorPermissions;
+  updateSupervisorPermissions: (params: {
+    targetUserId: string;
+    targetName: string;
+    targetEmail?: string;
+    permissions: SupervisorPermissions;
+  }) => Promise<{ success: boolean; message: string }>;
+
+  // SuperQi Payment Receipt Submissions & AI Verification (Requirements 2, 4, 5, 6, 7, 13)
+  receiptSubmissions: PaymentReceiptSubmission[];
+  submitSuperQiReceipt: (params: {
+    studentId: string;
+    studentNumber?: number;
+    studentName: string;
+    submittedRawName: string;
+    identityConfirmed: boolean;
+    eventTarget?: PaymentEventTarget;
+    amountIQD: number;
+    transactionReference?: string;
+    transactionDate?: string;
+    notes?: string;
+    file: File;
+  }) => Promise<{
+    success: boolean;
+    message: string;
+    submission?: PaymentReceiptSubmission;
+  }>;
+  approveSuperQiReceipt: (params: {
+    submissionId: string;
+    targetStudentIdOverride?: string;
+    reviewNote?: string;
+  }) => Promise<{ success: boolean; message: string }>;
+  rejectSuperQiReceipt: (params: {
+    submissionId: string;
+    reason: string;
+  }) => Promise<{ success: boolean; message: string }>;
+  reanalyzeSuperQiReceipt: (
+    submissionId: string
+  ) => Promise<{
+    success: boolean;
+    message: string;
+    analysis?: ReceiptAiAnalysisResult;
+  }>;
+
+  // Administrative Financial Adjustments & Settlements (Requirements 9 & 11)
+  financialSettlements: FinancialSettlementRecord[];
+  applyStudentFinancialAdjustment: (params: {
+    studentId: string;
+    newTotalFeeIQD: number;
+    newPaidIQD: number;
+    newRemainingIQD: number;
+    newPaymentStatus?: PaymentStatus;
+    reason: string;
+    adminNotes?: string;
+  }) => Promise<{ success: boolean; message: string }>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -458,6 +551,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [savedDesigns, setSavedDesigns] = useState<SavedStudioDesign[]>(() =>
     LocalStorageManager.getSavedStudioDesigns()
   );
+  const [reconciliation46Report, setReconciliation46Report] =
+    useState<Reconciliation46Report | null>(() =>
+      getSavedReconciliation46Report()
+    );
+  const [siteAnalytics, setSiteAnalytics] = useState<ComputedSiteAnalytics>(() =>
+    getCachedSiteAnalytics()
+  );
+  const [receiptSubmissions, setReceiptSubmissions] = useState<
+    PaymentReceiptSubmission[]
+  >(() => getLocalReceiptSubmissions());
+  const [financialSettlements, setFinancialSettlements] = useState<
+    FinancialSettlementRecord[]
+  >(() => getLocalFinancialSettlements());
+  const inFlightReceiptApprovalRef = useRef<Set<string>>(new Set());
+
+  // Record a real website visit on initial load & subscribe to real-time analytics, receipts, and settlements
+  useEffect(() => {
+    recordWebsiteVisitOncePerSession();
+    const unsubAnalytics = subscribeToSiteAnalytics((updated) => {
+      setSiteAnalytics(updated);
+    });
+    const unsubReceipts = subscribeToReceiptSubmissions((updated) => {
+      setReceiptSubmissions(updated);
+    });
+    const unsubSettlements = subscribeToFinancialSettlements((updated) => {
+      setFinancialSettlements(updated);
+    });
+    return () => {
+      unsubAnalytics();
+      unsubReceipts();
+      unsubSettlements();
+    };
+  }, []);
 
   // Current session user
   const [currentUserId, setCurrentUserId] = useState<string | null>(() =>
@@ -1033,6 +1159,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     firebaseUser?.email ||
     'مصطفى علي حسون (مدير النظام)';
 
+  const myPermissions: SupervisorPermissions = React.useMemo(() => {
+    if (isSuperAdmin) {
+      return { ...DEFAULT_SUPER_ADMIN_PERMISSIONS };
+    }
+    if (!isModerator && !isAdmin) {
+      return { ...NO_SUPERVISOR_PERMISSIONS };
+    }
+    const uid = firebaseUser?.uid || currentUser?.id || '';
+    const supRecord = supervisors.find((s) => s.userId === uid);
+    const localMap = getSavedSupervisorPermissionsMap();
+    const rawPerms = supRecord?.permissions || localMap[uid] || null;
+    return normalizePermissionsObject(rawPerms, false);
+  }, [isSuperAdmin, isModerator, isAdmin, firebaseUser?.uid, currentUser?.id, supervisors]);
+
   // Sync state changes with LocalStorage
   useEffect(() => {
     LocalStorageManager.saveEventConfig(eventConfig);
@@ -1113,11 +1253,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       existingGraduates: graduates,
       actorName: actorDisplayName,
     });
-    setScrubStudents(report.students);
+    const rec46 = await reconcileAndImportSubmitted46Names({
+      existingStudents: report.students,
+      existingPayments: report.studentPayments,
+      actorName: actorDisplayName,
+    });
+    setScrubStudents(rec46.students);
     setStudentPayments(report.studentPayments);
+    setReconciliation46Report(rec46.report);
     setAuditLogs(LocalStorageManager.getAuditLogs());
-    return report;
+    return {
+      ...report,
+      students: rec46.students,
+    };
   };
+
+  const runReconcile46SubmittedNames = async (): Promise<Reconciliation46Report> => {
+    const res = await reconcileAndImportSubmitted46Names({
+      existingStudents: scrubStudents,
+      existingPayments: studentPayments,
+      actorName: actorDisplayName,
+    });
+    setScrubStudents(res.students);
+    setReconciliation46Report(res.report);
+    setAuditLogs(LocalStorageManager.getAuditLogs());
+    return res.report;
+  };
+
+  const refreshSiteAnalytics = async (): Promise<void> => {
+    const latest = await fetchSiteAnalyticsSnapshot();
+    setSiteAnalytics(latest);
+  };
+
+  // Auto-run 46-name reconciliation once on initial student load so the report and any missing names are immediately ready
+  const initial46ReconciledRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (!initial46ReconciledRef.current && scrubStudents.length >= 244) {
+      initial46ReconciledRef.current = true;
+      reconcileAndImportSubmitted46Names({
+        existingStudents: scrubStudents,
+        existingPayments: studentPayments,
+        actorName: 'النظام الآلي — مراجعة قائمة الـ 46 طالباً',
+      }).then((res) => {
+        if (res.students.length !== scrubStudents.length) {
+          setScrubStudents(res.students);
+        }
+        setReconciliation46Report(res.report);
+      });
+    }
+  }, [scrubStudents.length]);
 
   const importCustomStudentsList = async (
     entries: Array<{
@@ -4605,6 +4789,673 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveReceipt(null);
   };
 
+  // =========================================================================
+  // GRANULAR SUPERVISOR PERMISSIONS MANAGEMENT (Requirement 12 & 13)
+  // =========================================================================
+  const updateSupervisorPermissions = async (params: {
+    targetUserId: string;
+    targetName: string;
+    targetEmail?: string;
+    permissions: SupervisorPermissions;
+  }) => {
+    const res = await updateSupervisorPermissionsBySiteManager({
+      ...params,
+      actorUid: firebaseUser?.uid || 'super_admin_root',
+      actorName: actorDisplayName,
+      actorEmail: firebaseUser?.email || BOOTSTRAP_ADMIN_EMAIL,
+      isActorSuperAdmin: isSuperAdmin,
+    });
+    if (res.success) {
+      await refreshSupervisors();
+      setAuditLogs(LocalStorageManager.getAuditLogs());
+    }
+    return res;
+  };
+
+  // =========================================================================
+  // SUPERQI RECEIPT SUBMISSION, AI ANALYSIS & APPROVAL (Requirements 2-7, 13)
+  // =========================================================================
+  const submitSuperQiReceipt = async (params: {
+    studentId: string;
+    studentNumber?: number;
+    studentName: string;
+    submittedRawName: string;
+    identityConfirmed: boolean;
+    eventTarget?: PaymentEventTarget;
+    amountIQD: number;
+    transactionReference?: string;
+    transactionDate?: string;
+    notes?: string;
+    file: File;
+  }) => {
+    const result = await submitSuperQiReceiptRequest({
+      ...params,
+      submitterUid: firebaseUser?.uid || currentUser?.id,
+      submitterEmail: firebaseUser?.email || currentUser?.email,
+      existingSubmissions: receiptSubmissions,
+      existingPayments: studentPayments,
+    });
+
+    if (result.success && result.submission) {
+      setReceiptSubmissions((prev) => [
+        result.submission!,
+        ...prev.filter((s) => s.id !== result.submission!.id),
+      ]);
+
+      await recordSystemAuditLog({
+        action: 'إرسال وصل دفع عبر SuperQi للمراجعة',
+        performedBy: params.studentName,
+        actorUid: firebaseUser?.uid || 'visitor-student',
+        actorEmail: firebaseUser?.email || '',
+        actorRole: 'student',
+        details: `تم إرسال وصل تحويل عبر SuperQi للطالب «${params.studentName}» بمبلغ (${params.amountIQD.toLocaleString('en-US')} د.ع) برقم مرجع (${params.transactionReference || 'غير محدد'}). نتيجة الفحص الأولي: [${result.submission.aiAnalysis?.classification || 'يحتاج إلى مراجعة المشرف'}]. الرصيد لم يتغير بانتظار اعتماد المشرف المخوّل.`,
+        entityType: 'student_payment',
+      });
+      setAuditLogs(LocalStorageManager.getAuditLogs());
+
+      await sendAppNotification({
+        title: 'وصل دفع SuperQi جديد بانتظار المراجعة',
+        message: `أرسل الطالب «${params.studentName}» وصل تحويل بمبلغ ${params.amountIQD.toLocaleString('en-US')} د.ع. يرجى من المشرف المخوّل مراجعة الوصل والتحقق من وصول المبلغ.`,
+        type: 'payment_status',
+        targetAudience: 'admins',
+        linkRoute: 'admin_dashboard',
+      });
+    }
+
+    return result;
+  };
+
+  const approveSuperQiReceipt = async (params: {
+    submissionId: string;
+    targetStudentIdOverride?: string;
+    reviewNote?: string;
+  }): Promise<{ success: boolean; message: string }> => {
+    if (!isSuperAdmin && !myPermissions.approve_reject_payments) {
+      return {
+        success: false,
+        message: 'غير مصرح لك بالموافقة على الدفعات أو تحديث الأرصدة المالية.',
+      };
+    }
+
+    const sub = receiptSubmissions.find((s) => s.id === params.submissionId);
+    if (!sub) {
+      return {
+        success: false,
+        message: 'لم يتم العثور على طلب الوصل المحدد.',
+      };
+    }
+
+    // Strict Idempotency Guard: prevent double approval on repeated clicks
+    if (
+      sub.status === 'approved' ||
+      sub.approvedPaymentId ||
+      inFlightReceiptApprovalRef.current.has(sub.id) ||
+      studentPayments.some(
+        (p) =>
+          p.idempotencyKey === sub.idempotencyKey &&
+          p.verificationStatus !== 'voided'
+      )
+    ) {
+      return {
+        success: false,
+        message:
+          'تم اعتماد هذا الوصل مسبقاً وإضافة مبلغه إلى حساب الطالب؛ يمنع النظام احتساب العملية نفسها مرتين.',
+      };
+    }
+
+    const resolvedStudentId =
+      params.targetStudentIdOverride?.trim() || sub.studentId;
+    const student = scrubStudents.find(
+      (s) => s.id === resolvedStudentId && s.status === 'active'
+    );
+
+    if (!student) {
+      return {
+        success: false,
+        message:
+          'يرجى تحديد سجل الطالب الصحيح من القائمة أولاً قبل اعتماد الدفعة وتحديث الرصيد.',
+      };
+    }
+
+    // Also check if the transaction reference was already used in another verified payment
+    const cleanRef = (
+      sub.transactionReference ||
+      sub.aiAnalysis?.extractedReferenceNumber ||
+      ''
+    ).trim();
+    if (cleanRef.length >= 4) {
+      const duplicateRefPayment = studentPayments.find(
+        (p) =>
+          p.verificationStatus === 'verified' &&
+          p.isVerified &&
+          (p.referenceCode.toLowerCase() === cleanRef.toLowerCase() ||
+            p.receiptNumber.toLowerCase() === cleanRef.toLowerCase())
+      );
+      if (duplicateRefPayment) {
+        return {
+          success: false,
+          message: `رقم العملية (${cleanRef}) مسجل ومعتمد مسبقاً في دفعة الطالب «${duplicateRefPayment.studentName}» (#${duplicateRefPayment.receiptNumber}). تم منع تكرار احتساب العملية.`,
+        };
+      }
+    }
+
+    inFlightReceiptApprovalRef.current.add(sub.id);
+    try {
+      const nowIso = new Date().toISOString();
+      const payDate = sub.transactionDate || nowIso.split('T')[0];
+      const payTime = new Date().toTimeString().substring(0, 5);
+      const paymentId = `scrub-pay-sqi-${sub.id}`;
+      const receiptNumber =
+        cleanRef ||
+        `SQI-${String(student.studentNumber).padStart(3, '0')}-${Date.now().toString().slice(-5)}`;
+
+      const prevPaid = student.verifiedPaidIQD;
+      const prevRemaining = student.remainingBalanceIQD;
+
+      const newVerifiedPayment: StudentPayment = {
+        id: paymentId,
+        studentId: student.id,
+        studentNumber: student.studentNumber,
+        studentName: student.fullName,
+        linkedUserId: student.linkedUserId || sub.submitterUid,
+        eventTarget: sub.eventTarget || 'scrub_night',
+        amountIQD: sub.amountIQD,
+        paymentType:
+          prevPaid + sub.amountIQD >= student.totalFeeIQD
+            ? 'final_settlement'
+            : prevPaid === 0
+            ? 'initial_deposit'
+            : 'installment',
+        paymentMethod: 'superqi',
+        gatewayProvider: 'qicard',
+        receiptNumber,
+        referenceCode: cleanRef || receiptNumber,
+        idempotencyKey: sub.idempotencyKey,
+        submittedByStudent: true,
+        date: payDate,
+        time: payTime,
+        notes:
+          params.reviewNote?.trim() ||
+          `دفعة SuperQi معتمدة (بطاقة ${sub.recipientCardNumber})${sub.notes ? ` — ${sub.notes}` : ''}`,
+        isVerified: true,
+        verificationStatus: 'verified',
+        recordedBy: actorDisplayName,
+        recordedByUid: firebaseUser?.uid,
+        verifiedBy: actorDisplayName,
+        verifiedAt: nowIso,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      const updatedPaymentsList = [newVerifiedPayment, ...studentPayments];
+      const recalculatedStudent = recalculateStudentFinancials(
+        {
+          ...student,
+          lastPaymentDate: payDate,
+          updatedAt: nowIso,
+        },
+        updatedPaymentsList
+      );
+
+      const updatedStudentsList = scrubStudents.map((s) =>
+        s.id === student.id ? recalculatedStudent : s
+      );
+
+      const updatedSub: PaymentReceiptSubmission = {
+        ...sub,
+        studentId: student.id,
+        studentNumber: student.studentNumber,
+        studentName: student.fullName,
+        identityConfirmed: true,
+        status: 'approved',
+        approvedPaymentId: paymentId,
+        reviewedByUid: firebaseUser?.uid || 'super_admin_root',
+        reviewedByName: actorDisplayName,
+        reviewedAt: nowIso,
+        reviewNote: params.reviewNote?.trim() || 'تم التحقق من وصول المبلغ واعتماد الدفعة',
+        updatedAt: nowIso,
+      };
+
+      const updatedSubsList = receiptSubmissions.map((item) =>
+        item.id === sub.id ? updatedSub : item
+      );
+
+      setStudentPayments(updatedPaymentsList);
+      setScrubStudents(updatedStudentsList);
+      setReceiptSubmissions(updatedSubsList);
+      saveLocalReceiptSubmissions(updatedSubsList);
+      syncLinkedGraduateBalance(recalculatedStudent);
+
+      try {
+        const cleanPay = Object.fromEntries(
+          Object.entries(newVerifiedPayment).filter(([_, v]) => v !== undefined)
+        );
+        const cleanStu = Object.fromEntries(
+          Object.entries(recalculatedStudent).filter(([_, v]) => v !== undefined)
+        );
+        const cleanSub = Object.fromEntries(
+          Object.entries(updatedSub).filter(([_, v]) => v !== undefined)
+        );
+        await setDoc(doc(db, 'student_payments', newVerifiedPayment.id), cleanPay);
+        await setDoc(doc(db, 'scrub_students', recalculatedStudent.id), cleanStu, {
+          merge: true,
+        });
+        await setDoc(doc(db, 'payment_receipt_submissions', updatedSub.id), cleanSub, {
+          merge: true,
+        });
+      } catch (e) {
+        console.warn('[approveSuperQiReceipt] Firestore sync notice:', e);
+      }
+
+      await recordSystemAuditLog({
+        action: 'اعتماد وصل دفع SuperQi وتحديث الرصيد المالي',
+        performedBy: actorDisplayName,
+        actorUid: firebaseUser?.uid,
+        actorEmail: firebaseUser?.email || '',
+        actorRole: isSuperAdmin ? 'super_admin' : 'moderator',
+        details: `اعتمد المشرف «${actorDisplayName}» وصل دفع SuperQi للطالب «${student.fullName}» (ت: ${student.studentNumber}) بمبلغ (${sub.amountIQD.toLocaleString('en-US')} د.ع) برقم مرجع (${receiptNumber}). المبلغ المدفوع قبل الاعتماد: (${prevPaid.toLocaleString('en-US')} د.ع) -> بعد الاعتماد: (${recalculatedStudent.verifiedPaidIQD.toLocaleString('en-US')} د.ع) | المتبقي قبل: (${prevRemaining.toLocaleString('en-US')} د.ع) -> المتبقي بعد: (${recalculatedStudent.remainingBalanceIQD.toLocaleString('en-US')} د.ع).`,
+        entityType: 'student_payment',
+      });
+      setAuditLogs(LocalStorageManager.getAuditLogs());
+
+      return {
+        success: true,
+        message: `تم اعتماد دفعة الطالب «${student.fullName}» بمبلغ ${sub.amountIQD.toLocaleString('en-US')} د.ع بنجاح! أصبح إجمالي المدفوع (${recalculatedStudent.verifiedPaidIQD.toLocaleString('en-US')} د.ع) والمتبقي (${recalculatedStudent.remainingBalanceIQD.toLocaleString('en-US')} د.ع).`,
+      };
+    } finally {
+      inFlightReceiptApprovalRef.current.delete(sub.id);
+    }
+  };
+
+  const rejectSuperQiReceipt = async (params: {
+    submissionId: string;
+    reason: string;
+  }): Promise<{ success: boolean; message: string }> => {
+    if (!isSuperAdmin && !myPermissions.approve_reject_payments) {
+      return {
+        success: false,
+        message: 'غير مصرح لك برفض أو مراجعة طلبات الدفع.',
+      };
+    }
+
+    const sub = receiptSubmissions.find((s) => s.id === params.submissionId);
+    if (!sub) {
+      return { success: false, message: 'لم يتم العثور على طلب الوصل.' };
+    }
+    if (sub.status === 'approved') {
+      return {
+        success: false,
+        message: 'لا يمكن رفض وصل تم اعتماده مسبقاً؛ يرجى استخدام خيار إلغاء الدفعة من السجل المالي عند الضرورة.',
+      };
+    }
+
+    const cleanReason =
+      params.reason.trim() || 'لم يتم التأكد من مطابقة بيانات الوصل أو وصول الحوالة.';
+    const nowIso = new Date().toISOString();
+
+    const updatedSub: PaymentReceiptSubmission = {
+      ...sub,
+      status: 'rejected',
+      reviewedByUid: firebaseUser?.uid || 'super_admin_root',
+      reviewedByName: actorDisplayName,
+      reviewedAt: nowIso,
+      rejectionReason: cleanReason,
+      updatedAt: nowIso,
+    };
+
+    const updatedList = receiptSubmissions.map((item) =>
+      item.id === sub.id ? updatedSub : item
+    );
+    setReceiptSubmissions(updatedList);
+    saveLocalReceiptSubmissions(updatedList);
+
+    try {
+      const cleanSub = Object.fromEntries(
+        Object.entries(updatedSub).filter(([_, v]) => v !== undefined)
+      );
+      await setDoc(doc(db, 'payment_receipt_submissions', updatedSub.id), cleanSub, {
+        merge: true,
+      });
+    } catch (e) {
+      console.warn('[rejectSuperQiReceipt] Firestore notice:', e);
+    }
+
+    await recordSystemAuditLog({
+      action: 'رفض طلب وصل دفع SuperQi',
+      performedBy: actorDisplayName,
+      actorUid: firebaseUser?.uid,
+      actorEmail: firebaseUser?.email || '',
+      actorRole: isSuperAdmin ? 'super_admin' : 'moderator',
+      details: `قام المشرف «${actorDisplayName}» برفض وصل دفع للطالب «${sub.studentName}» بمبلغ (${sub.amountIQD.toLocaleString('en-US')} د.ع). السبب: ${cleanReason}. لم يطرأ أي تغيير على رصيد الطالب.`,
+      entityType: 'student_payment',
+    });
+    setAuditLogs(LocalStorageManager.getAuditLogs());
+
+    return {
+      success: true,
+      message: `تم رفض طلب الوصل الخاص بالطالب «${sub.studentName}» مع بقاء الرصيد المالي دون تغيير.`,
+    };
+  };
+
+  const reanalyzeSuperQiReceipt = async (
+    submissionId: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    analysis?: ReceiptAiAnalysisResult;
+  }> => {
+    if (!isSuperAdmin && !myPermissions.analyze_receipts) {
+      return {
+        success: false,
+        message: 'غير مصرح لك بتحليل الوصولات المالية.',
+      };
+    }
+
+    const sub = receiptSubmissions.find((s) => s.id === submissionId);
+    if (!sub) {
+      return { success: false, message: 'لم يتم العثور على الوصل المطلوب.' };
+    }
+
+    const vaultLoaded = await loadAuthorizedReceiptBlobUrl({
+      vaultReceiptId: sub.vaultReceiptId,
+      submissionId: sub.id,
+      viewerUid: firebaseUser?.uid,
+      viewerIsSuperAdmin: isSuperAdmin,
+      viewerPermissions: {
+        ...myPermissions,
+        view_financial_receipts: true,
+      },
+      submitterUid: sub.submitterUid,
+    });
+
+    if (!vaultLoaded.allowed || !vaultLoaded.blobUrl) {
+      return {
+        success: false,
+        message: vaultLoaded.error || 'تعذر الوصول إلى صورة الوصل للتحليل.',
+      };
+    }
+
+    try {
+      const resp = await fetch(vaultLoaded.blobUrl);
+      const blob = await resp.blob();
+      const base64DataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      const existingRefs: string[] = [];
+      for (const p of studentPayments) {
+        if (p.verificationStatus !== 'voided') {
+          if (p.referenceCode) existingRefs.push(p.referenceCode);
+          if (p.receiptNumber) existingRefs.push(p.receiptNumber);
+        }
+      }
+      for (const other of receiptSubmissions) {
+        if (other.id !== sub.id && other.status !== 'rejected' && other.transactionReference) {
+          existingRefs.push(other.transactionReference);
+        }
+      }
+
+      const isDupHash = receiptSubmissions.some(
+        (other) =>
+          other.id !== sub.id &&
+          other.status !== 'rejected' &&
+          other.imageSha256 === sub.imageSha256
+      );
+
+      const newAnalysis = await analyzeReceiptImageWithAI({
+        imageDataUrl: base64DataUrl,
+        mimeType: sub.imageMimeType || 'image/jpeg',
+        expectedAmountIQD: sub.amountIQD,
+        studentName: sub.studentName,
+        submittedReference: sub.transactionReference,
+        submittedDate: sub.transactionDate,
+        existingReferences: existingRefs,
+        isDuplicateImageHash: isDupHash,
+      });
+
+      const updatedSub: PaymentReceiptSubmission = {
+        ...sub,
+        aiAnalysis: newAnalysis,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedList = receiptSubmissions.map((item) =>
+        item.id === sub.id ? updatedSub : item
+      );
+      setReceiptSubmissions(updatedList);
+      saveLocalReceiptSubmissions(updatedList);
+
+      try {
+        const cleanSub = Object.fromEntries(
+          Object.entries(updatedSub).filter(([_, v]) => v !== undefined)
+        );
+        await setDoc(doc(db, 'payment_receipt_submissions', updatedSub.id), cleanSub, {
+          merge: true,
+        });
+      } catch (e) {
+        console.warn('[reanalyzeSuperQiReceipt] Firestore notice:', e);
+      }
+
+      return {
+        success: true,
+        message: `تم تحديث تحليل الوصل بالذكاء الاصطناعي: «${newAnalysis.classification}»`,
+        analysis: newAnalysis,
+      };
+    } finally {
+      URL.revokeObjectURL(vaultLoaded.blobUrl);
+    }
+  };
+
+  // =========================================================================
+  // ADMINISTRATIVE FINANCIAL ADJUSTMENTS & SETTLEMENTS (Requirements 9 & 11)
+  // =========================================================================
+  const applyStudentFinancialAdjustment = async (params: {
+    studentId: string;
+    newTotalFeeIQD: number;
+    newPaidIQD: number;
+    newRemainingIQD: number;
+    newPaymentStatus?: PaymentStatus;
+    reason: string;
+    adminNotes?: string;
+  }): Promise<{ success: boolean; message: string }> => {
+    if (!isSuperAdmin && !myPermissions.edit_financial_amounts) {
+      return {
+        success: false,
+        message: 'غير مصرح لك بتعديل المبالغ المالية أو إنشاء تسويات إدارية.',
+      };
+    }
+
+    const student = scrubStudents.find((s) => s.id === params.studentId);
+    if (!student) {
+      return { success: false, message: 'لم يتم العثور على سجل الطالب.' };
+    }
+
+    const cleanReason = params.reason.trim();
+    if (!cleanReason || cleanReason.length < 3) {
+      return {
+        success: false,
+        message: 'يرجى كتابة سبب التعديل أو التسوية المالية لتوثيقه في السجل الرسمي.',
+      };
+    }
+
+    const targetTotalFee = Math.max(0, Math.round(Number(params.newTotalFeeIQD) || 0));
+    const targetPaid = Math.max(0, Math.round(Number(params.newPaidIQD) || 0));
+    const targetRemaining = Math.max(0, Math.round(Number(params.newRemainingIQD) || 0));
+
+    if (targetPaid > targetTotalFee) {
+      return {
+        success: false,
+        message: 'المبلغ المدفوع لا يمكن أن يتجاوز المبلغ الإجمالي المطلوب.',
+      };
+    }
+
+    const prevTotalFee = student.totalFeeIQD;
+    const prevPaid = student.verifiedPaidIQD;
+    const prevRemaining = student.remainingBalanceIQD;
+    const nowIso = new Date().toISOString();
+    const todayDate = nowIso.split('T')[0];
+    const nowTime = new Date().toTimeString().substring(0, 5);
+
+    const updatedPaymentsList = [...studentPayments];
+    const modifiedPaymentDocs: StudentPayment[] = [];
+
+    // 1. If targetPaid differs from prevPaid, record an official ledger transaction so the sum of verified payments matches targetPaid without deleting old history
+    const paidDelta = targetPaid - prevPaid;
+    if (paidDelta > 0) {
+      const adjPayId = `scrub-pay-adj-${Date.now()}-${student.studentNumber}`;
+      const adjPay: StudentPayment = {
+        id: adjPayId,
+        studentId: student.id,
+        studentNumber: student.studentNumber,
+        studentName: student.fullName,
+        linkedUserId: student.linkedUserId,
+        amountIQD: paidDelta,
+        paymentType: targetPaid >= targetTotalFee ? 'final_settlement' : 'installment',
+        paymentMethod: 'cash',
+        receiptNumber: `ADJ-${student.studentNumber}-${Date.now().toString().slice(-4)}`,
+        referenceCode: `SETTLE-${Date.now().toString().slice(-5)}`,
+        date: todayDate,
+        time: nowTime,
+        notes: `دفعة/تعديل مالي إداري بواسطة ${actorDisplayName} — السبب: ${cleanReason}`,
+        isVerified: true,
+        verificationStatus: 'verified',
+        recordedBy: actorDisplayName,
+        recordedByUid: firebaseUser?.uid,
+        verifiedBy: actorDisplayName,
+        verifiedAt: nowIso,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+      updatedPaymentsList.unshift(adjPay);
+      modifiedPaymentDocs.push(adjPay);
+    } else if (paidDelta < 0) {
+      // Reduce verified amounts proportionally or mark excess as adjusted while keeping audit history intact
+      let remainingToReduce = Math.abs(paidDelta);
+      for (let i = 0; i < updatedPaymentsList.length && remainingToReduce > 0; i++) {
+        const p = updatedPaymentsList[i];
+        if (
+          p.studentId === student.id &&
+          p.isVerified &&
+          p.verificationStatus === 'verified' &&
+          p.amountIQD > 0
+        ) {
+          if (p.amountIQD <= remainingToReduce) {
+            remainingToReduce -= p.amountIQD;
+            const voidedPay: StudentPayment = {
+              ...p,
+              isVerified: false,
+              verificationStatus: 'voided',
+              notes: `${p.notes || ''} | [تعديل إداري بواسطة ${actorDisplayName}: ${cleanReason}]`,
+              updatedAt: nowIso,
+            };
+            updatedPaymentsList[i] = voidedPay;
+            modifiedPaymentDocs.push(voidedPay);
+          } else {
+            const reducedPay: StudentPayment = {
+              ...p,
+              amountIQD: p.amountIQD - remainingToReduce,
+              notes: `${p.notes || ''} | [تعديل المبلغ من ${p.amountIQD.toLocaleString('en-US')} إلى ${(p.amountIQD - remainingToReduce).toLocaleString('en-US')} بواسطة ${actorDisplayName}: ${cleanReason}]`,
+              updatedAt: nowIso,
+            };
+            remainingToReduce = 0;
+            updatedPaymentsList[i] = reducedPay;
+            modifiedPaymentDocs.push(reducedPay);
+          }
+        }
+      }
+    }
+
+    // 2. Enforce exact equation: Remaining = TotalFee - VerifiedPaid - SettlementAdjustment
+    const standardRemaining = Math.max(0, targetTotalFee - targetPaid);
+    const settlementAdjustmentIQD = Math.max(0, standardRemaining - targetRemaining);
+
+    const updatedStudentBase: ScrubStudent = {
+      ...student,
+      totalFeeIQD: targetTotalFee,
+      settlementAdjustmentIQD,
+      notes: params.adminNotes !== undefined ? params.adminNotes.trim() : student.notes,
+      updatedAt: nowIso,
+    };
+
+    const recalculated = recalculateStudentFinancials(
+      updatedStudentBase,
+      updatedPaymentsList
+    );
+
+    const finalStudent: ScrubStudent = params.newPaymentStatus
+      ? { ...recalculated, paymentStatus: params.newPaymentStatus }
+      : recalculated;
+
+    // 3. Record immutable FinancialSettlementRecord in /financial_settlements
+    const settlementRecord: FinancialSettlementRecord = {
+      id: `settle-${Date.now()}-${student.studentNumber}`,
+      studentId: student.id,
+      studentNumber: student.studentNumber,
+      studentName: student.fullName,
+      previousTotalFeeIQD: prevTotalFee,
+      newTotalFeeIQD: finalStudent.totalFeeIQD,
+      previousPaidIQD: prevPaid,
+      newPaidIQD: finalStudent.verifiedPaidIQD,
+      previousRemainingIQD: prevRemaining,
+      newRemainingIQD: finalStudent.remainingBalanceIQD,
+      settlementDeltaIQD: settlementAdjustmentIQD,
+      reason: cleanReason,
+      performedBy: actorDisplayName,
+      performedByUid: firebaseUser?.uid || 'super_admin_root',
+      performedByEmail: firebaseUser?.email || '',
+      createdAt: nowIso,
+    };
+
+    const nextSettlements = [settlementRecord, ...financialSettlements];
+    setFinancialSettlements(nextSettlements);
+    saveLocalFinancialSettlements(nextSettlements);
+    setStudentPayments(updatedPaymentsList);
+    setScrubStudents((prev) =>
+      prev.map((s) => (s.id === student.id ? finalStudent : s))
+    );
+    syncLinkedGraduateBalance(finalStudent);
+
+    try {
+      const batch = writeBatch(db);
+      const cleanStu = Object.fromEntries(
+        Object.entries(finalStudent).filter(([_, v]) => v !== undefined)
+      );
+      batch.set(doc(db, 'scrub_students', finalStudent.id), cleanStu, { merge: true });
+      const cleanSettle = Object.fromEntries(
+        Object.entries(settlementRecord).filter(([_, v]) => v !== undefined)
+      );
+      batch.set(doc(db, 'financial_settlements', settlementRecord.id), cleanSettle);
+      for (const mp of modifiedPaymentDocs) {
+        const cleanPay = Object.fromEntries(
+          Object.entries(mp).filter(([_, v]) => v !== undefined)
+        );
+        batch.set(doc(db, 'student_payments', mp.id), cleanPay, { merge: true });
+      }
+      await batch.commit();
+    } catch (e) {
+      console.warn('[applyStudentFinancialAdjustment] Firestore sync notice:', e);
+    }
+
+    await recordSystemAuditLog({
+      action: 'تعديل مالي وتسوية إدارية مسجلة لطالب',
+      performedBy: actorDisplayName,
+      actorUid: firebaseUser?.uid,
+      actorEmail: firebaseUser?.email || '',
+      actorRole: isSuperAdmin ? 'super_admin' : 'moderator',
+      details: `قام «${actorDisplayName}» بتحديث السجل المالي للطالب «${student.fullName}» (ت: ${student.studentNumber}). الإجمالي المطلوب: [${prevTotalFee.toLocaleString('en-US')} -> ${finalStudent.totalFeeIQD.toLocaleString('en-US')} د.ع] | المدفوع المعتمد: [${prevPaid.toLocaleString('en-US')} -> ${finalStudent.verifiedPaidIQD.toLocaleString('en-US')} د.ع] | المتبقي: [${prevRemaining.toLocaleString('en-US')} -> ${finalStudent.remainingBalanceIQD.toLocaleString('en-US')} د.ع]${settlementAdjustmentIQD > 0 ? ` (تسوية إدارية: ${settlementAdjustmentIQD.toLocaleString('en-US')} د.ع)` : ''}. السبب: ${cleanReason}.`,
+      entityType: 'scrub_student',
+    });
+    setAuditLogs(LocalStorageManager.getAuditLogs());
+
+    return {
+      success: true,
+      message: `تم حفظ التعديل المالي والتسوية الإدارية للطالب «${student.fullName}» بنجاح! (المدفوع: ${finalStudent.verifiedPaidIQD.toLocaleString('en-US')} د.ع | المتبقي: ${finalStudent.remainingBalanceIQD.toLocaleString('en-US')} د.ع).`,
+    };
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -4628,6 +5479,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         scrubStudents,
         studentPayments,
         importOfficial46List,
+        reconciliation46Report,
+        runReconcile46SubmittedNames,
+        siteAnalytics,
+        refreshSiteAnalytics,
         importCustomStudentsList,
         addScrubStudent,
         updateScrubStudent,
@@ -4703,6 +5558,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         saveStudioDesign,
         deleteStudioDesign,
         updateMyProfileSettings,
+        myPermissions,
+        updateSupervisorPermissions,
+        receiptSubmissions,
+        submitSuperQiReceipt,
+        approveSuperQiReceipt,
+        rejectSuperQiReceipt,
+        reanalyzeSuperQiReceipt,
+        financialSettlements,
+        applyStudentFinancialAdjustment,
       }}
     >
       {children}

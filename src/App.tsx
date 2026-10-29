@@ -16,6 +16,7 @@ import { AuthPage } from './pages/AuthPage';
 import { GraduateDashboard } from './pages/GraduateDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { GraduationStudio } from './components/GraduationStudio';
+import { AiTrendsStudioPage } from './pages/AiTrendsStudioPage';
 import { AnnouncementsSection } from './components/AnnouncementsSection';
 import { GallerySection } from './components/GallerySection';
 import { TeamSection } from './components/TeamSection';
@@ -59,6 +60,7 @@ const MainContent: React.FC = () => {
         {currentPage === 'register' && <AuthPage initialMode="register" />}
         {currentPage === 'graduate_dashboard' && <GraduateDashboard />}
         {currentPage === 'graduation_studio' && <GraduationStudio />}
+        {currentPage === 'ai_trends_studio' && <AiTrendsStudioPage />}
         {currentPage === 'admin_dashboard' && <AdminDashboard />}
       </main>
 

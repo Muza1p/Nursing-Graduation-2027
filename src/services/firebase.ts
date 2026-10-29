@@ -39,7 +39,14 @@ import {
   getDocFromServer,
 } from 'firebase/firestore';
 import firebaseConfigJson from '../../firebase-applet-config.json';
-import { Graduate, LoggedInUserAccount, ModeratorRequest, PaymentTransaction, UserRole } from '../types';
+import {
+  Graduate,
+  LoggedInUserAccount,
+  ModeratorRequest,
+  PaymentTransaction,
+  SupervisorPermissions,
+  UserRole,
+} from '../types';
 
 const env = (import.meta as any).env || {};
 
@@ -1689,11 +1696,42 @@ export interface SupervisorRecord {
   role: 'super_admin' | 'moderator' | 'admin';
   createdAt?: string;
   approvedBy?: string;
+  permissions?: SupervisorPermissions;
 }
 
 export async function getAllSupervisors(
   viewerIsSuperAdmin = true
 ): Promise<SupervisorRecord[]> {
+  let savedLocalPerms: Record<string, SupervisorPermissions> = {};
+  try {
+    const raw = localStorage.getItem('nursing2027_supervisor_permissions_v1');
+    if (raw) savedLocalPerms = JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+
+  const defaultSuperAdminPerms: SupervisorPermissions = {
+    view_payments_list: true,
+    view_financial_receipts: true,
+    analyze_receipts: true,
+    record_manual_payment: true,
+    edit_financial_amounts: true,
+    approve_reject_payments: true,
+    manage_students: true,
+    manage_financial_settings: true,
+  };
+
+  const defaultModPerms: SupervisorPermissions = {
+    view_payments_list: true,
+    view_financial_receipts: false,
+    analyze_receipts: false,
+    record_manual_payment: false,
+    edit_financial_amounts: false,
+    approve_reject_payments: false,
+    manage_students: false,
+    manage_financial_settings: false,
+  };
+
   const supervisors: SupervisorRecord[] = [
     {
       userId: 'super_admin_root',
@@ -1701,6 +1739,7 @@ export async function getAllSupervisors(
       fullName: 'المشرف العام (مصطفى علي)',
       role: 'super_admin',
       createdAt: '2026-01-01T00:00:00.000Z',
+      permissions: defaultSuperAdminPerms,
     },
   ];
 
@@ -1710,21 +1749,30 @@ export async function getAllSupervisors(
     adminSnap.forEach((d) => {
       const data = d.data();
       const rawEmail = data.email || '';
+      const isRoot =
+        Boolean(rawEmail) &&
+        rawEmail.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL.toLowerCase();
       if (
         !supervisors.some(
-          (s) =>
-            s.userId === d.id ||
-            (rawEmail &&
-              rawEmail.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL.toLowerCase())
+          (s) => s.userId === d.id || isRoot
         )
       ) {
+        const isSupAdmin = data.role === 'super_admin';
+        const resolvedPerms: SupervisorPermissions = isSupAdmin
+          ? defaultSuperAdminPerms
+          : {
+              ...defaultModPerms,
+              ...(savedLocalPerms[d.id] || {}),
+              ...(data.permissions || {}),
+            };
         supervisors.push({
           userId: d.id,
           email: viewerIsSuperAdmin ? rawEmail : '',
           fullName: data.fullName || 'مشرف معتمد',
-          role: data.role === 'super_admin' ? 'super_admin' : 'moderator',
+          role: isSupAdmin ? 'super_admin' : 'moderator',
           createdAt: data.createdAt,
           approvedBy: data.approvedBy,
+          permissions: resolvedPerms,
         });
       }
     });
@@ -1749,12 +1797,19 @@ export async function getAllSupervisors(
               rawEmail.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL.toLowerCase())
         )
       ) {
+        const isSupAdmin = data.role === 'super_admin';
         supervisors.push({
           userId: d.id,
           email: viewerIsSuperAdmin ? rawEmail : '',
           fullName: data.displayName || 'مشرف',
           role: data.role,
           createdAt: data.createdAt,
+          permissions: isSupAdmin
+            ? defaultSuperAdminPerms
+            : {
+                ...defaultModPerms,
+                ...(savedLocalPerms[d.id] || {}),
+              },
         });
       }
     });

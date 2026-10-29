@@ -18,7 +18,13 @@ import {
   UserRole,
   ModeratorRequest,
   LoggedInUserAccount,
+  SupervisorPermissions,
 } from '../types';
+import {
+  SUPERVISOR_PERMISSION_META,
+  DEFAULT_MODERATOR_PERMISSIONS,
+  DEFAULT_SUPER_ADMIN_PERMISSIONS,
+} from '../services/superQiReceiptService';
 import { MediaUploadZone, UploadResult } from '../components/MediaUploadZone';
 import { ScrubStudentManagementSection } from '../components/ScrubStudentManagementSection';
 import { AdminMusicManagementSection } from '../components/AdminMusicManagementSection';
@@ -117,11 +123,16 @@ export const AdminDashboard: React.FC = () => {
     studentPayments,
     verifyStudentPayment,
     voidStudentPayment,
+    siteAnalytics,
+    refreshSiteAnalytics,
+    receiptSubmissions,
+    updateSupervisorPermissions,
   } = useApp();
   const { songs } = useMusic();
 
   const [activeAdminTab, setActiveAdminTab] = useState<
     | 'scrub_students'
+    | 'site_analytics'
     | 'financial_link_requests'
     | 'logged_in_users'
     | 'moderator_requests'
@@ -136,6 +147,9 @@ export const AdminDashboard: React.FC = () => {
     | 'music_library'
     | 'audit'
   >(canManageFinances ? 'scrub_students' : 'event_config');
+
+  const [analyticsRangeDays, setAnalyticsRangeDays] = useState<14 | 30>(14);
+  const [isRefreshingAnalytics, setIsRefreshingAnalytics] = useState<boolean>(false);
 
   const [finLinkActionFeedback, setFinLinkActionFeedback] = useState<{
     type: 'success' | 'error';
@@ -529,9 +543,14 @@ export const AdminDashboard: React.FC = () => {
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>
-              إدارة طلبة حفلة السكراب (
+              إدارة دفعات الطلاب وطلبة السكراب (
               {scrubStudents.filter((s) => s.status === 'active').length})
             </span>
+            {receiptSubmissions.filter((r) => r.status === 'pending_review').length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-black text-[10px] font-black animate-pulse">
+                {receiptSubmissions.filter((r) => r.status === 'pending_review').length} وصل
+              </span>
+            )}
           </button>
         )}
 
@@ -558,6 +577,24 @@ export const AdminDashboard: React.FC = () => {
                 0
               </span>
             )}
+          </button>
+        )}
+
+        {(isAdmin || isModerator) && (
+          <button
+            onClick={() => {
+              setActiveAdminTab('site_analytics');
+              refreshSiteAnalytics();
+              refreshLoggedInUsers();
+            }}
+            className={`px-4 py-2 rounded-xl transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
+              activeAdminTab === 'site_analytics'
+                ? 'bg-[#35D6C5] text-[#10151C] shadow-md font-extrabold'
+                : 'bg-[#142638] text-[#E8EEF2] hover:text-white'
+            }`}
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span>إحصائيات الموقع ({siteAnalytics.totalVisits})</span>
           </button>
         )}
 
@@ -757,6 +794,331 @@ export const AdminDashboard: React.FC = () => {
 
       {/* TAB: SCRUB PARTY STUDENT MANAGEMENT SYSTEM (46+ ROSTER) */}
       {activeAdminTab === 'scrub_students' && <ScrubStudentManagementSection />}
+
+      {/* TAB: WEBSITE VISITOR ANALYTICS («إحصائيات الموقع») */}
+      {activeAdminTab === 'site_analytics' && (isAdmin || isModerator) && (
+        <div className="space-y-6">
+          {/* Header Card */}
+          <div className="rounded-3xl bg-[#101827] border border-[#35D6C5]/35 p-6 sm:p-7 shadow-xl space-y-5">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-5">
+              <div className="space-y-1.5">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-[#35D6C5]/15 border border-[#35D6C5]/30 text-[#35D6C5] text-[11px] font-extrabold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>نظام إحصاء الزوار الحقيقي المباشر (Firestore Real-Time Analytics)</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black text-white">
+                  إحصائيات الموقع وعداد الزوار الفعلي
+                </h2>
+                <p className="text-xs text-slate-400 max-w-3xl leading-relaxed">
+                  يحتسب هذا النظام الزيارات الحقيقية عند فتح الموقع للزوار المسجلين وغير المسجلين دون اشتراط تسجيل الدخول، مع حماية ذكية تمنع احتساب تحديث الصفحة (Refresh) كزيارة جديدة، ودون جمع أي بيانات شخصية حساسة.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
+                <div className="px-3.5 py-2 rounded-xl bg-[#0A0D12] border border-white/10 text-xs">
+                  <span className="text-slate-400 block text-[10px]">تاريخ آخر تحديث للإحصائيات:</span>
+                  <strong className="text-[#35D6C5] font-mono">
+                    {siteAnalytics.lastUpdatedAt
+                      ? new Date(siteAnalytics.lastUpdatedAt).toLocaleString('ar-IQ', {
+                          timeZone: 'Asia/Baghdad',
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        })
+                      : 'بانتظار أول تحديث'}
+                  </strong>
+                </div>
+                <button
+                  onClick={async () => {
+                    setIsRefreshingAnalytics(true);
+                    try {
+                      await Promise.all([refreshSiteAnalytics(), refreshLoggedInUsers()]);
+                    } finally {
+                      setIsRefreshingAnalytics(false);
+                    }
+                  }}
+                  disabled={isRefreshingAnalytics}
+                  className="px-4 py-2.5 rounded-xl bg-[#35D6C5] hover:opacity-95 text-[#0A0D12] font-extrabold text-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isRefreshingAnalytics ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshingAnalytics ? 'جارِ التحديث...' : 'تحديث البيانات الآن'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 7 Primary KPI Cards */}
+            {(() => {
+              const registeredAccountsCount = Math.max(
+                loggedInUsers.length,
+                graduates.length,
+                scrubStudents.filter((s) => s.status === 'active' && s.isLinkedToAccount).length
+              );
+              const loggedInUsersCount = loggedInUsers.filter(
+                (u) => Boolean(u.lastLoginAt) || u.hasEverLoggedIn
+              ).length;
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="p-5 rounded-2xl bg-[#0A0D12] border border-[#35D6C5]/35 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#35D6C5]">إجمالي الزيارات</span>
+                      <Eye className="w-4 h-4 text-[#35D6C5]" />
+                    </div>
+                    <div className="text-3xl font-black text-white font-mono">
+                      {siteAnalytics.totalVisits.toLocaleString()}
+                    </div>
+                    <span className="text-[11px] text-slate-400 block">
+                      جميع جلسات فتح الموقع (المسجلين وغير المسجلين)
+                    </span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-[#0A0D12] border border-emerald-500/35 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-emerald-400">
+                        عدد الزوار المميزين التقديري
+                      </span>
+                      <Users className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <div className="text-3xl font-black text-emerald-400 font-mono">
+                      {siteAnalytics.uniqueVisitorsEstimate.toLocaleString()}
+                    </div>
+                    <span className="text-[11px] text-slate-400 block">
+                      زوار فريدون بدون احتساب تكرار الجلسات أو التحديث
+                    </span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-[#0A0D12] border border-cyan-500/35 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-cyan-400">زيارات اليوم</span>
+                      <Calendar className="w-4 h-4 text-cyan-400" />
+                    </div>
+                    <div className="text-3xl font-black text-cyan-300 font-mono">
+                      {siteAnalytics.todayVisits.toLocaleString()}
+                    </div>
+                    <span className="text-[11px] text-slate-400 block">
+                      زوار مميزون اليوم:{' '}
+                      <strong className="text-cyan-300 font-mono">
+                        {siteAnalytics.todayUniqueVisitors.toLocaleString()}
+                      </strong>
+                    </span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-[#0A0D12] border border-[#D7B875]/35 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#D7B875]">زيارات آخر 7 أيام</span>
+                      <Clock className="w-4 h-4 text-[#D7B875]" />
+                    </div>
+                    <div className="text-3xl font-black text-[#D7B875] font-mono">
+                      {siteAnalytics.last7DaysVisits.toLocaleString()}
+                    </div>
+                    <span className="text-[11px] text-slate-400 block">
+                      زوار مميزون (7 أيام):{' '}
+                      <strong className="text-[#D7B875] font-mono">
+                        {siteAnalytics.last7DaysUniqueVisitors.toLocaleString()}
+                      </strong>
+                    </span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-[#0A0D12] border border-indigo-500/35 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-indigo-300">زيارات آخر 30 يوماً</span>
+                      <Calendar className="w-4 h-4 text-indigo-400" />
+                    </div>
+                    <div className="text-3xl font-black text-indigo-300 font-mono">
+                      {siteAnalytics.last30DaysVisits.toLocaleString()}
+                    </div>
+                    <span className="text-[11px] text-slate-400 block">
+                      زوار مميزون (30 يوماً):{' '}
+                      <strong className="text-indigo-300 font-mono">
+                        {siteAnalytics.last30DaysUniqueVisitors.toLocaleString()}
+                      </strong>
+                    </span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-[#0A0D12] border border-white/15 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-200">عدد الحسابات المسجلة</span>
+                      <UserCheck className="w-4 h-4 text-[#35D6C5]" />
+                    </div>
+                    <div className="text-3xl font-black text-white font-mono">
+                      {registeredAccountsCount.toLocaleString()}
+                    </div>
+                    <span className="text-[11px] text-slate-400 block">
+                      إجمالي الحسابات المسجلة في المنصة
+                    </span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-[#0A0D12] border border-emerald-500/30 space-y-1.5 sm:col-span-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-emerald-300">
+                        عدد المستخدمين المسجلين دخولهم
+                      </span>
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <div className="flex flex-wrap items-baseline justify-between gap-4">
+                      <div className="text-3xl font-black text-emerald-400 font-mono">
+                        {loggedInUsersCount.toLocaleString()}
+                      </div>
+                      <button
+                        onClick={() => setActiveAdminTab('logged_in_users')}
+                        className="text-xs font-bold text-[#35D6C5] underline hover:text-white cursor-pointer"
+                      >
+                        عرض قائمة حسابات المستخدمين بالتفصيل ←
+                      </button>
+                    </div>
+                    <span className="text-[11px] text-slate-400 block">
+                      المستخدمون الذين قاموا بتسجيل الدخول الفعلي عبر Google أو البريد الإلكتروني
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Daily Visits Interactive Bar Chart & Table */}
+          <div className="rounded-3xl bg-[#101827] border border-white/10 p-6 sm:p-7 space-y-6 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+              <div>
+                <h3 className="text-lg font-black text-white">
+                  مخطط بياني للزيارات حسب اليوم (توقيت بغداد)
+                </h3>
+                <p className="text-xs text-slate-400">
+                  يعرض الأرقام الفعلية المسجلة في قاعدة البيانات لكل يوم دون أي بيانات عشوائية أو وهمية.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setAnalyticsRangeDays(14)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold cursor-pointer ${
+                    analyticsRangeDays === 14
+                      ? 'bg-[#35D6C5] text-[#0A0D12]'
+                      : 'bg-white/5 text-slate-300 hover:bg-white/10'
+                  }`}
+                >
+                  آخر 14 يوماً
+                </button>
+                <button
+                  onClick={() => setAnalyticsRangeDays(30)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold cursor-pointer ${
+                    analyticsRangeDays === 30
+                      ? 'bg-[#35D6C5] text-[#0A0D12]'
+                      : 'bg-white/5 text-slate-300 hover:bg-white/10'
+                  }`}
+                >
+                  آخر 30 يوماً
+                </button>
+              </div>
+            </div>
+
+            {(() => {
+              const series =
+                analyticsRangeDays === 14
+                  ? siteAnalytics.dailySeries14
+                  : siteAnalytics.dailySeries30;
+              const maxVisits = Math.max(1, ...series.map((d) => d.visits));
+
+              return (
+                <div className="space-y-6">
+                  {/* Visual Bar Chart */}
+                  <div className="p-4 sm:p-6 rounded-2xl bg-[#0A0D12] border border-white/10 overflow-x-auto">
+                    <div className="min-w-[620px] h-56 flex items-end gap-2 pt-8 pb-2 px-2">
+                      {series.map((day) => {
+                        const visitsHeightPct =
+                          day.visits > 0
+                            ? Math.max(12, Math.round((day.visits / maxVisits) * 100))
+                            : 4;
+                        const uniqueHeightPct =
+                          day.uniqueVisitors > 0
+                            ? Math.max(10, Math.round((day.uniqueVisitors / maxVisits) * 100))
+                            : 3;
+
+                        return (
+                          <div
+                            key={day.dateKey}
+                            className="flex-1 flex flex-col items-center justify-end h-full group relative"
+                            title={`${day.fullLabel}: ${day.visits} زيارة (${day.uniqueVisitors} زائر مميز)`}
+                          >
+                            <div className="text-[10px] font-mono font-bold text-[#35D6C5] mb-1">
+                              {day.visits > 0 ? day.visits : ''}
+                            </div>
+                            <div className="w-full flex items-end justify-center gap-1 h-36">
+                              <div
+                                style={{ height: `${visitsHeightPct}%` }}
+                                className={`w-3 sm:w-4 rounded-t-md transition-all ${
+                                  day.visits > 0
+                                    ? 'bg-[#35D6C5] group-hover:bg-[#5ce8d8]'
+                                    : 'bg-white/10'
+                                }`}
+                              />
+                              <div
+                                style={{ height: `${uniqueHeightPct}%` }}
+                                className={`w-2.5 sm:w-3 rounded-t-md transition-all ${
+                                  day.uniqueVisitors > 0
+                                    ? 'bg-emerald-500/80 group-hover:bg-emerald-400'
+                                    : 'bg-white/5'
+                                }`}
+                              />
+                            </div>
+                            <span className="mt-2 text-[10px] text-slate-400 font-mono whitespace-nowrap">
+                              {day.shortLabel}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-white/10 text-xs text-slate-400">
+                      <div className="flex items-center gap-4">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 rounded-sm bg-[#35D6C5] inline-block" />
+                          <span>إجمالي الزيارات اليومية</span>
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block" />
+                          <span>الزوار المميزون التقديريون</span>
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-400">
+                        تتحدث الأرقام تلقائياً في الوقت الفعلي عبر Firestore عند دخول أي زائر جديد
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Recent Active Days Table */}
+                  <div className="overflow-x-auto rounded-2xl border border-white/10">
+                    <table className="w-full text-right text-xs">
+                      <thead className="bg-[#0A0D12] text-slate-300 border-b border-white/10">
+                        <tr>
+                          <th className="py-3 px-4 font-bold">التاريخ</th>
+                          <th className="py-3 px-4 font-bold">اليوم</th>
+                          <th className="py-3 px-4 font-bold">إجمالي الزيارات</th>
+                          <th className="py-3 px-4 font-bold">الزوار المميزون التقديريون</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/10 bg-[#0D1522]">
+                        {[...series]
+                          .reverse()
+                          .slice(0, 7)
+                          .map((day) => (
+                            <tr key={day.dateKey} className="hover:bg-white/5">
+                              <td className="py-2.5 px-4 font-mono text-slate-300">{day.dateKey}</td>
+                              <td className="py-2.5 px-4 font-bold text-white">{day.fullLabel}</td>
+                              <td className="py-2.5 px-4 font-mono font-black text-[#35D6C5]">
+                                {day.visits.toLocaleString()}
+                              </td>
+                              <td className="py-2.5 px-4 font-mono font-bold text-emerald-400">
+                                {day.uniqueVisitors.toLocaleString()}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* TAB: FINANCIAL RECORD LINK REQUESTS & STUDENT PENDING PAYMENTS */}
       {activeAdminTab === 'financial_link_requests' && (
@@ -2121,6 +2483,13 @@ export const AdminDashboard: React.FC = () => {
               const isRootAdmin =
                 sup.role === 'super_admin' ||
                 sup.email.toLowerCase() === 'mustafaaalihassonkazh@gmail.com';
+              const effectivePerms: SupervisorPermissions = isRootAdmin
+                ? DEFAULT_SUPER_ADMIN_PERMISSIONS
+                : {
+                    ...DEFAULT_MODERATOR_PERMISSIONS,
+                    ...(sup.permissions || {}),
+                  };
+
               return (
                 <div
                   key={sup.userId}
@@ -2153,7 +2522,7 @@ export const AdminDashboard: React.FC = () => {
                             : 'bg-[#35D6C5]/15 text-[#35D6C5] border-[#35D6C5]/30'
                         }`}
                       >
-                        {isRootAdmin ? 'المشرف العام الأساسي' : 'مشرف معتمد'}
+                        {isRootAdmin ? 'مدير الموقع (كامل الصلاحيات)' : 'مشرف معتمد'}
                       </span>
                     </div>
 
@@ -2170,6 +2539,78 @@ export const AdminDashboard: React.FC = () => {
                           <span className="text-white">{formatArabicDate(sup.createdAt)}</span>
                         </div>
                       )}
+                    </div>
+
+                    {/* Granular 8 Permissions Control Panel */}
+                    <div className="p-3.5 rounded-2xl bg-[#090E17] border border-white/10 space-y-2.5">
+                      <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                        <span className="text-xs font-black text-[#D7B875] flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>صلاحيات المشرف التفصيلية (8 صلاحيات)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {isRootAdmin
+                            ? 'جميع الصلاحيات مفعّلة دائماً'
+                            : isSuperAdmin
+                            ? 'تحكم مباشر من مدير الموقع'
+                            : 'للعرض فقط'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {SUPERVISOR_PERMISSION_META.map((perm) => {
+                          const enabled = Boolean(effectivePerms[perm.key]);
+                          const canToggle = isSuperAdmin && !isRootAdmin;
+                          return (
+                            <button
+                              key={perm.key}
+                              type="button"
+                              disabled={!canToggle}
+                              onClick={async () => {
+                                if (!canToggle) return;
+                                const nextPerms: SupervisorPermissions = {
+                                  ...effectivePerms,
+                                  [perm.key]: !enabled,
+                                };
+                                const res = await updateSupervisorPermissions({
+                                  targetUserId: sup.userId,
+                                  targetName: sup.fullName,
+                                  targetEmail: sup.email,
+                                  permissions: nextPerms,
+                                });
+                                setModActionFeedback({
+                                  type: res.success ? 'success' : 'error',
+                                  text: res.message,
+                                });
+                              }}
+                              title={perm.description}
+                              className={`p-2 rounded-xl border text-right transition-all flex items-center justify-between gap-2 ${
+                                enabled
+                                  ? 'bg-emerald-500/10 border-emerald-500/35 text-emerald-300'
+                                  : 'bg-white/[0.02] border-white/10 text-slate-400'
+                              } ${canToggle ? 'hover:border-[#35D6C5]/50 cursor-pointer' : 'cursor-default'}`}
+                            >
+                              <div className="min-w-0">
+                                <span className="text-[11px] font-bold block truncate">
+                                  {perm.label}
+                                </span>
+                                <span className="text-[9px] text-slate-400 block truncate">
+                                  {perm.description}
+                                </span>
+                              </div>
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-black shrink-0 ${
+                                  enabled
+                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                    : 'bg-slate-800 text-slate-400'
+                                }`}
+                              >
+                                {enabled ? 'مفعّل' : 'معطّل'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
 

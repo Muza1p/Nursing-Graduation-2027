@@ -49,13 +49,23 @@ export const HomePage: React.FC = () => {
 
   const newFeatures = [
     {
-      title: 'استوديو التخرج الذكي (10 قوالب)',
+      title: 'استوديو ترندات التخرج AI 🩺🎓 (42+ فكرة)',
+      description:
+        'اصنع صور تخرج استثنائية مستوحاة من ترند الطفل الممرض، الطفل الخريج، أنا الصغير وأنا الخريج، بوسترات الأفلام، ومجسمات الـ 3D مع الحفاظ على ملامحك.',
+      badge: 'ترندات AI الجديدة 🔥',
+      icon: Sparkles,
+      accent: 'border-[#35D6C5]/50 text-[#35D6C5]',
+      actionLabel: 'افتح استوديو التخرج AI الآن',
+      onClick: () => navigateTo('ai_trends_studio'),
+    },
+    {
+      title: 'استوديو القوالب الكلاسيكية (10 قوالب)',
       description:
         'ارفع صورتك الشخصية مع الحفاظ التام على ملامحك الأصلية، واختر من بين 10 قوالب تخرج احترافية بالوشاح التركوازي وقبعة التخرج والسماعة الطبية.',
-      badge: 'جديد وحصري',
+      badge: 'قوالب استوديو',
       icon: Sparkles,
       accent: 'border-[#35D6C5]/40 text-[#35D6C5]',
-      actionLabel: 'جرّب استوديو التخرج الآن',
+      actionLabel: 'جرّب القوالب الكلاسيكية',
       onClick: () => navigateTo('graduation_studio'),
     },
     {

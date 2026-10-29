@@ -35,11 +35,11 @@ export const BottomNav: React.FC = () => {
     },
     {
       key: 'studio',
-      label: 'الاستوديو',
+      label: 'استوديو AI',
       icon: Sparkles,
-      isActive: currentPage === 'graduation_studio',
+      isActive: currentPage === 'ai_trends_studio' || currentPage === 'graduation_studio',
       onClick: () => {
-        navigateTo('graduation_studio');
+        navigateTo('ai_trends_studio');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       },
     },

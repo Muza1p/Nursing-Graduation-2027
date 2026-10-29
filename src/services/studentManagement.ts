@@ -61,7 +61,9 @@ export function normalizeArabicName(name: string): string {
     .replace(/عالوي/g, 'علاوي')
     .replace(/عبداالمير/g, 'عبدالامير')
     .replace(/عبد\s+االمير/g, 'عبدالامير')
-    // Normalize common compound spacing like "عبد الله" -> "عبدالله"
+    // Normalize common compound spacing like "عبد الله" -> "عبدالله" and attached words like "سؤددوليد" -> "سؤدد وليد"
+    .replace(/سؤدد\s*وليد/g, 'سؤدد وليد')
+    .replace(/سودد\s*وليد/g, 'سودد وليد')
     .replace(/عبد\s+الله/g, 'عبدالله')
     .replace(/عبد\s+الحسين/g, 'عبدالحسين')
     .replace(/عبد\s+الامير/g, 'عبدالامير')
@@ -383,7 +385,7 @@ export const REVIEW_14_CANDIDATES_MAP = new Map<
   ],
 ]);
 
-// Calculate balance and payment status strictly from verified payments (Requirement 3 & 5)
+// Calculate balance and payment status strictly from verified payments (Requirement 3, 5, 7, 9)
 export function recalculateStudentFinancials(
   student: ScrubStudent,
   allPaymentsForStudent: StudentPayment[]
@@ -392,23 +394,38 @@ export function recalculateStudentFinancials(
     (p) => p.studentId === student.id && p.verificationStatus !== 'voided'
   );
 
-  const verifiedPaidIQD = activePayments
-    .filter((p) => p.isVerified && p.verificationStatus === 'verified')
-    .reduce((sum, p) => sum + Math.max(0, Math.round(Number(p.amountIQD) || 0)), 0);
+  const verifiedList = activePayments.filter(
+    (p) => p.isVerified && p.verificationStatus === 'verified'
+  );
+
+  const verifiedPaidIQD = verifiedList.reduce(
+    (sum, p) => sum + Math.max(0, Math.round(Number(p.amountIQD) || 0)),
+    0
+  );
 
   const pendingPaidIQD = activePayments
     .filter((p) => !p.isVerified || p.verificationStatus === 'pending')
     .reduce((sum, p) => sum + Math.max(0, Math.round(Number(p.amountIQD) || 0)), 0);
 
-  const totalFeeIQD = student.totalFeeIQD > 0 ? Math.round(student.totalFeeIQD) : 35000;
-  // Remaining balance = Total fee - Sum of verified payments (never silent negative)
-  const remainingBalanceIQD = Math.max(0, totalFeeIQD - verifiedPaidIQD);
+  const latestVerifiedDate = verifiedList
+    .map((p) => p.date)
+    .filter(Boolean)
+    .sort()
+    .pop();
+
+  const totalFeeIQD = student.totalFeeIQD >= 0 ? Math.round(student.totalFeeIQD) : 35000;
+  const settlementAdj = Math.max(0, Math.round(Number(student.settlementAdjustmentIQD) || 0));
+  // Remaining balance = Total fee - Sum of verified payments - Administrative settlement adjustment
+  const remainingBalanceIQD = Math.max(0, totalFeeIQD - verifiedPaidIQD - settlementAdj);
   const effectiveNeedsReview = verifiedPaidIQD > 0 ? false : Boolean(student.needsReview);
-  const paymentStatus: PaymentStatus = calculatePaymentStatus(
-    verifiedPaidIQD,
-    totalFeeIQD,
-    effectiveNeedsReview
-  );
+  const paymentStatus: PaymentStatus =
+    remainingBalanceIQD === 0 && (verifiedPaidIQD > 0 || settlementAdj > 0 || totalFeeIQD === 0)
+      ? 'completed'
+      : calculatePaymentStatus(
+          verifiedPaidIQD,
+          totalFeeIQD,
+          effectiveNeedsReview
+        );
 
   return {
     ...student,
@@ -416,6 +433,8 @@ export function recalculateStudentFinancials(
     verifiedPaidIQD,
     pendingPaidIQD,
     remainingBalanceIQD,
+    settlementAdjustmentIQD: settlementAdj,
+    lastPaymentDate: latestVerifiedDate || student.lastPaymentDate,
     needsReview: effectiveNeedsReview,
     paymentStatus,
     matchStatus:
@@ -737,17 +756,28 @@ export async function syncScrubRosterFromFirestore(): Promise<{
         existingGraduates: LocalStorageManager.getGraduates(),
         actorName: 'النظام الآلي — تدقيق ومطابقة القوائم الرسمية (244 طالب)',
       });
+      const rec46 = await reconcileAndImportSubmitted46Names({
+        existingStudents: mergedReport.students,
+        existingPayments: mergedReport.studentPayments,
+        actorName: 'النظام الآلي — فحص ومطابقة قائمة الـ 46 طالباً',
+      });
       return {
-        students: mergedReport.students,
+        students: rec46.students,
         studentPayments: mergedReport.studentPayments,
       };
     }
 
-    ScrubStudentStorage.saveStudents(recalculated);
+    const rec46 = await reconcileAndImportSubmitted46Names({
+      existingStudents: recalculated,
+      existingPayments: fsPayments,
+      actorName: 'النظام الآلي — فحص ومطابقة قائمة الـ 46 طالباً',
+    });
+
+    ScrubStudentStorage.saveStudents(rec46.students);
     ScrubStudentStorage.saveStudentPayments(fsPayments);
     ScrubStudentStorage.markInitialImportDone();
 
-    return { students: recalculated, studentPayments: fsPayments };
+    return { students: rec46.students, studentPayments: fsPayments };
   } catch (err) {
     console.warn('syncScrubRosterFromFirestore note:', err);
     return null;
@@ -1744,3 +1774,408 @@ export function exportScrubFullBackupJSON(
     2
   );
 }
+
+// ============================================================================
+// FEATURE 2: 46 Submitted Student Names Audit, Deduplication & Reconciliation
+// ============================================================================
+
+export const SUBMITTED_46_RAW_NAMES_WITH_DUPLICATE_NOTE: string[] = [
+  'حسين علاء كاظم',
+  'علي محمد',
+  'عباس حمزة عودة',
+  'زهراء عبدالله',
+  'محمد باقر',
+  'علي قاسم',
+  'صفا محمد',
+  'شيماء حيدر',
+  'شهد هاشم',
+  'سؤددوليد',
+  'علي اكبر',
+  'غدير مؤيد',
+  'علي جميل',
+  'زهراء حسين مهلي',
+  'رقية اسماعيل',
+  'حسين مثنى',
+  'حسين كاظم',
+  'شيماء جابر',
+  'نور مشتاق',
+  'حوراء كاظم ظاهر',
+  'منار ستار',
+  'يوسف احمد',
+  'مصطفى احمد موحان',
+  'ايات ثائر',
+  'مريم صباح',
+  'طيبة عقيل',
+  'عباس خضير',
+  'عباس خضير', // Duplicate noted in source ("عباس خضير مكرر مرتين") — handled as 1 single record
+  'عباس محمد شيال ١',
+  'كرار احمد',
+  'عبدالله جمال',
+  'زهراء جبار حاكم',
+  'زهراء هادي عبيس',
+  'سكينة قيس',
+  'ضحى رياض',
+  'نرجس مالك',
+  'ملاك فالح',
+  'اسراء رضا علي',
+  'دعاء فوزي',
+  'علي حسين نعيم',
+  'محمد قاسم',
+  'مريم سالم حمزة',
+  'كرار حيدر',
+  'حسين سعد',
+  'ايات حاتم درسون',
+  'سيف مهند',
+  'زهراء علي كريم',
+];
+
+export interface Reconciliation46Report {
+  totalUniqueInList: number; // 46
+  rawListCount: number; // 47 (including the noted duplicate of عباس خضير)
+  newlyAddedNames: Array<{
+    indexIn46: number;
+    submittedName: string;
+    assignedStudentNumber: number;
+    studentId: string;
+    similarExistingRecords: string[];
+    note: string;
+  }>;
+  alreadyExistingNames: Array<{
+    indexIn46: number;
+    submittedName: string;
+    matchedStudentNumber: number;
+    matchedFullName: string;
+    matchType: 'exact_name' | 'existing_linked_record';
+  }>;
+  preventedDuplicates: Array<{
+    submittedName: string;
+    reason: string;
+  }>;
+  similarNamesForManualReview: Array<{
+    indexIn46: number;
+    submittedName: string;
+    candidateRecords: Array<{
+      studentNumber: number;
+      fullName: string;
+      section?: string;
+    }>;
+    reviewReason: string;
+  }>;
+  failedNames: Array<{
+    submittedName: string;
+    reason: string;
+  }>;
+  executedAt: string;
+}
+
+const RECONCILIATION_46_REPORT_STORAGE_KEY = 'nursing2027_reconciliation_46_report_v1';
+
+export function getSavedReconciliation46Report(): Reconciliation46Report | null {
+  try {
+    const raw = localStorage.getItem(RECONCILIATION_46_REPORT_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as Reconciliation46Report;
+  } catch {
+    return null;
+  }
+}
+
+function stripTrailingNumeralsForSimilarity(norm: string): string {
+  return norm.replace(/\s*[٠-٩0-9]+$/g, '').trim();
+}
+
+/**
+ * Audits the 46 submitted student names against the current database (`scrubStudents`):
+ * - Ignores extra spaces, repeated spaces, diacritics (tashkeel), and attached compound words (`سؤددوليد` <-> `سؤدد وليد`).
+ * - Preserves original Arabic name (including numerals like `عباس محمد شيال ١` and 2-part names like `علي محمد`) without inventing a 3rd name.
+ * - Treats duplicate `عباس خضير` as a single record and logs the prevented duplicate.
+ * - Never deletes any existing student and never alters paid/remaining amounts of any existing student.
+ * - Idempotent: running multiple times never creates duplicate records.
+ */
+export async function reconcileAndImportSubmitted46Names(params: {
+  existingStudents: ScrubStudent[];
+  existingPayments: StudentPayment[];
+  actorName: string;
+}): Promise<{
+  students: ScrubStudent[];
+  report: Reconciliation46Report;
+}> {
+  const { existingStudents, existingPayments, actorName } = params;
+  const nowIso = new Date().toISOString();
+  const todayDate = nowIso.split('T')[0];
+
+  const updatedStudents = deduplicateStudentsList([...existingStudents]);
+  const activeStudents = updatedStudents.filter((s) => s.status === 'active');
+
+  const newlyAddedNames: Reconciliation46Report['newlyAddedNames'] = [];
+  const alreadyExistingNames: Reconciliation46Report['alreadyExistingNames'] = [];
+  const preventedDuplicates: Reconciliation46Report['preventedDuplicates'] = [];
+  const similarNamesForManualReview: Reconciliation46Report['similarNamesForManualReview'] = [];
+  const failedNames: Reconciliation46Report['failedNames'] = [];
+
+  // Step 1: Deduplicate raw input list while recording prevented duplicates (e.g., عباس خضير)
+  const seenNormalizedInInput = new Map<string, string>();
+  const uniqueSubmittedList: Array<{ indexIn46: number; rawName: string; normName: string }> = [];
+
+  for (const rawItem of SUBMITTED_46_RAW_NAMES_WITH_DUPLICATE_NOTE) {
+    const cleanedDisplay = rawItem.trim().replace(/\s+/g, ' ');
+    const norm = normalizeArabicName(cleanedDisplay);
+    if (!norm) continue;
+
+    if (seenNormalizedInInput.has(norm)) {
+      preventedDuplicates.push({
+        submittedName: cleanedDisplay,
+        reason:
+          'تكرار داخل القائمة المرسلة («عباس خضير» مكرر مرتين) — تم التعامل معه كسجل واحد فقط ومنع إضافته مرة ثانية.',
+      });
+      continue;
+    }
+
+    seenNormalizedInInput.set(norm, cleanedDisplay);
+    uniqueSubmittedList.push({
+      indexIn46: uniqueSubmittedList.length + 1,
+      rawName: cleanedDisplay,
+      normName: norm,
+    });
+  }
+
+  // Step 2: Inspect each of the 46 unique names against the existing database
+  const newlyCreatedRecords: ScrubStudent[] = [];
+
+  for (const item of uniqueSubmittedList) {
+    const { indexIn46, rawName, normName } = item;
+    const deterministic46Id = `scrub-stu-2027-list46-${String(indexIn46).padStart(3, '0')}`;
+
+    try {
+      // 1. Check if an exact fullName match or deterministic46Id already exists in activeStudents
+      const exactFullNameMatch = activeStudents.find(
+        (s) =>
+          s.id === deterministic46Id ||
+          normalizeArabicName(s.fullName) === normName
+      );
+
+      // 2. Check if already linked via matchedOldPaymentName on a confirmed record (and exact string matches)
+      const exactOldPaymentMatch = activeStudents.find(
+        (s) =>
+          s.matchedOldPaymentName &&
+          normalizeArabicName(s.matchedOldPaymentName) === normName
+      );
+
+      // Find similar records in the 244 official roster / activeStudents (by prefix or without trailing numeral)
+      const normBase = stripTrailingNumeralsForSimilarity(normName);
+      const baseTokens = normBase.split(' ').filter(Boolean);
+      const hasNumeral = normBase !== normName;
+
+      const similarCandidates = activeStudents.filter((s) => {
+        if (s.id.startsWith('scrub-stu-2027-list46-')) return false;
+        const sNorm = normalizeArabicName(s.fullName);
+        if (sNorm === normName) return false;
+        const sTokens = sNorm.split(' ').filter(Boolean);
+        if (baseTokens.length >= 2 && sTokens.length >= baseTokens.length) {
+          return baseTokens.every((tok, idx) => sTokens[idx] === tok);
+        }
+        return false;
+      });
+
+      // If this is a 2-part name or numbered name or has multiple candidates, always include in similarNamesForManualReview for supervisor visibility
+      if (similarCandidates.length > 0 && (baseTokens.length === 2 || hasNumeral || similarCandidates.length > 1 || !exactOldPaymentMatch)) {
+        const reasonText = hasNumeral
+          ? `اسم يحتوي على رقم («${rawName}») يتشابه مع سجل بدون رقم في القائمة الرسمية (${similarCandidates.map((c) => c.fullName).join(' ، ')}). تم حفظه كما هو وعرضه للمراجعة اليدوية.`
+          : similarCandidates.length > 1
+          ? `اسم ثنائي («${rawName}») يتشابه مع (${similarCandidates.length}) سجلات رباعية مختلفة في قاعدة البيانات (${similarCandidates.map((c) => `ت ${c.studentNumber}: ${c.fullName}`).join(' | ')}). لم يُدمج تلقائياً لمنع الخلط.`
+          : baseTokens.length === 2
+          ? `اسم ثنائي («${rawName}») يقابله سجل رباعي مشابه في القائمة الرسمية (ت ${similarCandidates[0].studentNumber}: ${similarCandidates[0].fullName}).`
+          : `تشابه في الاسم الثلاثي («${rawName}») مع السجل الرسمي (ت ${similarCandidates[0].studentNumber}: ${similarCandidates[0].fullName}).`;
+
+        similarNamesForManualReview.push({
+          indexIn46,
+          submittedName: rawName,
+          candidateRecords: similarCandidates.map((c) => ({
+            studentNumber: c.studentNumber,
+            fullName: c.fullName,
+            section: c.section,
+          })),
+          reviewReason: reasonText,
+        });
+      }
+
+      // Case A: Exact fullName match already in database (or previously added by this reconciliation)
+      if (exactFullNameMatch) {
+        alreadyExistingNames.push({
+          indexIn46,
+          submittedName: rawName,
+          matchedStudentNumber: exactFullNameMatch.studentNumber,
+          matchedFullName: exactFullNameMatch.fullName,
+          matchType: 'exact_name',
+        });
+        preventedDuplicates.push({
+          submittedName: rawName,
+          reason: `موجود مسبقاً في قاعدة البيانات برقم تسلسلي (${exactFullNameMatch.studentNumber}) — تم منع تكرار السجل.`,
+        });
+        continue;
+      }
+
+      // Case B: Already linked to an existing confirmed deposit record (the 38 unambiguous records)
+      if (exactOldPaymentMatch) {
+        alreadyExistingNames.push({
+          indexIn46,
+          submittedName: rawName,
+          matchedStudentNumber: exactOldPaymentMatch.studentNumber,
+          matchedFullName: exactOldPaymentMatch.fullName,
+          matchType: 'existing_linked_record',
+        });
+        preventedDuplicates.push({
+          submittedName: rawName,
+          reason: `موثق ومرتبط مسبقاً بالسجل رقم (${exactOldPaymentMatch.studentNumber}: ${exactOldPaymentMatch.fullName}) — تم منع التكرار مع الحفاظ على الرصيد المالي الحالي دون تغيير.`,
+        });
+        continue;
+      }
+
+      // Case C: Name is NOT in the database yet (e.g., علي محمد, عباس حمزة عودة, سؤددوليد, علي اكبر, زهراء حسين مهلي, عباس محمد شيال ١, زهراء جبار حاكم, محمد قاسم)
+      // Add it as a new record preserving its exact Arabic name as provided without inventing a 3rd/4th name!
+      const nextNum = getNextSequentialStudentNumber([
+        ...updatedStudents,
+        ...newlyCreatedRecords,
+      ]);
+      const similarSummary = similarCandidates
+        .map((c) => `(ت ${c.studentNumber}: ${c.fullName})`)
+        .join(' ، ');
+
+      const reviewNote =
+        similarCandidates.length > 0
+          ? `سجل مضاف من قائمة الـ 46 طالباً بالاسم الأصلي («${rawName}»). يتشابه مع: ${similarSummary} — بانتظار المراجعة اليدوية للمشرف دون دمج تلقائي.`
+          : undefined;
+
+      const newStu: ScrubStudent = recalculateStudentFinancials(
+        {
+          id: deterministic46Id,
+          studentNumber: nextNum,
+          section: similarCandidates[0]?.section || 'قائمة الـ 46 المضافة',
+          fullName: rawName, // Preserved exact Arabic name (including 'عباس محمد شيال ١', 'سؤددوليد', 2-part names, etc.)
+          normalizedName: normName,
+          preferredTitle: rawName.startsWith('زهراء') ||
+            rawName.startsWith('صفا') ||
+            rawName.startsWith('شيماء') ||
+            rawName.startsWith('شهد') ||
+            rawName.startsWith('سؤدد') ||
+            rawName.startsWith('غدير') ||
+            rawName.startsWith('رقية') ||
+            rawName.startsWith('نور') ||
+            rawName.startsWith('حوراء') ||
+            rawName.startsWith('منار') ||
+            rawName.startsWith('ايات') ||
+            rawName.startsWith('مريم') ||
+            rawName.startsWith('طيبة') ||
+            rawName.startsWith('سكينة') ||
+            rawName.startsWith('ضحى') ||
+            rawName.startsWith('نرجس') ||
+            rawName.startsWith('ملاك') ||
+            rawName.startsWith('اسراء') ||
+            rawName.startsWith('دعاء')
+            ? 'nurse_f'
+            : 'nurse_m',
+          totalFeeIQD: 35000,
+          verifiedPaidIQD: 0,
+          pendingPaidIQD: 0,
+          remainingBalanceIQD: 35000,
+          paymentStatus: similarCandidates.length > 0 ? 'needs_review' : 'unpaid',
+          status: 'active',
+          isLinkedToAccount: false,
+          needsReview: similarCandidates.length > 0,
+          reviewNote,
+          potentialMatchId: similarCandidates[0]?.id,
+          potentialMatchName: similarCandidates[0]?.fullName,
+          matchStatus: similarCandidates.length > 0 ? 'needs_review' : 'unmatched',
+          matchedOldPaymentName: rawName,
+          notes:
+            reviewNote ||
+            `تمت إضافته من مراجعة قائمة الـ 46 طالباً بالاسم الأصلي («${rawName}»).`,
+          createdAt: todayDate,
+          updatedAt: nowIso,
+        },
+        existingPayments
+      );
+
+      newlyCreatedRecords.push(newStu);
+      newlyAddedNames.push({
+        indexIn46,
+        submittedName: rawName,
+        assignedStudentNumber: nextNum,
+        studentId: deterministic46Id,
+        similarExistingRecords: similarCandidates.map(
+          (c) => `ت ${c.studentNumber}: ${c.fullName}`
+        ),
+        note:
+          similarCandidates.length > 0
+            ? `أُضيف بالاسم الأصلي كما ورد وتم تصنيفه ضمن «أسماء متشابهة تحتاج مراجعة يدوية» لوجود: ${similarSummary}`
+            : 'أُضيف كسجل جديد مستقل.',
+      });
+    } catch (err: any) {
+      failedNames.push({
+        submittedName: rawName,
+        reason: err?.message || 'خطأ غير متوقع أثناء فحص السجل',
+      });
+    }
+  }
+
+  const finalStudents = deduplicateStudentsList([
+    ...updatedStudents,
+    ...newlyCreatedRecords,
+  ]);
+
+  // Persist updated students to LocalStorage
+  ScrubStudentStorage.saveStudents(finalStudents);
+
+  // Persist any newly created records to Firestore without touching or deleting existing records
+  if (newlyCreatedRecords.length > 0) {
+    try {
+      const batch = writeBatch(db);
+      for (const stu of newlyCreatedRecords) {
+        const cleanStu = Object.fromEntries(
+          Object.entries(stu).filter(([_, v]) => v !== undefined)
+        );
+        batch.set(doc(db, 'scrub_students', stu.id), cleanStu, { merge: true });
+      }
+      await batch.commit();
+    } catch (e) {
+      console.warn('Firestore reconcileAndImportSubmitted46Names sync notice:', e);
+    }
+
+    await recordSystemAuditLog({
+      action: 'فحص ومطابقة قائمة الـ 46 طالباً وإضافة السجلات الناقصة دون تكرار',
+      performedBy: actorName,
+      details: `تم فحص 46 اسماً (47 مدخلاً خام مع منع تكرار «عباس خضير»): تمت إضافة (${newlyAddedNames.length}) سجل ناقص بالاسم الأصلي، وتأكيد وجود (${alreadyExistingNames.length}) سجل مسبقاً، وتحديد (${similarNamesForManualReview.length}) حالة تشابه للمراجعة اليدوية دون المساس بأي مبالغ مدفوعة.`,
+      affectedCount: newlyAddedNames.length,
+      entityType: 'scrub_student',
+    });
+  }
+
+  // Save report to localStorage so it remains visible even after page reloads
+  // If newlyAddedNames is 0 on a subsequent run, preserve the first run's newlyAddedNames list if it was already executed so the admin can still inspect which records were added, while showing current verification status
+  const previousReport = getSavedReconciliation46Report();
+  const report: Reconciliation46Report = {
+    totalUniqueInList: uniqueSubmittedList.length,
+    rawListCount: SUBMITTED_46_RAW_NAMES_WITH_DUPLICATE_NOTE.length,
+    newlyAddedNames:
+      newlyAddedNames.length > 0
+        ? newlyAddedNames
+        : previousReport?.newlyAddedNames || [],
+    alreadyExistingNames,
+    preventedDuplicates,
+    similarNamesForManualReview,
+    failedNames,
+    executedAt: nowIso,
+  };
+
+  try {
+    localStorage.setItem(RECONCILIATION_46_REPORT_STORAGE_KEY, JSON.stringify(report));
+  } catch {
+    // ignore
+  }
+
+  return {
+    students: finalStudents,
+    report,
+  };
+}
+

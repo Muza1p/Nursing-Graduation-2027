@@ -11,7 +11,7 @@ export type UserRole =
   | 'gallery_moderator'
   | 'notification_manager';
 
-export type PaymentMethod = 'cash' | 'bank_transfer';
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'superqi' | 'zaincash';
 
 export type PaymentEventTarget = 'scrub_night' | 'official_grad';
 
@@ -219,7 +219,9 @@ export interface ScrubStudent {
   totalFeeIQD: number; // 35,000 IQD
   verifiedPaidIQD: number; // Sum of verified payments
   pendingPaidIQD: number; // Sum of pending/unverified payments
-  remainingBalanceIQD: number; // Total fee - Sum of verified payments
+  remainingBalanceIQD: number; // Total fee - Sum of verified payments - settlementAdjustmentIQD
+  settlementAdjustmentIQD?: number; // Administrative financial settlement / exemption discount
+  lastPaymentDate?: string; // Most recent verified payment date
   paymentStatus: PaymentStatus; // 'unpaid' | 'deposit' | 'partial' | 'completed'
   status: 'active' | 'archived'; // Soft-deletion / archival status
   isLinkedToAccount: boolean; // False initially unless verified by admin
@@ -440,4 +442,107 @@ export interface GraduationSong {
   updatedAt?: string;
   uploadedBy?: string;
 }
+
+export interface SupervisorPermissions {
+  view_payments_list: boolean;        // مشاهدة قائمة الدفعات
+  view_financial_receipts: boolean;   // مشاهدة الوصولات المالية
+  analyze_receipts: boolean;          // تحليل الوصولات
+  record_manual_payment: boolean;     // تسجيل دفعة يدوية
+  edit_financial_amounts: boolean;    // تعديل المبالغ
+  approve_reject_payments: boolean;   // الموافقة على الدفعات أو رفضها
+  manage_students: boolean;           // إدارة الطلاب
+  manage_financial_settings: boolean; // إدارة الإعدادات المالية
+}
+
+export type ReceiptAiClassification =
+  | 'البيانات متطابقة مبدئياً'
+  | 'المبلغ غير متطابق'
+  | 'رقم العملية مكرر'
+  | 'بيانات المستلم غير واضحة'
+  | 'الصورة غير واضحة'
+  | 'يحتاج إلى مراجعة المشرف';
+
+export interface ReceiptAiAnalysisResult {
+  analyzedAt: string;
+  analyzedByEngine: 'gemini_ai' | 'local_heuristic_fallback';
+  classification: ReceiptAiClassification;
+  extractedAmountIQD: number | null;
+  extractedDateTime: string | null;
+  extractedReferenceNumber: string | null;
+  extractedSenderName: string | null;
+  extractedRecipientInfo: string | null;
+  recipientCardMatched: boolean;
+  extractedStatus: string | null;
+  isImageClear: boolean;
+  amountMatchesSubmitted: boolean;
+  isDuplicateReference: boolean;
+  isDuplicateImageHash: boolean;
+  discrepancies: string[];
+  summaryArabic: string;
+  requiresHumanSupervisorReview: boolean;
+}
+
+export interface PaymentReceiptSubmission {
+  id: string;
+  studentId: string; // ScrubStudent.id or 'unconfirmed_identity'
+  studentNumber?: number;
+  studentName: string; // Selected official student name
+  submittedRawName: string; // Name typed/confirmed by student
+  identityConfirmed: boolean;
+  submitterUid?: string;
+  submitterEmail?: string;
+  eventTarget: PaymentEventTarget;
+  paymentChannel: 'superqi';
+  recipientCardNumber: string; // '6132013829'
+  amountIQD: number;
+  transactionReference?: string;
+  transactionDate?: string;
+  notes?: string;
+  vaultReceiptId: string; // Reference to /private_receipt_vault/{vaultReceiptId}
+  imageMimeType: string;
+  imageSizeBytes: number;
+  imageSha256: string;
+  status: 'pending_review' | 'approved' | 'rejected';
+  idempotencyKey: string;
+  approvedPaymentId?: string;
+  reviewedByUid?: string;
+  reviewedByName?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
+  rejectionReason?: string;
+  aiAnalysis?: ReceiptAiAnalysisResult;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface PrivateReceiptVaultItem {
+  id: string;
+  submissionId: string;
+  studentId: string;
+  submitterUid?: string;
+  encryptedPayload: string;
+  mimeType: string;
+  imageSha256: string;
+  createdAt: string;
+}
+
+export interface FinancialSettlementRecord {
+  id: string;
+  studentId: string;
+  studentNumber: number;
+  studentName: string;
+  previousTotalFeeIQD: number;
+  newTotalFeeIQD: number;
+  previousPaidIQD: number;
+  newPaidIQD: number;
+  previousRemainingIQD: number;
+  newRemainingIQD: number;
+  settlementDeltaIQD: number; // Positive = discount/exemption reducing remaining balance
+  reason: string;
+  performedBy: string;
+  performedByUid: string;
+  performedByEmail?: string;
+  createdAt: string;
+}
+
 

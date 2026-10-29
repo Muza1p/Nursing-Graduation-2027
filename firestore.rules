@@ -151,5 +151,100 @@ service cloud.firestore {
         incoming().templateId is string && incoming().templateId.size() > 0;
       allow delete: if isValidId(designId);
     }
+
+    // 14. Website Visitor Analytics Summary (/site_analytics/{docId})
+    match /site_analytics/{docId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(docId) &&
+        incoming().totalVisits is number && incoming().totalVisits >= 0 &&
+        incoming().uniqueVisitorsEstimate is number && incoming().uniqueVisitorsEstimate >= 0 &&
+        incoming().lastUpdatedAt is string && incoming().lastUpdatedAt.size() >= 10;
+      allow delete: if false;
+    }
+
+    // 15. Daily Website Visitor Analytics (/site_analytics_daily/{dateKey})
+    match /site_analytics_daily/{dateKey} {
+      allow get, list: if true;
+      allow create, update: if isValidId(dateKey) &&
+        incoming().dateKey is string && incoming().dateKey.size() == 10 &&
+        incoming().visits is number && incoming().visits >= 0 &&
+        incoming().uniqueVisitors is number && incoming().uniqueVisitors >= 0 &&
+        incoming().updatedAt is string && incoming().updatedAt.size() >= 10;
+      allow delete: if false;
+    }
+
+    // 16. SuperQi Payment Receipt Submissions Metadata (/payment_receipt_submissions/{submissionId})
+    match /payment_receipt_submissions/{submissionId} {
+      allow get, list: if true;
+      allow create: if isValidId(submissionId) &&
+        incoming().studentId is string && incoming().studentId.size() > 0 &&
+        incoming().studentName is string && incoming().studentName.size() >= 2 && incoming().studentName.size() <= 120 &&
+        incoming().amountIQD is number && incoming().amountIQD > 0 && incoming().amountIQD <= 500000 &&
+        incoming().vaultReceiptId is string && incoming().vaultReceiptId.size() > 0 &&
+        incoming().status in ['pending_review', 'approved', 'rejected'];
+      allow update: if isValidId(submissionId) &&
+        incoming().status in ['pending_review', 'approved', 'rejected'];
+      allow delete: if false;
+    }
+
+    // 17. Permission-Protected Private Receipt Image Vault (/private_receipt_vault/{vaultId})
+    // Enumeration (list) is strictly forbidden so no one can scrape or list receipt images.
+    match /private_receipt_vault/{vaultId} {
+      allow get: if isValidId(vaultId);
+      allow list: if false;
+      allow create: if isValidId(vaultId) &&
+        incoming().submissionId is string && incoming().submissionId.size() > 0 &&
+        incoming().encryptedPayload is string && incoming().encryptedPayload.size() > 20 &&
+        incoming().imageSha256 is string && incoming().imageSha256.size() >= 16;
+      allow update, delete: if false;
+    }
+
+    // 18. Immutable Administrative Financial Settlements (/financial_settlements/{settlementId})
+    match /financial_settlements/{settlementId} {
+      allow get, list: if true;
+      allow create: if isValidId(settlementId) &&
+        incoming().studentId is string && incoming().studentId.size() > 0 &&
+        incoming().reason is string && incoming().reason.size() >= 2 &&
+        incoming().performedBy is string && incoming().performedBy.size() >= 2;
+      allow update, delete: if false;
+    }
+
+    // 19. Private AI Trend Creations (/ai_trend_creations/{creationId})
+    // Strict Privacy: Enumeration (list) is disabled so no user can ever browse another student's private creations.
+    match /ai_trend_creations/{creationId} {
+      allow get: if isValidId(creationId);
+      allow list: if false;
+      allow create, update: if isValidId(creationId) &&
+        incoming().ownerUid is string && incoming().ownerUid.size() > 0 &&
+        incoming().title is string && incoming().title.size() >= 2 && incoming().title.size() <= 160;
+      allow delete: if isValidId(creationId);
+    }
+
+    // 20. Public Opt-In Shared AI Trend Gallery (/ai_trend_shared_gallery/{itemId})
+    match /ai_trend_shared_gallery/{itemId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(itemId) &&
+        incoming().ownerUid is string && incoming().ownerUid.size() > 0 &&
+        incoming().title is string && incoming().title.size() >= 2 && incoming().title.size() <= 160;
+      allow delete: if isValidId(itemId);
+    }
+
+    // 21. Site Manager Custom AI Trend Ideas & Categories (/ai_trend_custom_ideas/{ideaId})
+    match /ai_trend_custom_ideas/{ideaId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(ideaId) &&
+        incoming().title is string && incoming().title.size() >= 2 && incoming().title.size() <= 160 &&
+        incoming().promptTemplate is string && incoming().promptTemplate.size() >= 5;
+      allow delete: if isValidId(ideaId);
+    }
+
+    // 22. Aggregate AI Trend Studio Usage Stats (/ai_trend_stats/{docId})
+    match /ai_trend_stats/{docId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(docId) &&
+        incoming().totalCreations is number && incoming().totalCreations >= 0;
+      allow delete: if false;
+    }
   }
 }
+
