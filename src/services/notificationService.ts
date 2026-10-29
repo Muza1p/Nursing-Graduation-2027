@@ -17,6 +17,11 @@ export type NotificationType =
   | 'moderator_request'
   | 'moderator_approval'
   | 'announcement'
+  | 'event_update'
+  | 'financial_link_approved'
+  | 'payment_status'
+  | 'receipt_added'
+  | 'account_alert'
   | 'song'
   | 'general';
 

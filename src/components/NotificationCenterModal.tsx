@@ -112,7 +112,15 @@ export const NotificationCenterModal: React.FC<{ isOpen: boolean; onClose: () =>
       case 'moderator_request':
         return <ShieldCheck className="w-4 h-4 text-[#D7B875]" />;
       case 'moderator_approval':
+      case 'financial_link_approved':
         return <CheckCircle2 className="w-4 h-4 text-[#21D4C2]" />;
+      case 'payment_status':
+      case 'receipt_added':
+        return <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
+      case 'event_update':
+        return <Radio className="w-4 h-4 text-[#D7B875]" />;
+      case 'account_alert':
+        return <Bell className="w-4 h-4 text-[#35D6C5]" />;
       case 'song':
         return <Music className="w-4 h-4 text-[#A78BFA]" />;
       case 'announcement':

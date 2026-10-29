@@ -72,24 +72,8 @@ export const Hero: React.FC = () => {
               </p>
             </div>
 
-            {/* Primary Navigation CTAs Matching the 4 Core Destinations */}
+            {/* Primary Navigation CTAs Matching User Requirements */}
             <div className="grid grid-cols-1 sm:grid-cols-3 items-center justify-center lg:justify-start gap-2.5 sm:gap-3 pt-1">
-              <button
-                onClick={() => navigateTo('payments')}
-                className="w-full justify-center px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl font-black text-xs sm:text-sm text-[#10151C] bg-gradient-to-r from-[#35D6C5] to-[#A6F0DF] hover:opacity-95 shadow-lg shadow-[#35D6C5]/20 transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
-              >
-                <GraduationCap className="w-4 h-4 shrink-0" />
-                <span className="truncate">قائمة الطلاب والدفعات</span>
-              </button>
-
-              <button
-                onClick={() => navigateTo('events')}
-                className="w-full justify-center px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm text-[#E8EEF2] bg-[#142638] hover:bg-[#1C354A] border border-white/15 hover:border-[#35D6C5]/40 transition-all flex items-center gap-2 cursor-pointer"
-              >
-                <CalendarDays className="w-4 h-4 text-[#35D6C5] shrink-0" />
-                <span className="truncate">فعاليات تخرج دفعة 2027</span>
-              </button>
-
               <button
                 onClick={() => {
                   if (currentUser) {
@@ -102,10 +86,30 @@ export const Hero: React.FC = () => {
                     navigateTo('login');
                   }
                 }}
-                className="w-full justify-center px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm text-[#D6B777] hover:text-white bg-[#D6B777]/10 hover:bg-[#D6B777]/20 border border-[#D6B777]/35 transition-all flex items-center gap-2 cursor-pointer"
+                className="w-full justify-center px-4 sm:px-5 py-3.5 rounded-xl font-black text-xs sm:text-sm text-[#0A0D12] bg-gradient-to-r from-[#35D6C5] via-[#A6F0DF] to-[#D7B875] hover:opacity-95 shadow-xl shadow-[#35D6C5]/25 transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
               >
                 <User className="w-4 h-4 shrink-0" />
-                <span className="truncate">{currentUser ? 'حسابي' : 'الدخول'}</span>
+                <span className="truncate">
+                  {currentUser
+                    ? 'دخول لوحتي الشخصية'
+                    : 'تسجيل الدخول واكتشاف جميع المزايا'}
+                </span>
+              </button>
+
+              <button
+                onClick={() => navigateTo('payments')}
+                className="w-full justify-center px-4 sm:px-5 py-3.5 rounded-xl font-black text-xs sm:text-sm text-[#E8EEF2] bg-[#142638] hover:bg-[#1C354A] border border-[#35D6C5]/40 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <GraduationCap className="w-4 h-4 text-[#35D6C5] shrink-0" />
+                <span className="truncate">البحث عن اسم الطالب والدفعات</span>
+              </button>
+
+              <button
+                onClick={() => navigateTo('graduation_studio')}
+                className="w-full justify-center px-4 sm:px-5 py-3.5 rounded-xl font-black text-xs sm:text-sm text-[#D6B777] hover:text-white bg-[#D6B777]/15 hover:bg-[#D6B777]/25 border border-[#D6B777]/45 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <CalendarDays className="w-4 h-4 shrink-0" />
+                <span className="truncate">استوديو التخرج (10 قوالب)</span>
               </button>
             </div>
 

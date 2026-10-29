@@ -6,6 +6,7 @@ import {
   CalendarDays,
   User,
   ShieldAlert,
+  Sparkles,
 } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
@@ -33,6 +34,16 @@ export const BottomNav: React.FC = () => {
       },
     },
     {
+      key: 'studio',
+      label: 'الاستوديو',
+      icon: Sparkles,
+      isActive: currentPage === 'graduation_studio',
+      onClick: () => {
+        navigateTo('graduation_studio');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      },
+    },
+    {
       key: 'events',
       label: 'الحفلات',
       icon: CalendarDays,
@@ -47,7 +58,7 @@ export const BottomNav: React.FC = () => {
     },
     {
       key: 'auth',
-      label: 'الدخول',
+      label: currentUser ? 'حسابي' : 'الدخول',
       icon:
         currentUser && (isAdmin || isModerator || canManageContent)
           ? ShieldAlert
@@ -72,14 +83,14 @@ export const BottomNav: React.FC = () => {
 
   return (
     <div
-      className="fixed bottom-0 inset-x-0 z-50 px-3 sm:px-6 pb-2.5 sm:pb-3.5 pt-1 select-none pointer-events-none no-print"
+      className="fixed bottom-0 inset-x-0 z-50 px-2.5 sm:px-6 pb-2 sm:pb-3.5 pt-1 select-none pointer-events-none no-print"
       style={{ paddingBottom: 'max(0.65rem, env(safe-area-inset-bottom))' }}
     >
       <nav
         aria-label="التنقل السفلي الرئيسي"
-        className="pointer-events-auto mx-auto max-w-md sm:max-w-lg md:max-w-xl rounded-3xl p-1.5 sm:p-2 bg-[#0B1320]/75 backdrop-blur-2xl border border-white/15 shadow-[0_14px_44px_rgba(0,0,0,0.85),0_0_25px_rgba(53,214,197,0.14)] transition-all duration-300"
+        className="pointer-events-auto mx-auto max-w-md sm:max-w-lg md:max-w-xl rounded-3xl p-1.5 sm:p-2 bg-[#0B1320]/85 backdrop-blur-2xl border border-white/15 shadow-[0_14px_44px_rgba(0,0,0,0.85),0_0_25px_rgba(53,214,197,0.14)] transition-all duration-300"
       >
-        <div className="grid grid-cols-4 gap-1.5 sm:gap-2 items-center">
+        <div className="grid grid-cols-5 gap-1 sm:gap-2 items-center">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = item.isActive;

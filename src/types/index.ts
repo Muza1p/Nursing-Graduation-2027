@@ -106,6 +106,73 @@ export interface EventConfig {
   jobRightsText?: string;
   audioUrl?: string;
   aboutSiteText?: string;
+
+  // Payment Gateway & Installment Rules Configuration
+  paymentGatewayConfig?: PaymentGatewayConfig;
+}
+
+export interface PaymentGatewayConfig {
+  allowStudentCashRequest: boolean;
+  allowInstallments: boolean;
+  minPaymentAmountIQD: number;
+  electronicGatewayEnabled: boolean;
+  gatewayProviderName: string;
+  gatewayWebhookConfigured: boolean;
+  committeePaymentInstructions: string;
+}
+
+export interface FinancialLinkRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail?: string;
+  userPhone?: string;
+  institutionalStudentId?: string;
+  targetScrubStudentId: string;
+  targetStudentNumber: number;
+  targetStudentName: string;
+  targetStudentSection?: string;
+  note?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requestedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  rejectionReason?: string;
+}
+
+export type StudioTemplateId =
+  | 'turquoise_luxury'
+  | 'indigo_cinematic'
+  | 'portrait_grad_cap'
+  | 'nurse_stethoscope'
+  | 'appreciation_certificate'
+  | 'congrats_2027'
+  | 'instagram_story'
+  | 'social_square'
+  | 'photo_name_quote'
+  | 'group_collage';
+
+export interface SavedStudioDesign {
+  id: string;
+  userId: string;
+  userName: string;
+  templateId: StudioTemplateId;
+  templateName: string;
+  customName: string;
+  customTitle: 'nurse_m' | 'nurse_f';
+  customQuote: string;
+  bgColor: string;
+  sashStyle: 'turquoise_gold' | 'royal_navy' | 'champagne_luxury';
+  showStethoscope: boolean;
+  showGradCap: boolean;
+  fontFamily: 'Cairo' | 'Tajawal' | 'Amiri';
+  fontSize: number;
+  photoScale: number;
+  photoOffsetX: number;
+  photoOffsetY: number;
+  previewDataUrl: string;
+  isPrivate: boolean;
+  createdAt: string;
 }
 
 export interface LoggedInUserAccount {
@@ -190,6 +257,9 @@ export interface StudentPayment {
   paymentMethod: PaymentMethod;
   receiptNumber: string;
   referenceCode: string;
+  idempotencyKey?: string; // Prevents duplicate payment creation on double clicks
+  submittedByStudent?: boolean; // True when initiated by student via dashboard
+  gatewayProvider?: 'cash_committee' | 'zaincash' | 'qicard' | 'switch_iraq';
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
   notes?: string;

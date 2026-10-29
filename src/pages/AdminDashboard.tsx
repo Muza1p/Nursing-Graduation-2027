@@ -111,11 +111,18 @@ export const AdminDashboard: React.FC = () => {
     supervisors,
     refreshSupervisors,
     refreshModeratorRequests,
+    financialLinkRequests,
+    approveFinancialLinkRequest,
+    rejectFinancialLinkRequest,
+    studentPayments,
+    verifyStudentPayment,
+    voidStudentPayment,
   } = useApp();
   const { songs } = useMusic();
 
   const [activeAdminTab, setActiveAdminTab] = useState<
     | 'scrub_students'
+    | 'financial_link_requests'
     | 'logged_in_users'
     | 'moderator_requests'
     | 'supervisors_management'
@@ -129,6 +136,11 @@ export const AdminDashboard: React.FC = () => {
     | 'music_library'
     | 'audit'
   >(canManageFinances ? 'scrub_students' : 'event_config');
+
+  const [finLinkActionFeedback, setFinLinkActionFeedback] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
 
   // Moderator Requests review state
   const [selectedModReq, setSelectedModReq] = useState<ModeratorRequest | null>(null);
@@ -523,6 +535,32 @@ export const AdminDashboard: React.FC = () => {
           </button>
         )}
 
+        {canManageFinances && (
+          <button
+            onClick={() => setActiveAdminTab('financial_link_requests')}
+            className={`px-4 py-2 rounded-xl transition-all shrink-0 flex items-center gap-1.5 ${
+              activeAdminTab === 'financial_link_requests'
+                ? 'bg-[#35D6C5] text-[#10151C] shadow-md font-extrabold'
+                : 'bg-[#142638] text-[#E8EEF2] hover:text-white'
+            }`}
+          >
+            <Link2 className="w-3.5 h-3.5" />
+            <span>طلبات ربط السجلات والدفعات المعلقة</span>
+            {financialLinkRequests.filter((r) => r.status === 'pending').length +
+              studentPayments.filter((p) => p.verificationStatus === 'pending').length >
+            0 ? (
+              <span className="w-5 h-5 rounded-full bg-amber-500 text-black text-[10px] font-black flex items-center justify-center animate-pulse">
+                {financialLinkRequests.filter((r) => r.status === 'pending').length +
+                  studentPayments.filter((p) => p.verificationStatus === 'pending').length}
+              </span>
+            ) : (
+              <span className="w-4 h-4 rounded-full bg-white/10 text-white text-[10px] flex items-center justify-center">
+                0
+              </span>
+            )}
+          </button>
+        )}
+
         {(isAdmin || isModerator) && (
           <button
             onClick={() => {
@@ -719,6 +757,326 @@ export const AdminDashboard: React.FC = () => {
 
       {/* TAB: SCRUB PARTY STUDENT MANAGEMENT SYSTEM (46+ ROSTER) */}
       {activeAdminTab === 'scrub_students' && <ScrubStudentManagementSection />}
+
+      {/* TAB: FINANCIAL RECORD LINK REQUESTS & STUDENT PENDING PAYMENTS */}
+      {activeAdminTab === 'financial_link_requests' && (
+        <div className="space-y-8">
+          {finLinkActionFeedback && (
+            <div
+              className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between ${
+                finLinkActionFeedback.type === 'success'
+                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                  : 'bg-red-500/15 border-red-500/30 text-red-300'
+              }`}
+            >
+              <span>{finLinkActionFeedback.text}</span>
+              <button
+                onClick={() => setFinLinkActionFeedback(null)}
+                className="text-white/60 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* 1. Financial Record Link Requests */}
+          <div className="rounded-3xl bg-[#101827] border border-[#35D6C5]/30 p-6 space-y-6 shadow-xl">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+              <div className="space-y-1">
+                <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+                  <Link2 className="w-5 h-5 text-[#35D6C5]" />
+                  <span>طلبات ربط الحسابات بالسجلات المالية ({financialLinkRequests.length})</span>
+                </h2>
+                <p className="text-xs text-[#929BAA]">
+                  راجع طلبات الطلاب لربط حساباتهم الشخصية بسجلات حفلة السكراب الرسمية دون إنشاء سجلات مكررة. عند الموافقة تنتقل المبالغ المدفوعة والوصولات فوراً لحساب الطالب ويصله إشعار شخصي.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-bold">
+                <span className="px-3 py-1.5 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  معلقة: {financialLinkRequests.filter((r) => r.status === 'pending').length}
+                </span>
+                <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  مقبولة: {financialLinkRequests.filter((r) => r.status === 'approved').length}
+                </span>
+              </div>
+            </div>
+
+            {financialLinkRequests.length === 0 ? (
+              <div className="p-8 rounded-2xl bg-[#0A0D12]/60 border border-white/5 text-center space-y-2">
+                <Link2 className="w-8 h-8 text-[#929BAA] mx-auto opacity-50" />
+                <p className="text-sm font-bold text-white">لا توجد طلبات ربط سجلات مالية حالياً</p>
+                <p className="text-xs text-[#929BAA]">
+                  عندما يبحث طالب من حسابه عبر ميزة «العثور على سجلي المالي» ويرسل طلب ربط سيظهر هنا للمراجعة والاعتماد.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {financialLinkRequests.map((req) => (
+                  <div
+                    key={req.id}
+                    className={`p-5 rounded-2xl border transition-all space-y-4 ${
+                      req.status === 'pending'
+                        ? 'bg-[#142638]/80 border-amber-500/40'
+                        : req.status === 'approved'
+                        ? 'bg-[#0A0D12]/80 border-emerald-500/30'
+                        : 'bg-[#0A0D12]/50 border-red-500/20 opacity-75'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-black px-2.5 py-0.5 rounded-lg bg-[#35D6C5]/15 text-[#35D6C5]">
+                            تسلسل السجل #{req.targetStudentNumber}
+                          </span>
+                          {req.targetStudentSection && (
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-white/10 text-white">
+                              {req.targetStudentSection}
+                            </span>
+                          )}
+                          <span
+                            className={`text-[11px] font-black px-2.5 py-0.5 rounded-lg ${
+                              req.status === 'pending'
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                : req.status === 'approved'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                            }`}
+                          >
+                            {req.status === 'pending'
+                              ? 'قيد المراجعة'
+                              : req.status === 'approved'
+                              ? 'تم الربط والاعتماد'
+                              : 'مرفوض'}
+                          </span>
+                        </div>
+                        <h3 className="text-base font-black text-white pt-1">
+                          السجل المطلوب: {req.targetStudentName}
+                        </h3>
+                        <p className="text-xs text-[#929BAA]">
+                          مقدم الطلب: <span className="text-white font-bold">{req.userName}</span>
+                          {req.userEmail ? ` (${req.userEmail})` : ''}
+                        </p>
+                      </div>
+                      <span className="text-[11px] text-[#929BAA] font-mono">
+                        {formatArabicDate(req.requestedAt)}
+                      </span>
+                    </div>
+
+                    {req.note && (
+                      <div className="p-3 rounded-xl bg-black/30 border border-white/5 text-xs text-[#E8EEF2]">
+                        ملاحظة الطالب: {req.note}
+                      </div>
+                    )}
+
+                    {req.status === 'pending' && (
+                      <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                        <button
+                          onClick={async () => {
+                            const res = await approveFinancialLinkRequest(req.id);
+                            setFinLinkActionFeedback({
+                              type: res.success ? 'success' : 'error',
+                              text: res.message,
+                            });
+                          }}
+                          className="flex-1 py-2.5 px-4 rounded-xl bg-[#35D6C5] hover:bg-[#2bc2b2] text-[#0A0D12] font-black text-xs flex items-center justify-center gap-1.5 transition-all"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>موافقة وربط السجل بحساب الطالب</span>
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const res = await rejectFinancialLinkRequest(
+                              req.id,
+                              'يرجى التأكد من مطابقة الاسم الثلاثي مع السجل الرسمي'
+                            );
+                            setFinLinkActionFeedback({
+                              type: res.success ? 'success' : 'error',
+                              text: res.message,
+                            });
+                          }}
+                          className="py-2.5 px-4 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          <span>رفض</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 2. Student-Submitted Pending Payments Verification */}
+          <div className="rounded-3xl bg-[#101827] border border-[#D7B875]/30 p-6 space-y-6 shadow-xl">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+              <div className="space-y-1">
+                <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-[#D7B875]" />
+                  <span>
+                    الدفعات المرسلة قيد المراجعة ({studentPayments.filter((p) => p.verificationStatus === 'pending').length})
+                  </span>
+                </h2>
+                <p className="text-xs text-[#929BAA]">
+                  أي طلب تسديد يرسله الطالب من حسابه يبقى في حالة «قيد الانتظار» ولا يخصم من المتبقي إلا بعد تأكيد استلام المبلغ فعلياً من قِبل الإدارة.
+                </p>
+              </div>
+            </div>
+
+            {studentPayments.filter((p) => p.verificationStatus === 'pending').length === 0 ? (
+              <div className="p-8 rounded-2xl bg-[#0A0D12]/60 border border-white/5 text-center space-y-2">
+                <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto opacity-60" />
+                <p className="text-sm font-bold text-white">لا توجد دفعات معلقة بانتظار المراجعة</p>
+                <p className="text-xs text-[#929BAA]">جميع طلبات التسديد تمت مراجعتها واعتمادها.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {studentPayments
+                  .filter((p) => p.verificationStatus === 'pending')
+                  .map((pay) => (
+                    <div
+                      key={pay.id}
+                      className="p-5 rounded-2xl bg-[#142638]/80 border border-amber-500/40 space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-[11px] font-black px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300">
+                            دفعة معلقة #{pay.receiptNumber}
+                          </span>
+                          <h3 className="text-base font-black text-white mt-1">{pay.studentName}</h3>
+                          <p className="text-xs text-[#929BAA]">
+                            التاريخ: {pay.date} {pay.time || ''} • الطريقة:{' '}
+                            {pay.paymentMethod === 'cash' ? 'نقدي للجنة' : 'تحويل / إلكتروني'}
+                          </p>
+                        </div>
+                        <div className="text-left">
+                          <div className="text-lg font-black text-[#35D6C5]">
+                            {formatIQD(pay.amountIQD)}
+                          </div>
+                          <span className="text-[10px] text-amber-300 font-bold">بانتظار التأكيد</span>
+                        </div>
+                      </div>
+
+                      {pay.notes && (
+                        <p className="text-xs text-[#E8EEF2] bg-black/30 p-2.5 rounded-xl border border-white/5">
+                          {pay.notes}
+                        </p>
+                      )}
+
+                      <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                        <button
+                          onClick={async () => {
+                            const res = await verifyStudentPayment(pay.id, true);
+                            setFinLinkActionFeedback({
+                              type: res.success ? 'success' : 'error',
+                              text: res.message,
+                            });
+                          }}
+                          className="flex-1 py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-[#0A0D12] font-black text-xs flex items-center justify-center gap-1.5 transition-all"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>تأكيد الاستلام واعتماد الوصل</span>
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const res = await voidStudentPayment(pay.id, 'لم يتم تأكيد استلام المبلغ');
+                            setFinLinkActionFeedback({
+                              type: res.success ? 'success' : 'error',
+                              text: res.message,
+                            });
+                          }}
+                          className="py-2 px-3 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          <span>رفض / إلغاء</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          {/* 3. Payment Rules & Iraqi Electronic Payment Gateway Readiness */}
+          <div className="rounded-3xl bg-[#101827] border border-white/10 p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-1">
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <Settings className="w-4 h-4 text-[#35D6C5]" />
+                  <span>قواعد التسديد وإعدادات بوابات الدفع الإلكترونية (QiCard / ZainCash / Switch)</span>
+                </h3>
+                <p className="text-xs text-[#929BAA]">
+                  تحكم بالحد الأدنى للدفعة وتفعيل طلبات التسديد من حساب الطالب أو ربط بوابة الدفع الرسمية عبر السيرفر.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+              <div className="p-4 rounded-2xl bg-[#0A0D12]/80 border border-white/10 space-y-1.5">
+                <span className="text-xs text-[#929BAA]">الحد الأدنى للدفعة الواحدة (د.ع)</span>
+                <div className="text-lg font-black text-white">
+                  {formatIQD(eventConfig.paymentGatewayConfig?.minPaymentAmountIQD || 5000)}
+                </div>
+                <p className="text-[11px] text-[#35D6C5]">السعر الكامل المعتمد: {formatIQD(35000)}</p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[#0A0D12]/80 border border-white/10 space-y-2">
+                <span className="text-xs text-[#929BAA]">طلبات التسديد وإشعارات الدفع للطلاب</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white">
+                    {eventConfig.paymentGatewayConfig?.allowStudentCashRequest !== false
+                      ? 'مفعّل للطلاب المسجلين'
+                      : 'متوقف حالياً'}
+                  </span>
+                  <button
+                    onClick={() => {
+                      const current = eventConfig.paymentGatewayConfig?.allowStudentCashRequest !== false;
+                      updateEventConfig({
+                        ...eventConfig,
+                        paymentGatewayConfig: {
+                          allowStudentCashRequest: !current,
+                          allowInstallments: eventConfig.paymentGatewayConfig?.allowInstallments ?? true,
+                          minPaymentAmountIQD: eventConfig.paymentGatewayConfig?.minPaymentAmountIQD ?? 5000,
+                          electronicGatewayEnabled: eventConfig.paymentGatewayConfig?.electronicGatewayEnabled ?? false,
+                          gatewayProviderName:
+                            eventConfig.paymentGatewayConfig?.gatewayProviderName ??
+                            'QiCard / ZainCash / Switch',
+                          gatewayWebhookConfigured:
+                            eventConfig.paymentGatewayConfig?.gatewayWebhookConfigured ?? false,
+                          committeePaymentInstructions:
+                            eventConfig.paymentGatewayConfig?.committeePaymentInstructions ??
+                            'يرجى تسليم المبلغ للجنة التنظيم وتدوين رقم الوصل لتأكيد الدفعة في حسابك.',
+                        },
+                      });
+                      setFinLinkActionFeedback({
+                        type: 'success',
+                        text: 'تم تحديث حالة استقبال طلبات التسديد من حسابات الطلاب',
+                      });
+                    }}
+                    className="px-3 py-1 rounded-lg bg-[#35D6C5]/15 text-[#35D6C5] hover:bg-[#35D6C5]/25 text-xs font-bold"
+                  >
+                    تبديل الحالة
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[#0A0D12]/80 border border-white/10 space-y-2">
+                <span className="text-xs text-[#929BAA]">حالة الربط المباشر لبوابة البطاقات</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-300">
+                    {eventConfig.paymentGatewayConfig?.electronicGatewayEnabled
+                      ? 'مفعّل عبر المزود'
+                      : 'وضع الأمان (تأكيد يدوي للوصولات)'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-[#929BAA]">
+                  لا يتم تخزين أي أرقام بطاقات أو رموز CVV داخل المتصفح أو قاعدة البيانات نهائياً.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* TAB: MUSIC LIBRARY MANAGEMENT (MULTI-FILE PHONE UPLOAD & FIREBASE PERSISTENCE) */}
       {activeAdminTab === 'music_library' && <AdminMusicManagementSection />}

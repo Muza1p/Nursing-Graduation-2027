@@ -8,6 +8,8 @@ import {
   AuditLogEntry,
   PaymentStatus,
   PaymentEventTarget,
+  FinancialLinkRequest,
+  SavedStudioDesign,
 } from '../types';
 
 const STORAGE_KEYS = {
@@ -19,6 +21,8 @@ const STORAGE_KEYS = {
   PRIVATE_MEDIA: 'nursing_grad_private_media_v2',
   AUDIT_LOGS: 'nursing_grad_audit_logs_v2',
   CURRENT_USER_ID: 'nursing_grad_current_user_v2',
+  FINANCIAL_LINK_REQUESTS: 'nursing_grad_fin_link_requests_v2',
+  SAVED_DESIGNS: 'nursing_grad_saved_designs_v2',
 };
 
 export const DEFAULT_ABOUT_SITE_TEXT =
@@ -85,6 +89,17 @@ export const DEFAULT_CONFIG: EventConfig = {
   jobWorthText: '',
   jobCountText: '',
   jobRightsText: '',
+
+  paymentGatewayConfig: {
+    allowStudentCashRequest: true,
+    allowInstallments: true,
+    minPaymentAmountIQD: 15000,
+    electronicGatewayEnabled: false,
+    gatewayProviderName: 'بوابة البطاقات العراقية (QiCard / ZainCash / Switch)',
+    gatewayWebhookConfigured: false,
+    committeePaymentInstructions:
+      'يمكنك تسجيل طلب تسديد نقدي أو تحويل مالي وإرفاق رقم المرجع ليقوم فريق تنظيم الدفعة بتدقيقه وتوثيق الوصل الرسمي في حسابك.',
+  },
 
   organizers: [
     {
@@ -544,6 +559,64 @@ export class LocalStorageManager {
       localStorage.setItem(STORAGE_KEYS.PRIVATE_MEDIA, JSON.stringify(filtered));
     } catch (e) {
       console.error('Failed to delete private media', e);
+    }
+  }
+
+  static getFinancialLinkRequests(): FinancialLinkRequest[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.FINANCIAL_LINK_REQUESTS);
+      if (!data) return [];
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  static saveFinancialLinkRequests(requests: FinancialLinkRequest[]): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.FINANCIAL_LINK_REQUESTS, JSON.stringify(requests));
+    } catch (e) {
+      console.error('Failed to save financial link requests', e);
+    }
+  }
+
+  static getSavedStudioDesigns(userId?: string): SavedStudioDesign[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.SAVED_DESIGNS);
+      const all: SavedStudioDesign[] = data ? JSON.parse(data) : [];
+      if (!userId) return all;
+      return all.filter((item) => item.userId === userId);
+    } catch {
+      return [];
+    }
+  }
+
+  static saveStudioDesign(design: SavedStudioDesign): void {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.SAVED_DESIGNS);
+      const all: SavedStudioDesign[] = data ? JSON.parse(data) : [];
+      const withoutExisting = all.filter((d) => d.id !== design.id);
+      withoutExisting.unshift(design);
+      localStorage.setItem(
+        STORAGE_KEYS.SAVED_DESIGNS,
+        JSON.stringify(withoutExisting.slice(0, 30))
+      );
+    } catch (e) {
+      console.error('Failed to save studio design', e);
+    }
+  }
+
+  static deleteStudioDesign(userId: string, designId: string): void {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.SAVED_DESIGNS);
+      const all: SavedStudioDesign[] = data ? JSON.parse(data) : [];
+      const filtered = all.filter(
+        (item) => !(item.userId === userId && item.id === designId)
+      );
+      localStorage.setItem(STORAGE_KEYS.SAVED_DESIGNS, JSON.stringify(filtered));
+    } catch (e) {
+      console.error('Failed to delete studio design', e);
     }
   }
 

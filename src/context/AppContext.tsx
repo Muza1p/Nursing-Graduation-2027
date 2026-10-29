@@ -21,6 +21,8 @@ import {
   UserRole,
   LoggedInUserAccount,
   ModeratorRequest,
+  FinancialLinkRequest,
+  SavedStudioDesign,
 } from '../types';
 import {
   DEFAULT_CONFIG,
@@ -91,8 +93,11 @@ import {
   User as FirebaseUser,
 } from 'firebase/auth';
 import {
+  collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   updateDoc,
   writeBatch,
@@ -111,6 +116,7 @@ export type PageRoute =
   | 'login'
   | 'register'
   | 'graduate_dashboard'
+  | 'graduation_studio'
   | 'admin_dashboard';
 
 interface AppContextType {
@@ -364,6 +370,53 @@ interface AppContextType {
     success: boolean;
     message: string;
   };
+
+  // Financial Record Link Requests ("العثور على سجلي المالي")
+  financialLinkRequests: FinancialLinkRequest[];
+  submitFinancialLinkRequest: (params: {
+    targetScrubStudentId: string;
+    phone?: string;
+    institutionalStudentId?: string;
+    note?: string;
+  }) => Promise<{ success: boolean; message: string }>;
+  approveFinancialLinkRequest: (
+    requestId: string
+  ) => Promise<{ success: boolean; message: string }>;
+  rejectFinancialLinkRequest: (
+    requestId: string,
+    reason?: string
+  ) => Promise<{ success: boolean; message: string }>;
+
+  // Student-Initiated Payment Request ("تسديد المبلغ")
+  submitStudentPaymentRequest: (params: {
+    amountIQD: number;
+    paymentMethod: PaymentMethod;
+    gatewayProvider?: 'cash_committee' | 'zaincash' | 'qicard' | 'switch_iraq';
+    referenceCode?: string;
+    notes?: string;
+    idempotencyKey: string;
+  }) => Promise<{
+    success: boolean;
+    message: string;
+    payment?: StudentPayment;
+  }>;
+
+  // Personal Graduation Studio Designs ("استوديو التخرج" & "تصاميمي المحفوظة")
+  savedDesigns: SavedStudioDesign[];
+  saveStudioDesign: (
+    design: Omit<SavedStudioDesign, 'id' | 'userId' | 'userName' | 'createdAt'>
+  ) => Promise<{ success: boolean; message: string; design?: SavedStudioDesign }>;
+  deleteStudioDesign: (
+    designId: string
+  ) => Promise<{ success: boolean; message: string }>;
+
+  // Personal Account Settings ("إعدادات حسابي")
+  updateMyProfileSettings: (params: {
+    fullName: string;
+    preferredTitle: 'nurse_m' | 'nurse_f';
+    phone?: string;
+    avatarUrl?: string;
+  }) => Promise<{ success: boolean; message: string }>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -398,6 +451,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
   const [studentPayments, setStudentPayments] = useState<StudentPayment[]>(() =>
     ScrubStudentStorage.getStudentPayments()
+  );
+  const [financialLinkRequests, setFinancialLinkRequests] = useState<
+    FinancialLinkRequest[]
+  >(() => LocalStorageManager.getFinancialLinkRequests());
+  const [savedDesigns, setSavedDesigns] = useState<SavedStudioDesign[]>(() =>
+    LocalStorageManager.getSavedStudioDesigns()
   );
 
   // Current session user
@@ -813,12 +872,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const matchedLoggedInAccount = firebaseUser
     ? loggedInUsers.find((u) => u.uid === firebaseUser.uid) || null
     : null;
-  const linkedScrubRecord = firebaseUser
+  const activeSessionUid = firebaseUser?.uid || currentUserId || null;
+  const linkedScrubRecord = activeSessionUid
     ? scrubStudents.find(
         (s) =>
           s.status === 'active' &&
           s.isLinkedToAccount &&
-          s.linkedUserId === firebaseUser.uid
+          (s.linkedUserId === activeSessionUid ||
+            (matchedGraduateUser && s.id === matchedGraduateUser.linkedScrubStudentId))
       )
     : undefined;
 
@@ -863,6 +924,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ? {
         ...matchedGraduateUser,
         status: 'approved',
+        linkedScrubStudentId:
+          linkedScrubRecord?.id || matchedGraduateUser.linkedScrubStudentId,
+        scrubDueIQD:
+          linkedScrubRecord?.totalFeeIQD ??
+          matchedGraduateUser.scrubDueIQD ??
+          35000,
+        scrubPaidIQD:
+          linkedScrubRecord?.verifiedPaidIQD ??
+          matchedGraduateUser.scrubPaidIQD ??
+          0,
+        scrubBalanceIQD:
+          linkedScrubRecord?.remainingBalanceIQD ??
+          matchedGraduateUser.scrubBalanceIQD ??
+          35000,
+        scrubStatus:
+          linkedScrubRecord?.paymentStatus ??
+          matchedGraduateUser.scrubStatus ??
+          'unpaid',
+        totalDueIQD:
+          (linkedScrubRecord?.totalFeeIQD ??
+            matchedGraduateUser.scrubDueIQD ??
+            35000) + (matchedGraduateUser.gradDueIQD ?? 50000),
+        totalPaidIQD:
+          (linkedScrubRecord?.verifiedPaidIQD ??
+            matchedGraduateUser.scrubPaidIQD ??
+            0) + (matchedGraduateUser.gradPaidIQD ?? 0),
+        remainingBalanceIQD:
+          (linkedScrubRecord?.remainingBalanceIQD ??
+            matchedGraduateUser.scrubBalanceIQD ??
+            35000) + (matchedGraduateUser.gradBalanceIQD ?? 50000),
       }
     : firebaseUser
     ? {
@@ -970,6 +1061,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     ScrubStudentStorage.saveStudentPayments(studentPayments);
   }, [studentPayments]);
+
+  useEffect(() => {
+    LocalStorageManager.saveFinancialLinkRequests(financialLinkRequests);
+  }, [financialLinkRequests]);
 
   const navigateTo = (page: PageRoute) => {
     setCurrentPage(page);
@@ -1956,6 +2051,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     setAuditLogs(LocalStorageManager.getAuditLogs());
 
+    if (student.isLinkedToAccount && student.linkedUserId) {
+      await sendAppNotification({
+        title: isVerified ? 'إضافة إيصال مالي جديد لحسابك' : 'تسجيل دفعة قيد المراجعة',
+        message: isVerified
+          ? `تم إصدار وتوثيق الإيصال رقم (${receiptNumber}) بمبلغ ${amount.toLocaleString()} د.ع في سجلك المالي. المتبقي الآن: ${updatedStudent.remainingBalanceIQD.toLocaleString()} د.ع.`
+          : `تم تسجيل دفعة بمبلغ ${amount.toLocaleString()} د.ع وهي الآن قيد التدقيق من فريق التنظيم.`,
+        type: isVerified ? 'receipt_added' : 'payment_status',
+        targetAudience: 'user',
+        targetUserId: student.linkedUserId,
+        linkRoute: 'graduate_dashboard',
+      });
+    }
+
     return {
       success: true,
       message: `تم تسجيل الدفعة بمبلغ ${amount.toLocaleString()} د.ع وإصدار الوصل (${receiptNumber}). الرصيد المتبقي الآن: ${updatedStudent.remainingBalanceIQD.toLocaleString()} د.ع.`,
@@ -2042,6 +2150,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       entityType: 'student_payment',
     });
     setAuditLogs(LocalStorageManager.getAuditLogs());
+
+    const targetLinkedUid = student.linkedUserId || targetPay.linkedUserId;
+    if (targetLinkedUid) {
+      await sendAppNotification({
+        title: verified
+          ? 'تم اعتماد دفعتك المالية وإصدار الوصل'
+          : 'تحديث حالة عملية الدفع',
+        message: verified
+          ? `تم اعتماد وتوثيق الوصل (${targetPay.receiptNumber}) بقيمة ${targetPay.amountIQD.toLocaleString()} د.ع في سجلك المالي. المتبقي الآن: ${updatedStudent.remainingBalanceIQD.toLocaleString()} د.ع.`
+          : `تم تحويل الوصل (${targetPay.receiptNumber}) إلى حالة قيد المراجعة.`,
+        type: verified ? 'receipt_added' : 'payment_status',
+        targetAudience: 'user',
+        targetUserId: targetLinkedUid,
+        linkRoute: 'graduate_dashboard',
+      });
+    }
 
     return {
       success: true,
@@ -3890,6 +4014,589 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return res;
   };
 
+  // Sync financial link requests and saved studio designs from Firestore when user logs in
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    getDocs(collection(db, 'financial_link_requests'))
+      .then((snap) => {
+        const list: FinancialLinkRequest[] = [];
+        snap.forEach((d) => list.push(d.data() as FinancialLinkRequest));
+        if (list.length > 0) {
+          list.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+          setFinancialLinkRequests((prev) => {
+            const mergedMap = new Map<string, FinancialLinkRequest>();
+            prev.forEach((r) => mergedMap.set(r.id, r));
+            list.forEach((r) => mergedMap.set(r.id, r));
+            return Array.from(mergedMap.values()).sort((a, b) =>
+              b.requestedAt.localeCompare(a.requestedAt)
+            );
+          });
+        }
+      })
+      .catch(() => {
+        // Ignore offline/permission read fallback
+      });
+
+    getDocs(collection(db, 'saved_designs'))
+      .then((snap) => {
+        const uid = auth.currentUser?.uid;
+        if (!uid) return;
+        const list: SavedStudioDesign[] = [];
+        snap.forEach((d) => {
+          const item = d.data() as SavedStudioDesign;
+          if (item.userId === uid) list.push(item);
+        });
+        if (list.length > 0) {
+          setSavedDesigns((prev) => {
+            const mergedMap = new Map<string, SavedStudioDesign>();
+            prev.forEach((d) => mergedMap.set(d.id, d));
+            list.forEach((d) => mergedMap.set(d.id, d));
+            return Array.from(mergedMap.values()).sort((a, b) =>
+              b.createdAt.localeCompare(a.createdAt)
+            );
+          });
+        }
+      })
+      .catch(() => {});
+  }, [firebaseUser?.uid]);
+
+  // =========================================================================
+  // REQUIREMENT 3: STUDENT FINANCIAL RECORD LINKING ("العثور على سجلي المالي")
+  // =========================================================================
+  const submitFinancialLinkRequest = async (params: {
+    targetScrubStudentId: string;
+    phone?: string;
+    institutionalStudentId?: string;
+    note?: string;
+  }): Promise<{ success: boolean; message: string }> => {
+    const uid = firebaseUser?.uid || currentUser?.id;
+    if (!uid || !currentUser) {
+      return {
+        success: false,
+        message: 'يرجى تسجيل الدخول بحسابك الشخصي أولاً لتقديم طلب ربط السجل المالي.',
+      };
+    }
+
+    // Check if user is already linked to an active student record
+    const existingLink = scrubStudents.find(
+      (s) =>
+        s.status === 'active' &&
+        s.isLinkedToAccount &&
+        s.linkedUserId === uid
+    );
+    if (existingLink) {
+      return {
+        success: false,
+        message: `حسابك مرتبط بالفعل بسجل الطالب رقم (${existingLink.studentNumber}) "${existingLink.fullName}".`,
+      };
+    }
+
+    const targetStu = scrubStudents.find(
+      (s) => s.id === params.targetScrubStudentId && s.status === 'active'
+    );
+    if (!targetStu) {
+      return {
+        success: false,
+        message: 'السجل المالي المختار غير موجود في القائمة المعتمدة.',
+      };
+    }
+
+    if (targetStu.isLinkedToAccount && targetStu.linkedUserId !== uid) {
+      return {
+        success: false,
+        message:
+          'هذا السجل المالي مرتبط بالفعل بحساب طالب آخر موثق ولا يمكن المطالبة به.',
+      };
+    }
+
+    // Prevent duplicate pending requests from the same user
+    const existingPending = financialLinkRequests.find(
+      (r) => r.userId === uid && r.status === 'pending'
+    );
+    if (existingPending) {
+      return {
+        success: false,
+        message: `لديك طلب ربط قيد المراجعة حالياً للسجل "${existingPending.targetStudentName}". يرجى انتظار تدقيق المشرفين.`,
+      };
+    }
+
+    const nowIso = new Date().toISOString();
+    const newReq: FinancialLinkRequest = {
+      id: `fin-link-${uid}-${Date.now()}`,
+      userId: uid,
+      userName: currentUser.fullName,
+      userEmail: currentUser.email || firebaseUser?.email || undefined,
+      userPhone: params.phone?.trim() || currentUser.phone || undefined,
+      institutionalStudentId: params.institutionalStudentId?.trim() || undefined,
+      targetScrubStudentId: targetStu.id,
+      targetStudentNumber: targetStu.studentNumber,
+      targetStudentName: targetStu.fullName,
+      targetStudentSection: targetStu.section,
+      note: params.note?.trim() || undefined,
+      status: 'pending',
+      requestedAt: nowIso,
+    };
+
+    const updated = [newReq, ...financialLinkRequests];
+    setFinancialLinkRequests(updated);
+
+    if (auth.currentUser) {
+      try {
+        const cleanReq = Object.fromEntries(
+          Object.entries(newReq).filter(([_, v]) => v !== undefined)
+        );
+        await setDoc(doc(db, 'financial_link_requests', newReq.id), cleanReq);
+      } catch (e) {
+        console.warn('Firestore financial_link_requests create notice:', e);
+      }
+    }
+
+    await sendAppNotification({
+      title: 'طلب جديد لربط سجل مالي بحساب طالب',
+      message: `قدّم الطالب "${currentUser.fullName}" طلباً لربط حسابه بالسجل رقم (#${targetStu.studentNumber}) "${targetStu.fullName}". يرجى المراجعة والاعتماد من لوحة الإدارة.`,
+      type: 'account_alert',
+      targetAudience: 'admins',
+      linkRoute: 'admin_dashboard',
+    });
+
+    return {
+      success: true,
+      message: `تم إرسال طلب ربط حسابك بالسجل رقم (#${targetStu.studentNumber}) "${targetStu.fullName}" إلى فريق التنظيم والإشراف للمراجعة والاعتماد.`,
+    };
+  };
+
+  const approveFinancialLinkRequest = async (
+    requestId: string
+  ): Promise<{ success: boolean; message: string }> => {
+    if (!canManageFinances && !isAdmin && !isModerator) {
+      return {
+        success: false,
+        message: 'غير مصرح لك بالموافقة على طلبات ربط السجلات المالية.',
+      };
+    }
+
+    const reqItem = financialLinkRequests.find((r) => r.id === requestId);
+    if (!reqItem) {
+      return { success: false, message: 'طلب الربط غير موجود.' };
+    }
+
+    const linkResult = await linkStudentToAccount(reqItem.targetScrubStudentId, {
+      userId: reqItem.userId,
+      email: reqItem.userEmail || '',
+      fullName: reqItem.userName,
+      phone: reqItem.userPhone,
+    });
+
+    if (!linkResult.success) {
+      return linkResult;
+    }
+
+    const nowIso = new Date().toISOString();
+    const updatedReq: FinancialLinkRequest = {
+      ...reqItem,
+      status: 'approved',
+      reviewedAt: nowIso,
+      reviewedBy: actorDisplayName,
+    };
+
+    setFinancialLinkRequests((prev) =>
+      prev.map((r) => (r.id === requestId ? updatedReq : r))
+    );
+
+    if (auth.currentUser) {
+      try {
+        const cleanReq = Object.fromEntries(
+          Object.entries(updatedReq).filter(([_, v]) => v !== undefined)
+        );
+        await setDoc(doc(db, 'financial_link_requests', requestId), cleanReq, {
+          merge: true,
+        });
+      } catch (e) {
+        console.warn('Firestore approveFinancialLinkRequest notice:', e);
+      }
+    }
+
+    await sendAppNotification({
+      title: 'تمت الموافقة على طلب ربط سجلك المالي',
+      message: `تم التحقق والموافقة على ربط حسابك الشخصي بالسجل المالي رقم (#${reqItem.targetStudentNumber}) "${reqItem.targetStudentName}". يمكنك الآن استعراض دفعاتك وإيصالاتك الرسمية من حسابك.`,
+      type: 'financial_link_approved',
+      targetAudience: 'user',
+      targetUserId: reqItem.userId,
+      linkRoute: 'graduate_dashboard',
+    });
+
+    return {
+      success: true,
+      message: `تمت الموافقة على الطلب وربط سجل "${reqItem.targetStudentName}" (#${reqItem.targetStudentNumber}) بحساب الطالب بنجاح!`,
+    };
+  };
+
+  const rejectFinancialLinkRequest = async (
+    requestId: string,
+    reason?: string
+  ): Promise<{ success: boolean; message: string }> => {
+    if (!canManageFinances && !isAdmin && !isModerator) {
+      return {
+        success: false,
+        message: 'غير مصرح لك برفض طلبات ربط السجلات المالية.',
+      };
+    }
+
+    const reqItem = financialLinkRequests.find((r) => r.id === requestId);
+    if (!reqItem) {
+      return { success: false, message: 'طلب الربط غير موجود.' };
+    }
+
+    const nowIso = new Date().toISOString();
+    const updatedReq: FinancialLinkRequest = {
+      ...reqItem,
+      status: 'rejected',
+      reviewedAt: nowIso,
+      reviewedBy: actorDisplayName,
+      rejectionReason: reason?.trim() || 'يرجى التأكد من مطابقة الاسم الثلاثي والتواصل مع المشرفين.',
+    };
+
+    setFinancialLinkRequests((prev) =>
+      prev.map((r) => (r.id === requestId ? updatedReq : r))
+    );
+
+    if (auth.currentUser) {
+      try {
+        const cleanReq = Object.fromEntries(
+          Object.entries(updatedReq).filter(([_, v]) => v !== undefined)
+        );
+        await setDoc(doc(db, 'financial_link_requests', requestId), cleanReq, {
+          merge: true,
+        });
+      } catch (e) {
+        console.warn('Firestore rejectFinancialLinkRequest notice:', e);
+      }
+    }
+
+    await sendAppNotification({
+      title: 'تحديث بخصوص طلب ربط السجل المالي',
+      message: `تعذر اعتماد طلب ربط السجل "${reqItem.targetStudentName}". السبب: ${updatedReq.rejectionReason}`,
+      type: 'account_alert',
+      targetAudience: 'user',
+      targetUserId: reqItem.userId,
+      linkRoute: 'graduate_dashboard',
+    });
+
+    return {
+      success: true,
+      message: `تم رفض طلب الربط للسجل "${reqItem.targetStudentName}" وإشعار الطالب.`,
+    };
+  };
+
+  // =========================================================================
+  // REQUIREMENT 4: STUDENT-INITIATED PAYMENT REQUEST ("تسديد المبلغ")
+  // =========================================================================
+  const submitStudentPaymentRequest = async (params: {
+    amountIQD: number;
+    paymentMethod: PaymentMethod;
+    gatewayProvider?: 'cash_committee' | 'zaincash' | 'qicard' | 'switch_iraq';
+    referenceCode?: string;
+    notes?: string;
+    idempotencyKey: string;
+  }) => {
+    const uid = firebaseUser?.uid || currentUser?.id;
+    if (!uid || !currentUser) {
+      return {
+        success: false,
+        message: 'يرجى تسجيل الدخول بحسابك أولاً لتقديم طلب تسديد.',
+      };
+    }
+
+    const student = scrubStudents.find(
+      (s) =>
+        s.status === 'active' &&
+        s.isLinkedToAccount &&
+        (s.linkedUserId === uid || s.id === currentUser.linkedScrubStudentId)
+    );
+
+    if (!student) {
+      return {
+        success: false,
+        message:
+          'يرجى ربط حسابك بسجلك المالي أولاً عبر ميزة «العثور على سجلي المالي» قبل تسجيل دفعة مالية.',
+      };
+    }
+
+    // Check idempotency key to prevent duplicate creation on double click
+    const duplicateKey = studentPayments.find(
+      (p) =>
+        p.idempotencyKey &&
+        p.idempotencyKey === params.idempotencyKey &&
+        p.verificationStatus !== 'voided'
+    );
+    if (duplicateKey) {
+      return {
+        success: false,
+        message: `تم إرسال هذا الطلب مسبقاً برقم مرجع (${duplicateKey.receiptNumber}). تم منع تكرار العملية تلقائياً.`,
+      };
+    }
+
+    const amount = Math.floor(Number(params.amountIQD) || 0);
+    const minAmount = eventConfig.paymentGatewayConfig?.minPaymentAmountIQD || 5000;
+    if (amount <= 0) {
+      return {
+        success: false,
+        message: 'يرجى إدخال مبلغ صحيح بالدينار العراقي.',
+      };
+    }
+
+    if (amount > student.remainingBalanceIQD) {
+      return {
+        success: false,
+        message: `المبلغ المدخل (${amount.toLocaleString()} د.ع) يتجاوز المبلغ المتبقي عليك (${student.remainingBalanceIQD.toLocaleString()} د.ع).`,
+      };
+    }
+
+    if (amount < minAmount && amount < student.remainingBalanceIQD) {
+      return {
+        success: false,
+        message: `الحد الأدنى للدفعة الواحدة هو ${minAmount.toLocaleString()} د.ع (أو كامل الرصيد المتبقي).`,
+      };
+    }
+
+    const nowIso = new Date().toISOString();
+    const todayDate = nowIso.split('T')[0];
+    const nowTime = new Date().toTimeString().substring(0, 5);
+    const existingPays = studentPayments.filter(
+      (p) => p.studentId === student.id && p.verificationStatus !== 'voided'
+    );
+    const seqCount = existingPays.length + 1;
+    const receiptNumber = `REQ-${String(student.studentNumber).padStart(3, '0')}-${seqCount}-${Math.floor(100 + Math.random() * 900)}`;
+
+    const paymentType =
+      amount === student.remainingBalanceIQD
+        ? 'final_settlement'
+        : student.verifiedPaidIQD === 0
+        ? 'initial_deposit'
+        : 'installment';
+
+    // CRITICAL SECURITY: Student-submitted payment is strictly 'pending' (isVerified: false) until verified by an admin/webhook
+    const newPayment: StudentPayment = {
+      id: `scrub-pay-req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      studentId: student.id,
+      studentNumber: student.studentNumber,
+      studentName: student.fullName,
+      linkedUserId: uid,
+      amountIQD: amount,
+      paymentType,
+      paymentMethod: params.paymentMethod,
+      gatewayProvider: params.gatewayProvider || 'cash_committee',
+      receiptNumber,
+      referenceCode:
+        params.referenceCode?.trim() ||
+        `STU-${Math.floor(100000 + Math.random() * 900000)}`,
+      idempotencyKey: params.idempotencyKey,
+      submittedByStudent: true,
+      date: todayDate,
+      time: nowTime,
+      notes:
+        params.notes?.trim() ||
+        'طلب تسديد مقدم من حساب الطالب — بانتظار تدقيق وتأكيد لجنة التنظيم',
+      isVerified: false,
+      verificationStatus: 'pending',
+      recordedBy: `${student.fullName} (طلب إلكتروني)`,
+      recordedByUid: uid,
+      createdAt: nowIso,
+    };
+
+    const updatedPayments = [newPayment, ...studentPayments];
+    const updatedStudent = recalculateStudentFinancials(
+      { ...student, updatedAt: nowIso },
+      updatedPayments
+    );
+
+    setStudentPayments(updatedPayments);
+    setScrubStudents((prev) =>
+      prev.map((s) => (s.id === student.id ? updatedStudent : s))
+    );
+
+    if (auth.currentUser) {
+      try {
+        const cleanPay = Object.fromEntries(
+          Object.entries(newPayment).filter(([_, v]) => v !== undefined)
+        );
+        const cleanStu = Object.fromEntries(
+          Object.entries(updatedStudent).filter(([_, v]) => v !== undefined)
+        );
+        await setDoc(doc(db, 'student_payments', newPayment.id), cleanPay);
+        await setDoc(doc(db, 'scrub_students', updatedStudent.id), cleanStu, {
+          merge: true,
+        });
+      } catch (e) {
+        console.warn('Firestore submitStudentPaymentRequest notice:', e);
+      }
+    }
+
+    await sendAppNotification({
+      title: 'طلب تسديد مالي جديد قيد المراجعة',
+      message: `أرسل الطالب "${student.fullName}" (#${student.studentNumber}) طلب تسديد بمبلغ ${amount.toLocaleString()} د.ع برقم (${receiptNumber}). يرجى التحقق من الاستلام واعتماد الوصل.`,
+      type: 'payment_status',
+      targetAudience: 'admins',
+      linkRoute: 'admin_dashboard',
+    });
+
+    return {
+      success: true,
+      message: `تم تسجيل طلب الدفعة بمبلغ ${amount.toLocaleString()} د.ع بحالة «قيد الانتظار» برقم (${receiptNumber}). سيتم تحديث رصيدك الموثق فور مراجعة وتأكيد اللجنة.`,
+      payment: newPayment,
+    };
+  };
+
+  // =========================================================================
+  // REQUIREMENT 5: PERSONAL GRADUATION STUDIO SAVED DESIGNS
+  // =========================================================================
+  const saveStudioDesign = async (
+    designData: Omit<SavedStudioDesign, 'id' | 'userId' | 'userName' | 'createdAt'>
+  ) => {
+    const uid = firebaseUser?.uid || currentUser?.id;
+    if (!uid || !currentUser) {
+      return {
+        success: false,
+        message: 'يرجى تسجيل الدخول بحسابك لحفظ التصاميم في ملفك الشخصي.',
+      };
+    }
+
+    const newDesign: SavedStudioDesign = {
+      ...designData,
+      id: `design-${uid.slice(0, 6)}-${Date.now()}`,
+      userId: uid,
+      userName: currentUser.fullName,
+      createdAt: new Date().toISOString(),
+    };
+
+    LocalStorageManager.saveStudioDesign(newDesign);
+    setSavedDesigns(LocalStorageManager.getSavedStudioDesigns());
+
+    if (auth.currentUser) {
+      try {
+        const cleanDesign = Object.fromEntries(
+          Object.entries(newDesign).filter(([_, v]) => v !== undefined)
+        );
+        await setDoc(doc(db, 'saved_designs', newDesign.id), cleanDesign);
+      } catch (e) {
+        console.warn('Firestore saveStudioDesign notice:', e);
+      }
+    }
+
+    return {
+      success: true,
+      message: 'تم حفظ التصميم بجودة عالية في قسم «تصاميمي المحفوظة» داخل حسابك!',
+      design: newDesign,
+    };
+  };
+
+  const deleteStudioDesign = async (designId: string) => {
+    const uid = firebaseUser?.uid || currentUser?.id;
+    if (!uid) {
+      return { success: false, message: 'غير مصرح لك بحذف هذا التصميم.' };
+    }
+
+    LocalStorageManager.deleteStudioDesign(uid, designId);
+    setSavedDesigns(LocalStorageManager.getSavedStudioDesigns());
+
+    if (auth.currentUser) {
+      try {
+        await deleteDoc(doc(db, 'saved_designs', designId));
+      } catch (e) {
+        console.warn('Firestore deleteStudioDesign notice:', e);
+      }
+    }
+
+    return {
+      success: true,
+      message: 'تم حذف التصميم من حسابك الشخصي.',
+    };
+  };
+
+  // =========================================================================
+  // REQUIREMENT 2.12: PERSONAL ACCOUNT SETTINGS
+  // =========================================================================
+  const updateMyProfileSettings = async (params: {
+    fullName: string;
+    preferredTitle: 'nurse_m' | 'nurse_f';
+    phone?: string;
+    avatarUrl?: string;
+  }) => {
+    const uid = firebaseUser?.uid || currentUser?.id;
+    if (!uid || !currentUser) {
+      return {
+        success: false,
+        message: 'يرجى تسجيل الدخول أولاً لتحديث إعدادات الحساب.',
+      };
+    }
+
+    const cleanName = params.fullName.trim();
+    if (!cleanName || cleanName.length < 3) {
+      return {
+        success: false,
+        message: 'يرجى إدخال الاسم الثلاثي بشكل صحيح.',
+      };
+    }
+
+    const prefix = params.preferredTitle === 'nurse_f' ? 'الممرضة' : 'الممرض';
+    const displayTitle = `${prefix} ${cleanName}`;
+
+    await updateMyDisplayName(cleanName);
+
+    setGraduates((prev) => {
+      const exists = prev.some((g) => g.id === uid);
+      if (exists) {
+        return prev.map((g) =>
+          g.id === uid
+            ? {
+                ...g,
+                fullName: cleanName,
+                preferredTitle: params.preferredTitle,
+                displayTitle,
+                phone: params.phone?.trim() ?? g.phone,
+                avatarUrl: params.avatarUrl ?? g.avatarUrl,
+              }
+            : g
+        );
+      }
+      const newGrad: Graduate = {
+        ...currentUser,
+        id: uid,
+        fullName: cleanName,
+        preferredTitle: params.preferredTitle,
+        displayTitle,
+        phone: params.phone?.trim() || currentUser.phone || '',
+        avatarUrl: params.avatarUrl || currentUser.avatarUrl,
+      };
+      return [newGrad, ...prev];
+    });
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(
+          doc(db, 'graduates', uid),
+          {
+            id: uid,
+            fullName: cleanName,
+            preferredTitle: params.preferredTitle,
+            displayTitle,
+            phone: params.phone?.trim() || currentUser.phone || '',
+            avatarUrl: params.avatarUrl || currentUser.avatarUrl || null,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      } catch (e) {
+        console.warn('Firestore updateMyProfileSettings notice:', e);
+      }
+    }
+
+    return {
+      success: true,
+      message: 'تم حفظ إعدادات حسابك الشخصي بنجاح!',
+    };
+  };
+
   const openReceipt = (transaction: PaymentTransaction) => {
     setActiveReceipt(transaction);
   };
@@ -3987,6 +4694,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         approveMedia,
         rejectMedia,
         submitGraduateMedia,
+        financialLinkRequests,
+        submitFinancialLinkRequest,
+        approveFinancialLinkRequest,
+        rejectFinancialLinkRequest,
+        submitStudentPaymentRequest,
+        savedDesigns,
+        saveStudioDesign,
+        deleteStudioDesign,
+        updateMyProfileSettings,
       }}
     >
       {children}

@@ -129,5 +129,27 @@ service cloud.firestore {
         incoming().title is string && incoming().message is string;
       allow delete: if isValidId(notificationId);
     }
+
+    // 12. Student Financial Record Link Requests (/financial_link_requests/{requestId})
+    match /financial_link_requests/{requestId} {
+      allow get, list: if true;
+      allow create: if isValidId(requestId) &&
+        incoming().status in ['pending', 'approved', 'rejected'] &&
+        incoming().userName is string && incoming().userName.size() >= 2 && incoming().userName.size() <= 120 &&
+        incoming().targetScrubStudentId is string && incoming().targetScrubStudentId.size() > 0;
+      allow update: if isValidId(requestId) &&
+        incoming().status in ['pending', 'approved', 'rejected'];
+      allow delete: if isValidId(requestId);
+    }
+
+    // 13. Saved Graduation Studio Designs (/saved_designs/{designId})
+    match /saved_designs/{designId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(designId) &&
+        incoming().userId is string && incoming().userId.size() > 0 &&
+        incoming().customName is string && incoming().customName.size() >= 2 && incoming().customName.size() <= 120 &&
+        incoming().templateId is string && incoming().templateId.size() > 0;
+      allow delete: if isValidId(designId);
+    }
   }
 }

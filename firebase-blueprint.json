@@ -837,6 +837,139 @@
         }
       },
       "required": ["id", "title", "message", "type", "targetAudience", "createdAt"]
+    },
+    "FinancialLinkRequest": {
+      "title": "FinancialLinkRequest",
+      "description": "Student request to link their personal account with an official ScrubStudent financial record",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique link request identifier"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Authenticated user ID requesting the link"
+        },
+        "userName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120,
+          "description": "Full Arabic name of the requesting student"
+        },
+        "userEmail": {
+          "type": "string",
+          "description": "Email address of the requesting student"
+        },
+        "userPhone": {
+          "type": "string",
+          "description": "Optional phone number of the requesting student"
+        },
+        "scrubStudentId": {
+          "type": "string",
+          "description": "Target ScrubStudent record ID"
+        },
+        "scrubStudentNumber": {
+          "type": "number",
+          "description": "Target ScrubStudent sequential number"
+        },
+        "scrubStudentName": {
+          "type": "string",
+          "description": "Full name on the target ScrubStudent record"
+        },
+        "section": {
+          "type": "string",
+          "description": "Section of the student (A or B)"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional note from the student"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected"],
+          "description": "Approval status of the link request"
+        },
+        "requestedAt": {
+          "type": "string",
+          "description": "ISO timestamp when requested"
+        },
+        "reviewedAt": {
+          "type": "string",
+          "description": "ISO timestamp when reviewed by admin"
+        },
+        "reviewedBy": {
+          "type": "string",
+          "description": "Admin who reviewed the request"
+        },
+        "adminNote": {
+          "type": "string",
+          "description": "Optional admin response note"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "userName",
+        "scrubStudentId",
+        "scrubStudentNumber",
+        "scrubStudentName",
+        "status",
+        "requestedAt"
+      ]
+    },
+    "SavedStudioDesign": {
+      "title": "SavedStudioDesign",
+      "description": "Personal Graduation Studio design saved by a student",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Design unique identifier"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "studentName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120,
+          "description": "Student name displayed on the design"
+        },
+        "preferredTitle": {
+          "type": "string",
+          "enum": ["nurse_m", "nurse_f"],
+          "description": "Nursing title used in the design"
+        },
+        "templateId": {
+          "type": "string",
+          "description": "Selected Graduation Studio template ID"
+        },
+        "templateName": {
+          "type": "string",
+          "description": "Arabic display name of the template"
+        },
+        "customQuote": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Graduation quote on the card"
+        },
+        "dataUrl": {
+          "type": "string",
+          "description": "Rendered image data URL"
+        },
+        "sharedToGallery": {
+          "type": "boolean",
+          "description": "Whether student explicitly consented to share in public gallery"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["id", "userId", "studentName", "templateId", "dataUrl", "createdAt"]
     }
   },
   "firestore": {
@@ -859,6 +992,14 @@
     "/student_payments/{paymentId}": {
       "schema": "StudentPayment",
       "description": "Verified and pending payment history for Scrub Party students"
+    },
+    "/financial_link_requests/{requestId}": {
+      "schema": "FinancialLinkRequest",
+      "description": "Student requests to link their personal account with an official ScrubStudent financial record"
+    },
+    "/saved_designs/{designId}": {
+      "schema": "SavedStudioDesign",
+      "description": "Personal Graduation Studio designs saved by students"
     },
     "/audit_logs/{logId}": {
       "schema": "AuditLog",
